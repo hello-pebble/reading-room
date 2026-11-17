@@ -39,7 +39,7 @@
 
 | 테이블 | 컬럼 | 수명 |
 |---|---|---|
-| `shared_room` | id, created_by, kind(`SAME`/`OWN`), isbn, title, visibility(`INVITE`/`PUBLIC`), max_participants, invite_code, page_lock, open_at, close_at, status(`SCHEDULED`/`OPEN`/`CLOSED`), closed_at | 종료 후 7일. `isbn`은 `SAME`에서 필수, `OWN`은 비움. invite_code unique(8자리, 헷갈리는 글자 `I O 0 1` 제외). max_participants 2~30. `page_lock`은 `SAME`에서만 true 가능 |
+| `shared_room` | id, created_by, kind(`SAME`/`OWN`), isbn, title, visibility(`INVITE`/`PUBLIC`), max_participants, invite_code, page_lock, open_at, close_at, status(`SCHEDULED`/`OPEN`/`CLOSED`), closed_at | 종료 후 7일. `isbn`은 `SAME`에서 필수, `OWN`은 비움. invite_code unique(8자리, 헷갈리는 글자 `I O 0 1` 제외). max_participants 2~20. `page_lock`은 `SAME`에서만 true 가능 |
 | `room_participant` | room_id, user_id, book_id, joined_at, agreed_at(보관 동의), last_read_at, left_at | 종료 후 7일. unique(room_id, user_id). `book_id`는 이 방에서 내가 읽는 책 (`SAME`은 방의 책과 같은 ISBN, `OWN`은 내가 고른 책, 없을 수 있음). 가져오기는 `book_id`의 책에 붙인다 |
 | `room_message` | id, room_id, user_id, content(최대 300자), page(같은 책 방, 1~9999, 없을 수 있음), created_at, deleted_at | 종료 후 7일. 삭제하면 `content`를 지우고 `deleted_at`을 채운다. 나간 사람의 글은 남긴다 (결정 #38) |
 | `book_room_archive` | id, book_id, room_id, room_title, opened_at, closed_at, snapshot(JSON), imported_at | 영구. unique(book_id, room_id) |
@@ -48,7 +48,7 @@
 
 | 테이블 | 컬럼 | 수명 |
 |---|---|---|
-| `plaza_message` | id, user_id, content(최대 40자), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 열린 결정 N 이후 |
+| `plaza_message` | id, user_id, content(최대 40자), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 공개 가입 전에 만든다(#41) |
 
 ### 알림
 
@@ -137,7 +137,7 @@
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| POST | `/rooms` | 모닥불 피우기(개설). body `{kind, isbn?, title?, visibility, maxParticipants, pageLock, openAt (생략하면 지금), days(3/7/14), bookId?}`. 개설자는 자동으로 참여자가 된다. 한 사용자가 동시에 열 수 있는 방(`SCHEDULED`·`OPEN`)은 2개, 넘으면 409. `SAME`인데 `isbn`이 없으면 400. `openAt`이 지금보다 앞서면 400 |
+| POST | `/rooms` | 모닥불 피우기(개설). body `{kind, isbn?, title?, visibility(베타는 `INVITE`만, #41), maxParticipants(2~20), pageLock, openAt (생략하면 지금), days(3/7/14), bookId?}`. 개설자는 자동으로 참여자가 된다. 한 사용자가 동시에 열 수 있는 방(`SCHEDULED`·`OPEN`)은 2개, 넘으면 409. `SAME`인데 `isbn`이 없으면 400. `openAt`이 지금보다 앞서면 400 |
 | GET | `/rooms/invite/{code}` | 초대 링크 미리보기 (방 이름, 종류, 책, 개설자 닉네임, 현재/최대 인원, 기간). 로그인 전에도 보여 준다 |
 | POST | `/rooms/join` | body `{code, bookId?}`. 정원이 차면 409, 이미 참여 중이면 200 (멱등), 종료된 방이면 410 |
 | POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관 |
@@ -147,7 +147,7 @@
 | POST | `/rooms/{id}/messages` | 글 보내기. body `{content, page?}` (1~300자). 사용자당 5초에 1건(넘으면 429). `OPEN` 방과 내가 참여 중인 방만 |
 | DELETE | `/rooms/{id}/messages/{mid}` | 내 글 삭제 (남의 글은 403) |
 | POST | `/rooms/{id}/read` | 마지막으로 읽은 시각(`last_read_at`) 저장. 새 글 별(✦) 계산에 쓴다 |
-| GET | `/rooms?status=` | 마을 게시판, 창문 소식. `PUBLIC` 방과 내가 참여한 방만 내려준다 |
+| GET | `/rooms?status=` | 마을 게시판, 창문 소식. 내가 참여했거나 초대받은 방만 내려준다(베타는 공개 방이 없다, #41) |
 | POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 삭제된 글만 빼고 **잠긴 글도 `page`와 함께 저장**하며(`room_type`, `page_lock`도 스냅샷에 담는다), 책의 공유방 탭을 조회하는 API가 내 진행 기준으로 잠긴 글의 `content`를 빼고 내려준다. 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
 
 ### 마을 광장
@@ -155,7 +155,7 @@
 | 메서드 | 경로 | 동작 |
 |---|---|---|
 | GET | `/plaza/messages?since=` | 최근 24시간 대화 (최대 30개). 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
-| GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/50)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 50명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
+| GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/100)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 100명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
 | POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거). 사용자당 5초에 1건 제한, 넘으면 429 |
 
 ## 배치 작업 (`@Scheduled`)

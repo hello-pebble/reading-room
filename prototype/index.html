@@ -245,7 +245,9 @@ function hull(x,y,z,w,d,h){return `<polygon class="hull" points="${pts([P(x,y,z+
 function floorPoly(x1,y1,x2,y2,fill,extra=''){return `<polygon points="${pts([P(x1,y1,0.01),P(x2,y1,0.01),P(x2,y2,0.01),P(x1,y2,0.01)])}" fill="${fill}" ${extra}/>`}
 function wallRect(x1,x2,z1,z2,fill,y=0.02){return `<polygon points="${pts([P(x1,y,z1),P(x2,y,z1),P(x2,y,z2),P(x1,y,z2)])}" fill="${fill}"/>`}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const today=()=>{const d=new Date();return (d.getMonth()+1)+'.'+String(d.getDate()).padStart(2,'0')};
+const today=()=>ymd();   // 메모·인용구 날짜와 읽기 시작일도 연도를 포함한 한국 시간 날짜로 저장한다 (결정 #41, 열린 결정 Q ①)
+// 화면에는 올해는 '11.05', 다른 해는 '2025.11.05'로 보여준다
+const shortDate=s=>{const m=/^(\d{4})\.(\d+)\.(\d+)$/.exec(String(s||''));if(!m)return s||'';const y=+new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).slice(0,4);return (+m[1]===y?'':m[1]+'.')+(+m[2])+'.'+m[3]};
 const ymd=()=>{const [y,m,d]=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).split('-');return y+'.'+(+m)+'.'+d}; // 완독일 '2026.11.17' (한국 시간, 연도 포함)
 
 const COLORS=[['하양','#f6f3ff'],['크림','#fff1d6'],['분홍','#ffd6e4'],['민트','#cdf0e0'],['하늘','#cfe4fb'],['라일락','#e0d4fa'],['버터','#fff0a8'],['회색','#d9dce6']];
@@ -290,7 +292,10 @@ if(!S.later)S.later=[];if(!S.plaza)S.plaza=[];S.plaza=S.plaza.filter(m=>Date.now
 S.news.forEach(n=>{if(n.kind==='SOON'&&!n.opensAt)n.opensAt=Date.UTC(2026,10,19,15,0,0);if(n.kind==='CLOSED'&&!n.deleteAt){const m=/D-(\d+)/.exec(n.sub||'');n.deleteAt=Date.now()+(m?+m[1]:3)*864e5}});
 // 완독일에 연도를 붙인다. 예전 저장값은 '월.일'뿐이라, 오늘(한국 시간) 이전에서 가장 가까운 그 날짜로 정한다
 (()=>{const [ty,tm,td]=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).split('-').map(Number);
- [...S.finished,...(S.dropped||[])].forEach(b=>{const m=/^(\d+)\.(\d+)$/.exec(b.finishedAt||'');if(m){const mo=+m[1],d=+m[2];b.finishedAt=((mo>tm||(mo===tm&&d>td))?ty-1:ty)+'.'+mo+'.'+String(d).padStart(2,'0')}})})();
+ [...S.finished,...(S.dropped||[])].forEach(b=>{const m=/^(\d+)\.(\d+)$/.exec(b.finishedAt||'');if(m){const mo=+m[1],d=+m[2];b.finishedAt=((mo>tm||(mo===tm&&d>td))?ty-1:ty)+'.'+mo+'.'+String(d).padStart(2,'0')}})
+ // 메모·인용구 날짜, 읽기 시작일, 나중에 읽을 책 담은 날도 같은 방식으로 연도를 붙인다 (열린 결정 Q ①)
+ const addY=s=>{const m=/^(\d+)\.(\d+)$/.exec(s||'');return m?(((+m[1]>tm||(+m[1]===tm&&+m[2]>td))?ty-1:ty)+'.'+(+m[1])+'.'+String(+m[2]).padStart(2,'0')):s};
+ [S.reading,...S.finished,...(S.dropped||[]),...S.later].filter(Boolean).forEach(b=>{if(b.startedAt)b.startedAt=addY(b.startedAt);if(b.addedAt)b.addedAt=addY(b.addedAt);(b.notes||[]).forEach(n=>{if(n.at)n.at=addY(n.at)})})})();
 S.onboard=0; // 첫 방문 안내는 평소에 뜨지 않고, 데모 초기화를 눌렀을 때만 뜬다
 let saveBad=0; // 저장이 막혀도 화면은 계속 쓰되, 한 번은 알린다 (setTimeout: 바로 뒤에 오는 성공 토스트가 덮어쓰지 못하게)
 const save=()=>{try{localStorage.setItem('myroom-proto-v1',JSON.stringify(S));saveBad=0}catch(e){if(!saveBad){saveBad=1;setTimeout(()=>toast('저장 공간이 부족하거나 막혀 있어요. 이 기록이 기기에 남지 않을 수 있어요'),0)}}};
@@ -314,7 +319,9 @@ const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
 // 마을은 두 구역으로 나뉜다: 가운데 돌바닥 "광장"(누구와도 짧게 대화)과 동쪽 흙바닥 "모닥불 구역"(공유방, 대화는 방 안에서만)
 const VSLOTS=[[26.0,6.2],[32.0,8.7],[26.0,11.2],[32.0,13.7],[26.0,16.2],[32.0,18.7],[26.0,21.2],[32.0,23.7]]; // 공유방 모닥불 자리 (빈 자리 하나는 "모닥불 피우기")
 const PLAZA={x0:8.6,z0:7.0,x1:21.6,z1:17.0,cx:15.1,cz:12.0}; // 대화 가능 구역 (13×10칸). 이 안에 있을 때만 말풍선으로 말할 수 있다
-const VMAX=50; // 마을 동시 접속 정원 (기본값, 조정 가능)
+const VMAX=100; // 마을 동시 접속 정원 (결정 #41, 조정 가능)
+const RMAX=20;  // 공유방 최대 인원 (결정 #41)
+const PUBLIC_ROOMS=false; // 베타는 초대만 (결정 #41, 열린 결정 M ②). 켜면 개설 창에 "마을에 공개" 선택지가 다시 나온다
 const ZONE={x0:23.0,z0:4.0,x1:35.4,z1:25.6,g0:11.0,g1:13.2}; // 모닥불 구역 (12×21.6칸). g0~g1은 울타리 입구
 const inPlaza=(x,z)=>x>PLAZA.x0&&x<PLAZA.x1&&z>PLAZA.z0&&z<PLAZA.z1;
 // 체험판용 가짜 이웃. 서버가 생기면 그날 광장에 온 실제 사람으로 바뀐다
@@ -1104,7 +1111,7 @@ function sofaPanel(){
  if(panelView.mode==='drop'){return head('포기할까요?')+`<p>『${esc(r.title)}』을 소파에서 내려요. 남긴 메모 ${r.notes.length}개는 책장의 ‘포기한 책’에 그대로 보관돼요.</p>
   <div class="row"><button class="grow" data-act="cancelFinish">계속 읽기</button><button class="grow" data-act="doDrop" style="color:var(--danger)">포기</button></div>`}
  const type=panelView.type||'MEMO';
- return head('소파 · 읽는 중')+`<div class="card"><div class="row">${bthumb(r)}<div class="grow"><b>『${esc(r.title)}』</b><div class="muted">${esc(r.author)} · ${r.startedAt}부터</div></div></div>
+ return head('소파 · 읽는 중')+`<div class="card"><div class="row">${bthumb(r)}<div class="grow"><b>『${esc(r.title)}』</b><div class="muted">${esc(r.author)} · ${shortDate(r.startedAt)}부터</div></div></div>
   <label for="pg" style="margin-top:12px">어디까지 읽었나요?</label>
   <div class="row"><input id="pg" type="number" min="0" inputmode="numeric" placeholder="현재 쪽" value="${r.page==null?'':r.page}" style="width:96px"><span class="muted">/</span><input id="tp" type="number" min="1" inputmode="numeric" placeholder="전체 쪽" value="${r.totalPages||''}" style="width:96px"><span class="muted">쪽</span><b id="pv" class="grow" style="font-weight:normal;font-size:24px;text-align:right">${r.totalPages?r.progress+'%':''}</b></div>
   <div class="progress" style="margin:8px 0 4px"><i style="width:${r.progress||0}%"></i></div>
@@ -1117,7 +1124,7 @@ function sofaPanel(){
   <div style="margin-top:10px">${r.notes.length?r.notes.slice().reverse().map((n,ix)=>noteHTML(n,r.notes.length-1-ix,true)).join(''):'<p class="muted">아직 남긴 기록이 없어요.</p>'}</div>
   <div class="row foot" style="margin-top:14px"><button data-act="drop">포기</button><button class="primary grow" data-act="finish">완독</button></div>`;
 }
-function noteHTML(n,ix,del){return `<div class="note ${n.type==='QUOTE'?'q':''}">${n.type==='QUOTE'?'“'+esc(n.content)+'”':esc(n.content)}<div class="meta"><span>${n.type==='QUOTE'?'인용구':'메모'}${n.page?' · '+n.page+'쪽':''} · ${n.at}</span>${del?`<button class="ghost" style="padding:0 4px;font-size:12px" data-act="delNote" data-i="${ix}">삭제</button>`:''}</div></div>`}
+function noteHTML(n,ix,del){return `<div class="note ${n.type==='QUOTE'?'q':''}">${n.type==='QUOTE'?'“'+esc(n.content)+'”':esc(n.content)}<div class="meta"><span>${n.type==='QUOTE'?'인용구':'메모'}${n.page?' · '+n.page+'쪽':''} · ${shortDate(n.at)}</span>${del?`<button class="ghost" style="padding:0 4px;font-size:12px" data-act="delNote" data-i="${ix}">삭제</button>`:''}</div></div>`}
 function lampPanel(){
  const r=S.reading,ses=S.session,v=panelView;
  const tools=`<details style="margin-top:14px"><summary class="muted" style="cursor:pointer">테스트 도구 (시간 앞당기기)</summary><div class="row wrap" style="margin-top:8px"><button data-act="ff" data-m="10">+10분</button><button data-act="ff" data-m="60">+60분 · 확인 알림</button><button data-act="ff" data-m="185">+3시간 · 깜빡함</button></div><p class="muted">실제로는 서버의 시작 시각을 기준으로 계산해요. 여기서는 시작 시각을 과거로 옮겨서 흉내 내요. 알림은 5초 안에 와요.</p></details>`;
@@ -1161,7 +1168,7 @@ function shelfPanel(){
   if(tab==='rooms'){let lockedN=0;   // 쪽수 잠금: 이 책을 내가 읽은 쪽(완독·포기하면 전부)보다 뒤쪽 글은 가린다
    body=b.rooms.map(rm=>{const room={rtype:rm.rtype,pageLock:rm.pageLock,book:b.title};return `<div class="card"><b>${esc(rm.title)}</b><div class="muted">${rm.period} · 가져온 기록</div><div style="margin-top:8px">${rm.messages.map(m=>{const lk=rcLocked(room,m);if(lk)lockedN++;return `<div class="msg"><b>${esc(m.who)}</b>${lk?`🔒 ${m.page}쪽 이후 글 · 읽으면 열려요`:esc(m.text)}</div>`}).join('')}</div></div>`}).join('')+(lockedN?`<p class="muted">🔒 잠긴 글 ${lockedN}개는 이 책을 더 읽으면 열려요.</p>`:'')+'<p class="muted">다른 참여자 이름은 익명으로 보관돼요.</p>'}
   return head('책장')+`<button class="ghost" data-act="back" style="padding:4px 0">← 목록</button>
-   <div class="row" style="margin-top:6px">${bthumb(b)}<div><b>『${esc(b.title)}』</b><div class="muted">${esc(b.author)} · ${later?'나중에 읽을 책':v.drop?'포기':String(b.finishedAt).replace(/^\d{4}\./,'')+' 완독'}</div>${!later&&minOfBook(b.id)>0?`<div class="muted">⏱ 읽은 시간 ${fmtMin(minOfBook(b.id))} · 기록 ${S.sessions.filter(x=>x.bookId===b.id).length}번</div>`:''}</div></div>
+   <div class="row" style="margin-top:6px">${bthumb(b)}<div><b>『${esc(b.title)}』</b><div class="muted">${esc(b.author)} · ${later?'나중에 읽을 책':v.drop?'포기':shortDate(b.finishedAt)+' 완독'}</div>${!later&&minOfBook(b.id)>0?`<div class="muted">⏱ 읽은 시간 ${fmtMin(minOfBook(b.id))} · 기록 ${S.sessions.filter(x=>x.bookId===b.id).length}번</div>`:''}</div></div>
    ${later?`<button class="primary" data-act="laterToSofa" data-id="${b.id}" style="width:100%;margin-top:8px">소파에 올리기</button>`:''}
    <div class="tabs">${tabs.map(([k,l])=>`<button data-act="tab" data-t="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')}</div>${body}`}
  const showDrop=v.list==='drop',showLater=v.list==='later';
@@ -1286,7 +1293,7 @@ const rcMembersOf=(n,c)=>{const o=rcHash(n.id)%NAMEPOOL.length;return Array.from
 function rcNorm(n){
  if(!n.rtype)n.rtype='SAME';if(n.pageLock===undefined)n.pageLock=n.rtype==='SAME';
  if(!n.book)n.book=shortTitle(n);
- if(!n.max)n.max=30;
+ if(!n.max||n.max>RMAX)n.max=RMAX;   // 방 최대 인원은 20명까지 (예전에 더 크게 만든 방도 맞춘다)
  if(!n.people){const m=/(\d+)명/.exec(n.sub||'');n.people=m?+m[1]:n.mine?1:n.kind==='CLOSED'?3:12}
  if(!n.inviteCode)n.inviteCode=genCode();
  if(!n.members)n.members=n.mine?[]:rcMembersOf(n,n.people-1);
@@ -1419,8 +1426,8 @@ function createPanel(){
   <label>시작</label>${seg('rstart',[['now','지금 바로'],['later','예약']],nf.start)}
   ${nf.start==='later'?`<input id="rwhen" type="datetime-local" value="${esc(nf.when)}" style="margin-top:6px">`:''}
   <label>기간</label>${seg('rdays',[[3,'3일'],[7,'7일'],[14,'14일']],nf.days)}
-  <label>공개 범위</label>${seg('rvis',[['invite','초대 링크로만'],['public','마을에 공개']],nf.vis)}
-  <label for="rmax">최대 인원</label><input id="rmax" type="number" min="2" max="30" value="${nf.max}" style="width:100px">
+  ${PUBLIC_ROOMS?`<label>공개 범위</label>${seg('rvis',[['invite','초대 링크로만'],['public','마을에 공개']],nf.vis)}`:'<p class="muted" style="margin:10px 0 0">초대 링크로 부른 친구만 들어올 수 있어요.</p>'}
+  <label for="rmax">최대 인원</label><input id="rmax" type="number" min="2" max="${RMAX}" value="${nf.max}" style="width:100px">
   ${same?`<div class="row" style="margin-top:12px"><input type="checkbox" id="rlock" ${nf.lock?'checked':''} style="width:auto"><label for="rlock" style="margin:0;font-size:14px;color:var(--ink)">쪽수 잠금 · 내 진행보다 뒤쪽 글은 흐리게 잠겨요</label></div>`:''}
   <div class="err" id="rerr"></div>
   <div class="foot" style="margin-top:14px"><button class="primary" data-act="rcreate" style="width:100%">모닥불 피우기</button></div>`;
@@ -1430,7 +1437,7 @@ function createRoom(){
  const b=nfBook(nf),max=Math.round(+nf.max);
  if(S.news.filter(n=>n.mine&&n.kind!=='CLOSED').length>=2)return err('동시에 열 수 있는 모닥불은 2개예요. 하나를 끝낸 뒤에 다시 피워 주세요');
  if(nf.kind==='SAME'&&!b)return err('함께 읽을 책을 골라 주세요');
- if(!(max>=2&&max<=30))return err('최대 인원은 2~30명이에요');
+ if(!(max>=2&&max<=RMAX))return err('최대 인원은 2~'+RMAX+'명이에요');
  const now=Date.now();let opens=now;
  if(nf.start==='later'){opens=new Date(nf.when).getTime();if(!(opens>now+60000))return err('시작 시각은 지금보다 뒤로 정해 주세요')}
  const name=(nf.name||'').trim()||defaultRoomName(nf),closes=opens+nf.days*DAY;

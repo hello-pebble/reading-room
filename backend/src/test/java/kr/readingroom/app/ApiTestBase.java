@@ -27,9 +27,14 @@ public abstract class ApiTestBase extends PgTestBase {
         @org.springframework.context.annotation.Bean
         @org.springframework.context.annotation.Primary
         TestClock testClock() { return new TestClock(); }
+
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        RecordingPushSender recordingPushSender() { return new RecordingPushSender(); }
     }
 
     @Autowired protected TestClock clock;
+    @Autowired protected RecordingPushSender pushes;
     @Autowired protected MockMvc mvc;
     @Autowired protected DSLContext dsl;
     @Autowired protected ObjectMapper json;
@@ -37,6 +42,7 @@ public abstract class ApiTestBase extends PgTestBase {
     @BeforeEach
     void cleanDb() {
         clock.set("2026-11-17T03:00:00Z");
+        pushes.reset();
         dsl.execute("truncate app_user restart identity cascade");
     }
 

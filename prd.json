@@ -193,8 +193,8 @@
         "중복 발송 방지 테스트"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "공유방 개방 알림은 범위 밖."
+      "passes": true,
+      "notes": "선정은 DB에서 먼저 '보냈음'으로 표시(claim)한 세션만 보낸다: reading_session.check_notified_for(=보낸 last_check_at), confirm_notified_at. 표시 후 전송이 실패하면 재전송하지 않는다(중복보다 누락). 60분 확인은 last_check_at+60분을 '지났을 때'(정확히 60분은 아직)이고 3시간을 넘긴 RUNNING은 제외. 구독이 없는 사용자도 선정(표시)만 되고 나중에 구독해도 지난 알림은 오지 않는다. 구독 해제는 ?endpoint= 쿼리 또는 본문. PushSender는 LogPushSender만 구현, VAPID 키는 VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/VAPID_SUBJECT 환경변수."
     },
     {
       "id": "US-014",

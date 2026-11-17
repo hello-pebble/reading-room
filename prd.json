@@ -73,8 +73,8 @@
         "남의 책에는 404"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "쪽수 갱신 규칙은 FEATURE_DEFINITION.md 의 소파/메모 절을 먼저 읽고 맞춘다."
+      "passes": true,
+      "notes": "메모·인용구 삭제(SF-03)는 이번 스토리 범위 밖이라 API를 만들지 않았다. 쪽 규칙: 더 큰 쪽이면 current_page를 total 상한까지 올리고, 작으면 유지(BookService.raisePage)."
     },
     {
       "id": "US-006",

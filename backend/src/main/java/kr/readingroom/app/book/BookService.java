@@ -67,6 +67,15 @@ public class BookService {
         return view(r);
     }
 
+    /**
+     * 현재 쪽을 올린다. 줄이지 않고, 전체 쪽수가 있으면 그 이상으로는 올리지 않는다.
+     * (메모·스탠드 끄기·직접 기록·완독이 같은 규칙을 쓴다)
+     */
+    public void raisePage(long bookId, int page) {
+        dsl.execute("update book set current_page = greatest(current_page, least(?, coalesce(total_pages, ?))) where id = ?",
+                Math.max(0, Math.min(MAX_PAGES, page)), MAX_PAGES, bookId);
+    }
+
     public List<Map<String, Object>> list(long userId, String status) {
         if (status != null && !List.of("READING", "DONE", "DROPPED", "LATER").contains(status))
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_STATUS", "status는 READING/DONE/DROPPED/LATER 중 하나예요");

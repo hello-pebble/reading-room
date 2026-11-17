@@ -281,6 +281,11 @@
 | `reading` / `finished` / `dropped` | `book` (`READING` / `DONE` / `DROPPED`), `book_note` |
 | `session` / `sessions` | `reading_session` |
 | `news` 가져오기 | `shared_room`, `book_room_archive` |
+| `news[]` (공유방 필드) | `shared_room`(`kind`=rtype, `title`, `visibility`=vis, `max_participants`, `invite_code`, `page_lock`, `open_at`, `close_at`, `status`), 방을 만든 사람은 `created_by` |
+| `news[].members`, `people`, `owner`, `agreed`, `lastRead`, `left` | `room_participant`(`user_id`, `joined_at`, `agreed_at`, `last_read_at`, `left_at`). `people`은 참여자 수로 서버가 센다. `owner`는 `shared_room.created_by` |
+| `news[].messages[]` | `room_message`(`content`, `page`, `created_at`, `deleted_at`). 잠금 판단은 서버가 한다 |
+| `plaza` | `plaza_message`(24시간 뒤 삭제). 접속 인원은 `GET /plaza/presence` |
+| `S.later` (나중에 읽을 책) | `book`의 `status=LATER` |
 | 달력 계산 | `GET /me/calendar` (서버가 한국 시간으로 계산) |
 
 ## 6. 플랫폼과 제약
@@ -312,6 +317,8 @@
 | L | 같은 책 방에 책이 없는 친구가 들어올 때 처리 |
 | M | "마을에 공개" 방의 노출과 신고·관리 (베타에서는 공개 없이 초대만 하는 안이 추천이나 아직 열려 있다) |
 | N | 광장 대화의 신고·차단·금칙어를 언제 넣을지 (추천: 공개 가입 전에) |
+| O | 광장 대화의 "광장 안에서만 보낸다"를 서버가 확인할지 (추천: 베타는 화면 규칙으로만) |
+| P | 마을 접속 정원 50명과 공유방 최대 인원 2~30명의 관계 (추천: 따로 본다, 정원이 자주 차면 방 인원을 낮춘다) |
 ## 8. 이번 단계에서 바뀐 큰 결정
 
 | # | 내용 |

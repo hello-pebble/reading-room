@@ -31,7 +31,7 @@
 
 | 테이블 | 컬럼 | 제약 |
 |---|---|---|
-| `book` | id, user_id, isbn, title, author, cover_url, total_pages, current_page, status(`READING`/`DONE`/`DROPPED`), rating, one_line_review, started_at, finished_at | `READING`은 사용자당 1개. 화면에서 `DROPPED`는 "포기한 책". 퍼센트는 저장하지 않고 `current_page ÷ total_pages`로 계산(100% 상한). `total_pages`가 없으면 퍼센트 없음. `current_page`는 줄지 않는다(메모에 더 작은 쪽을 적어도 유지) |
+| `book` | id, user_id, isbn, title, author, cover_url, total_pages, current_page, status(`READING`/`DONE`/`DROPPED`/`LATER`), rating, one_line_review, started_at, finished_at | `finished_at`은 `timestamptz`(연도 포함)이고 달력·월 완독 수는 `Asia/Seoul` 기준 연-월로 센다. 프로토타입의 `finishedAt`(`YYYY.M.DD`)은 이 값의 날짜 부분이다. `READING`은 사용자당 1개. 화면에서 `DROPPED`는 "포기한 책". 퍼센트는 저장하지 않고 `current_page ÷ total_pages`로 계산(100% 상한). `total_pages`가 없으면 퍼센트 없음. `current_page`는 줄지 않는다(메모에 더 작은 쪽을 적어도 유지) |
 | `book_note` | id, book_id, type(`MEMO`/`QUOTE`), content, page, created_at | |
 | `reading_session` | id, user_id, book_id, started_at, ended_at, last_check_at, status(`RUNNING`/`DONE`/`NEEDS_CONFIRM`/`DISCARDED`), source(`TIMER`/`MANUAL`), ended_by(`LAMP`/`PIP`/`NOTIFICATION`/`CONFIRM`/`FINISH`/`MANUAL`), start_page, end_page | `RUNNING`은 사용자당 1개 (부분 유니크 인덱스) |
 
@@ -94,7 +94,7 @@
 | PATCH | `/books/{id}` | 현재 쪽(`currentPage`), 전체 쪽(`totalPages`). 퍼센트는 서버·클라이언트가 계산 |
 | GET | `/books/search?q=` | 제목·저자·ISBN·책 링크로 검색 → `[{title, author, totalPages, isbn, coverUrl}]`. 서버가 알라딘(표지·쪽수)과 카카오 책 검색을 호출한다. 링크는 서버가 ISBN이나 서점 상품 번호를 해석해서 같은 책을 찾는다. API 키는 서버에만 둔다 |
 | POST | `/books/{id}/notes` | 메모·인용구 |
-| POST | `/books/{id}/finish` | 별점, 한줄평 → `DONE` (실행 중인 세션 자동 종료) |
+| POST | `/books/{id}/finish` | 별점, 한줄평 → `DONE` (실행 중인 세션 자동 종료. 세션이 `NEEDS_CONFIRM`이면 409로 거절하고 확인을 먼저 요구한다. 확인 없이 닫는 경로는 `last_check_at`까지만 기록한다) |
 | POST | `/books/{id}/drop` | `DROPPED` |
 
 ### 달력과 월 목표
@@ -141,13 +141,14 @@
 | POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관 |
 | DELETE | `/rooms/{id}/participants/me` | 방 나가기 |
 | GET | `/rooms?status=` | 마을 게시판, 창문 소식. `PUBLIC` 방과 내가 참여한 방만 내려준다 |
-| POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 책이 없으면 생성 |
+| POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
 
 ### 마을 광장
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
 | GET | `/plaza/messages?since=` | 최근 24시간 대화 (최대 30개). 광장 창을 열고 있는 동안 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
+| GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/50)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 50명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
 | POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거). 사용자당 5초에 1건 제한, 넘으면 429 |
 
 ## 배치 작업 (`@Scheduled`)
@@ -159,7 +160,7 @@
 | 1분 | `shared_room.open_at <= now()` 이고 아직 안 보낸 방 → `room_alarm` 사용자에게 개방 푸시. 상태는 `SCHEDULED`→`OPEN`. 개설자는 `room_alarm` 없이도 받는다 |
 | 1분 | `status='OPEN' AND close_at <= now()` → `CLOSED`, `closed_at = now()` (이때부터 7일 보관) |
 | 10분 | `status='RUNNING' AND started_at + 3h < now()` → `NEEDS_CONFIRM` |
-| 매일 새벽 | `close_at + 7일 < now()` 공유방 하드 삭제 (메시지 → 참여자 → 방) |
+| 매일 새벽 | `closed_at + 7일 < now()` 공유방 하드 삭제 (일찍 끝낸 방도 끝낸 날부터 7일. 예정 종료일 `close_at` 기준이 아니다) (메시지 → 참여자 → 방) |
 | 1시간 | `plaza_message.created_at + 24h < now()` 하드 삭제 |
 | 매일 | 가져오기 마감 D-1 알림 |
 

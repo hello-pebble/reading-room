@@ -298,8 +298,16 @@ const G3=(function(){
  const cv=document.getElementById('stage'),wrap=document.getElementById('stageWrap');
  let R;try{R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true})}catch(e){return null}
  R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
- const mat=(c,r=.5,o={})=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:0,...o});
- const mesh=(g,m,p=[0,0,0],s=[1,1,1],r=[0,0,0])=>{const x=new THREE.Mesh(g,m);x.position.set(...p);x.scale.set(...s);x.rotation.set(...r);x.castShadow=true;x.receiveShadow=true;return x};
+ // 툰 셰이딩(결정 #36): 빛을 3단으로 끊어 칠하고 갈색 외곽선을 두른다. 주소 끝에 ?toon=0을 붙이면 예전 소프트 3D로 보인다
+ const TOON=!/[?&]toon=0/.test(location.search);
+ const RAMP=new THREE.DataTexture(new Uint8Array([150,150,150,255,205,205,205,255,255,255,255,255]),3,1,THREE.RGBAFormat);RAMP.minFilter=RAMP.magFilter=THREE.NearestFilter;RAMP.needsUpdate=true;
+ const mat=(c,r=.5,o={})=>{if(!TOON)return new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:0,...o});const {roughness,metalness,...q}=o;return new THREE.MeshToonMaterial({color:c,gradientMap:RAMP,...q})};
+ const OLM=new THREE.MeshBasicMaterial({color:'#3b2a1a',side:THREE.BackSide});   // 외곽선: 뒤집은 껍데기를 법선 방향으로 살짝 부풀림
+ OLM.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position+normalize(normal)*0.04;')};
+ let OL=TOON;   // 멀리 있는 숲처럼 개수가 많은 것은 잠시 꺼서 그리는 양을 줄인다
+ const mesh=(g,m,p=[0,0,0],s=[1,1,1],r=[0,0,0])=>{const x=new THREE.Mesh(g,m);x.position.set(...p);x.scale.set(...s);x.rotation.set(...r);x.castShadow=true;x.receiveShadow=true;
+  if(OL){if(!g.boundingSphere)g.computeBoundingSphere();if(g.boundingSphere.radius>.2){const o=new THREE.Mesh(g,OLM);o.userData.nodim=true;o.castShadow=o.receiveShadow=false;x.add(o)}}   // 눈·볼 같은 작은 조각은 외곽선 없음
+  return x};
  const sph=r=>new THREE.SphereGeometry(r,40,24),cap=(r,l)=>new THREE.CapsuleGeometry(r,l,10,20);
  function dispose(g){g.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material&&n.material.dispose)n.material.dispose()})}
  function woodTex({base='#d8a868',planks=8,vertical=false,seed=3,tone=.07}){
@@ -422,8 +430,8 @@ const G3=(function(){
 
  /* 방 */
  const scene=new THREE.Scene();
- scene.add(new THREE.HemisphereLight(0xffffff,0xb9a98c,.66));
- const sun=new THREE.DirectionalLight(0xfff2dc,.5);sun.position.set(9,14,6);sun.castShadow=true;
+ scene.add(new THREE.HemisphereLight(0xffffff,0xb9a98c,TOON?.5:.66));   // 툰은 3단 음영이 밝게 칠해져서 조명을 조금 낮춘다
+ const sun=new THREE.DirectionalLight(0xfff2dc,TOON?.42:.5);sun.position.set(9,14,6);sun.castShadow=true;
  Object.assign(sun.shadow.camera,{left:-10,right:10,top:10,bottom:-10,near:1,far:40});sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0005;sun.shadow.normalBias=.03;scene.add(sun);scene.add(sun.target);
  const cam=new THREE.OrthographicCamera(-8,8,8,-8,.1,100),T=new THREE.Vector3(5,1.1,4),dirV=new THREE.Vector3(1,.82,1).normalize();
  const FUR=['sofa','lamp','shelf','calendar','mirror','window','door'];
@@ -576,7 +584,7 @@ const G3=(function(){
  function say(i,text,ms=5200){vilBub=vilBub.filter(b=>{if(b.i===i){b.el.remove();return false}return true});
   if(view!=='village')return;const e=document.createElement('div');e.className='ov vbub'+(i<0?' me':'');e.textContent=text;wrap.appendChild(e);vilBub.push({el:e,i,until:performance.now()+ms})}
  const addLabel=(html,x,y,z,fire)=>{const e=document.createElement('div');e.className='ov vlab';e.innerHTML=html;wrap.appendChild(e);vilLabels.push({el:e,x,y,z,fire:!!fire})};
- function vcollect(f,g){const set=new Set();g.traverse(n=>{if(n.isMesh&&!n.userData.hull&&!n.userData.nodim&&n.material&&n.material.isMeshStandardMaterial)set.add(n.material)});vilMats[f]=[...set]}
+ function vcollect(f,g){const set=new Set();g.traverse(n=>{if(n.isMesh&&!n.userData.hull&&!n.userData.nodim&&n.material&&(n.material.isMeshStandardMaterial||n.material.isMeshToonMaterial))set.add(n.material)});vilMats[f]=[...set]}
  function buildVillage(){
   villageG=new THREE.Group();scene.add(villageG);vilPick=[];vilMats={};vilWins=[];vilFlames=[];vilFiresG=null;vilKey='';vilHouses=[];
   const sn=windowScene().season;
@@ -628,8 +636,10 @@ const G3=(function(){
    else{const cols=sn==='가을'?['#e0892f','#c9452f','#e8b73a']:sn==='봄'?['#f4b6c8','#f8c9d6']:['#4f9a4a','#5faa5a'];g.add(mesh(sph(.5*s),mat(cols[((Math.floor(x*7+z*3)%cols.length)+cols.length)%cols.length],.85),[0,.95*s,0]))}};
   for(let gx=.6;gx<VIL.X-.5;gx+=2.2)for(let gz=.6;gz<VIL.Y-.2;gz+=2.2){const x=gx+rnd()*1.2,z=gz+rnd()*1.2;
    if(rects.some(([a,b,c,d])=>x>a&&x<c&&z>b&&z<d)||near(x,z)||rnd()<.35)continue;tree(x,z,.8+rnd()*.5)}
+  const olWas=OL;OL=false;   // 지도 바깥 숲은 외곽선 없이 (그리는 양 절약)
   for(let gx=-24;gx<VIL.X+24;gx+=3)for(let gz=-24;gz<VIL.Y+24;gz+=3){const x=gx+rnd()*1.8,z=gz+rnd()*1.8; // 지도 바깥 숲: 끝없이 이어지는 느낌
    if(x>-.5&&x<VIL.X+.5&&z>-.5&&z<VIL.Y+.5||rnd()<.3)continue;tree(x,z,.8+rnd()*.6)}
+  OL=olWas;
   addLabel('<b>내 방</b>',4.0,2.5,2.0);addLabel('<b>마을 게시판</b>',bx+.8,2.5,bz+.1);
   addLabel('<b>광장 · 이야기</b>',PLAZA.cx,1.5,PLAZA.cz-.9);addLabel('<b>모닥불 구역</b>',ZONE.x0-.2,2.8,(ZONE.g0+ZONE.g1)/2);
  } function syncVillage(list){

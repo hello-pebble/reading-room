@@ -400,9 +400,10 @@ const G3=(function(){
   const handM=mat(new THREE.Color(o.color).lerp(new THREE.Color('#2c3050'),.1),.45);
   const oval=new THREE.Group();oval.position.set(-.27,1.25,.5);oval.rotation.set(0,-.48,.35);
   oval.add(mesh(sph(.12),handM,[0,0,0],[.9,1.15,.8]));root.add(oval);
-  const tear=new THREE.Group();tear.position.set(.27,1.25,.5);tear.rotation.set(0,.48,0);
-  tear.add(mesh(sph(.115),handM,[0,0,0],[1,1.1,.75]));
-  P.tailM=mesh(new THREE.ConeGeometry(.058,.28,24),handM,[.17,.14,0],[1,1,.6],[0,0,-.9]);tear.add(P.tailM);root.add(tear);
+  const tear=new THREE.Group();tear.position.set(.27,1.25,.5);tear.rotation.set(0,.48,-.35);   // 양손 모두 동그란 주먹 (결정 #42): 오른손은 왼손과 좌우 대칭
+  tear.add(mesh(sph(.12),handM,[0,0,0],[.9,1.15,.8]));
+  P.tailM=new THREE.Mesh();   // 예전의 뾰족한 손끝 자리. 지금은 쓰지 않지만 포즈 계산이 참조하므로 빈 객체로 둔다
+  root.add(tear);
   P.hL=tear;P.hR=oval;
   const prof=[[.84,.3],[.8,.42],[.72,.7],[.64,.98],[.58,1.22],[.56,1.46],[.58,1.7],[.54,1.92],[.42,2.1],[.24,2.22],[0,2.25]].map(([r,y])=>new THREE.Vector2(r,y));
   const g=new THREE.LatheGeometry(prof,72),pa=g.attributes.position;

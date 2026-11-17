@@ -163,12 +163,15 @@ input[type=range]{accent-color:var(--accent)}
 .spark{animation:tw 1.2s ease-in-out infinite}
 @keyframes tw{50%{opacity:.2}}
 @media (max-width:760px){
- .app{padding:10px}
- .main{display:block}
- #stage{height:calc(100vh - 100px);height:calc(100dvh - 100px)}
+ /* 폰: 여백 없이 화면을 가득 채운다. 헤더는 얇은 띠, 방·마을 화면이 나머지 전체 */
+ .app{padding:0;height:100vh;height:100dvh;display:flex;flex-direction:column}
+ header.top{border-radius:0;border-width:0 0 1px 0;padding:6px 12px;flex:none}
+ .main{display:block;margin-top:0;flex:1;min-height:0}
+ .stage-wrap{height:100%;border:0;border-radius:0}
+ #stage{height:100%;min-height:0}
  .coach{width:calc(100% - 24px);justify-content:space-between}
  .toast{max-width:90%;text-align:center}
- .who small{font-size:12px}
+ .who small{font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}  /* 별 점멸·모달·토스트 연출을 끈다. 걷기 같은 기능 이동은 JS라 그대로 */
 </style>
@@ -326,8 +329,8 @@ const G3=(function(){
  const TOON=!/[?&]toon=0/.test(location.search);
  const RAMP=new THREE.DataTexture(new Uint8Array([150,150,150,255,205,205,205,255,255,255,255,255]),3,1,THREE.RGBAFormat);RAMP.minFilter=RAMP.magFilter=THREE.NearestFilter;RAMP.needsUpdate=true;
  const mat=(c,r=.5,o={})=>{if(!TOON)return new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:0,...o});const {roughness,metalness,...q}=o;return new THREE.MeshToonMaterial({color:c,gradientMap:RAMP,...q})};
- const OLM=new THREE.MeshBasicMaterial({color:'#3b2a1a',side:THREE.BackSide});   // 외곽선: 뒤집은 껍데기를 법선 방향으로 살짝 부풀림
- OLM.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position+normalize(normal)*0.04;')};
+ const OLM=new THREE.MeshBasicMaterial({color:'#5a4332',side:THREE.BackSide});   // 외곽선: 뒤집은 껍데기를 법선 방향으로 살짝 부풀림
+ OLM.onBeforeCompile=s=>{s.vertexShader=s.vertexShader.replace('#include <begin_vertex>','vec3 transformed=position+normalize(normal)*0.022;')};
  let OL=TOON;   // 멀리 있는 숲처럼 개수가 많은 것은 잠시 꺼서 그리는 양을 줄인다
  const mesh=(g,m,p=[0,0,0],s=[1,1,1],r=[0,0,0])=>{const x=new THREE.Mesh(g,m);x.position.set(...p);x.scale.set(...s);x.rotation.set(...r);x.castShadow=true;x.receiveShadow=true;
   if(OL){if(!g.boundingSphere)g.computeBoundingSphere();if(g.boundingSphere.radius>.2){const o=new THREE.Mesh(g,OLM);o.userData.nodim=true;o.castShadow=o.receiveShadow=false;x.add(o)}}   // 눈·볼 같은 작은 조각은 외곽선 없음
@@ -655,7 +658,7 @@ const G3=(function(){
   let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
   const rects=[[2.4,.2,VIL.X,4.4],[PLAZA.x0-.6,PLAZA.z0-.4,PLAZA.x1+.6,PLAZA.z1+.6],[3.2,2.8,5.0,9.0],[3.2,7.2,9.4,8.8],[ZONE.x0-.6,3.4,VIL.X,VIL.Y],[1.2,13.8,7.0,18.6]];
   const near=(x,z)=>VSLOTS.some(([a,b])=>Math.hypot(a-x,b-z)<2.2)||Math.hypot(x-VIL.start[0],z-VIL.start[1])<2.2;
-  const tree=(x,z,s)=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
+  const tree=(x,z,s)=>{const olw=OL;OL=false;treeInner(x,z,s);OL=olw},treeInner=(x,z,s)=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
    g.add(mesh(new THREE.CylinderGeometry(.07*s,.1*s,.7*s,8),mat('#7a5536',.9),[0,.35*s,0]));
    if(sn==='겨울')g.add(mesh(sph(.34*s),mat('#ffffff',.9),[0,.95*s,0],[1,.6,1]));
    else{const cols=sn==='가을'?['#e0892f','#c9452f','#e8b73a']:sn==='봄'?['#f4b6c8','#f8c9d6']:['#4f9a4a','#5faa5a'];g.add(mesh(sph(.5*s),mat(cols[((Math.floor(x*7+z*3)%cols.length)+cols.length)%cols.length],.85),[0,.95*s,0]))}};
@@ -881,7 +884,7 @@ function render(){
  if(sitting){hint.style.display='block';hint.textContent=reading?'소파에 앉아 『'+S.reading.title+'』 읽는 중':'소파에 앉았어요 · 읽을 책을 올려보세요'}
  else{hint.textContent='가구를 눌러 사용 · 바닥을 눌러 이동';hint.style.display='none'}
  if(S.onboard)hint.style.display='none';
- if(VIEW==='village'){hint.style.display='block';hint.textContent='바닥을 눌러 마을을 걸어 보세요 · 게시판과 모닥불을 눌러 보세요 · 내 방을 누르면 돌아가요'}
+ if(VIEW==='village')hint.style.display='none';   // 마을은 설명문 없이 (사용자 결정)
  renderCoach();
 }
 

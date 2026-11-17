@@ -118,8 +118,8 @@
         "달력 독서한 날 계산에 포함됨 (US-011 에서 확인)"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "입력: {minutes 1~600, daysAgo 0|1 또는 date YYYY-MM-DD(한국 날짜, 오늘 이전), endPage?, memo?}. 날짜는 선택한 날 정오(KST)로 저장(LP-06). '미래 시각'은 미래 날짜로 판정한다(오늘 정오 전에 오늘을 고르는 것은 프로토타입처럼 허용). 소파에 READING 책이 있어야 한다."
     },
     {
       "id": "US-009",

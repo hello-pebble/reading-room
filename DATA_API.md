@@ -1,6 +1,27 @@
 # 데이터와 API 설계
 
-스택 가정: Java 21, Spring, jOOQ, Flyway, PostgreSQL.
+스택 가정: Java 21, Spring, jOOQ, Flyway, PostgreSQL. **내 방 부분은 `backend/`에 구현됐다** (아래 "구현 상태와 차이").
+
+## 구현 상태와 차이 (`backend/`, 2026-11-17)
+
+구현한 범위: 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방·마을 광장·카카오 로그인·책 검색·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+
+| 영역 | 구현 (이 문서와 다른 점) |
+|---|---|
+| 인증 | 로그인이 없어 **`X-User-Id` 헤더**로 사용자를 식별하는 임시 필터(`UserIdFilter`, 없으면 401). 카카오 로그인이 생기면 교체. `POST /dev/users`는 `dev` 프로파일에서만 열린다 |
+| 시각 | 서버 `Clock`으로 `now()`를 정하고, 응답의 시각은 모두 UTC(`...Z`) ISO 문자열. 날짜 자르기(달력·월 목표·직접 기록)는 `Asia/Seoul` |
+| 멱등키 | `Idempotency-Key` 헤더. `idempotency_key(user_id, key, path, status, body)`에 **성공 응답만** 저장하고 재전송이면 그대로 돌려준다. 같은 키를 다른 경로에 쓰면 422. 적용: `POST /books`, `/books/{id}/notes`, `/books/{id}/finish`, `/drop`, `/sessions/start`, `/{id}/stop`, `/{id}/check`, `/{id}/confirm`, `/sessions/manual`. (`PUT`·`PATCH`·구독 저장은 원래 멱등) |
+| 아바타 | 표에 없던 **`PUT /me/avatar`**를 만들었다. 모르는 키는 버리고, 모르는 값·빠진 키는 기본값으로 채우며, **400은 해금 조건 미충족일 때만**(glasses는 책 1건 이상, beanie는 `DONE` 10권 이상). `GET /me`에 `avatar`가 들어 있다 |
+| 책 | `GET /books?status=`, `GET /books/{id}`, `GET /books/{id}/notes`를 더했다. 전체 쪽수는 1~9999이고 0·음수는 비움, 9999 초과는 9999로 맞춘다(프로토타입과 같다). `PATCH`의 현재 쪽은 줄지 않고(작은 값은 무시) 전체 쪽수를 넘는 값도 그대로 저장하되 퍼센트만 100으로 막는다. **메모·스탠드 끄기·직접 기록·완독은 현재 쪽을 전체 쪽수까지만** 올리고 완독 때 넘은 값을 전체 쪽수로 줄인다. `percent`는 서버가 반올림해 내려준다. 포기한 책의 `finished_at`은 비운다. 메모·인용구 삭제 API는 아직 없다 |
+| 세션 | `RUNNING`뿐 아니라 **`NEEDS_CONFIRM`도 사용자당 1개 인덱스에 포함**해(확인 필요 상태도 켜진 것), 그 사이 새로 켤 수 없다(409 + 기존 세션). 컬럼 추가: `memo`, `needs_confirm_at`(전환 시각), `check_notified_for`·`confirm_notified_at`(푸시 중복 방지). 켠 지 3시간이 넘은 `RUNNING`은 10분 배치를 기다리지 않고 **요청 시점에도** `NEEDS_CONFIRM`으로 바꾼다(`check`·`stop`·`GET /sessions/current` 등. 3시간 확인 우회 방지) |
+| stop / confirm | `stop` 본문 `{endPage?, totalPages?(모르던 책만), memo?, endedBy?(LAMP/PIP/NOTIFICATION)}`. 메모는 세션과 책의 `MEMO` 노트로 남는다. `NEEDS_CONFIRM`에서 `stop`하면 `last_check_at`까지만 기록한다(1분 미만이면 `DISCARDED`). `confirm` 본문 `{until: LAST_CHECK \| MINUTES, minutes?, discard?}`: `LAST_CHECK`는 '계속'을 한 번도 안 눌렀으면 1시간으로 기록(프로토타입 [1시간 읽은 걸로 기록]), `MINUTES`는 1~600분이고 켠 뒤 지난 시간 안 |
+| 직접 기록 | 본문 `{minutes(1~600), daysAgo(0·1) 또는 date(YYYY-MM-DD), endPage?, memo?}`. 선택한 한국 날짜 정오에 저장. 미래 날짜는 400. 소파에 `READING` 책이 있어야 한다 |
+| 완독·포기 | `READING` 책만 가능(이미 처리된 책이면 같은 결과로 200, `LATER`는 409). 켜진 스탠드는 같이 끄고(1분 미만은 `DISCARDED`), `NEEDS_CONFIRM`이면 409 `NEEDS_CONFIRM`. 별점 0은 해제, 한줄평 500자까지 |
+| 달력 | `streak`는 **이번 달 조회에서만 숫자**이고 지난 달은 `null`. 이번 달보다 뒤의 `month`는 400. `days`는 그 달 날짜만, `streak`는 전체 기록으로 계산. 확인용 **`GET /me/goal`**을 더했다(첫 조회 때 기본 1권 행 생성). `PUT /me/goal`이 같은 값이면 변경 기록을 늘리지 않는다. `changes`의 `at`은 한국 날짜(`YYYY-MM-DD`), 새 사용자의 첫 변경은 기본 1권에서 시작한다(`1→N`). `app_user.monthly_goal` 컬럼은 서버에 없었으므로 이관은 필요 없다 |
+| 푸시 구독 | `POST` 본문은 브라우저 `PushSubscription` 그대로(`{endpoint, keys:{p256dh, auth}}`, 평평한 모양도 허용), endpoint는 `https://`. 다른 사용자가 같은 endpoint를 저장하면 그 기기의 주인이 바뀐다. `DELETE`는 `?endpoint=` 또는 본문 `{endpoint}`로 내 구독만 지우고 없어도 204 |
+| 알림 선정 | 1분 배치(`NotificationBatch`)가 대상을 DB에서 먼저 "보냈음"으로 표시한 뒤 보낸다(`PushSender` 인터페이스, 구현은 로그만 남기는 `LogPushSender`). 60분 확인은 `last_check_at + 60분`을 **지났을 때**(정확히 60분은 아직)이고 `last_check_at` 값마다 한 번, 3시간을 넘긴 `RUNNING`은 제외. 확인 필요는 `NEEDS_CONFIRM` 전환 뒤 한 번. 보낼 기기가 없어도 선정(표시)은 되어 나중에 구독해도 지난 알림은 오지 않고, 표시 후 전송이 실패하면 다시 보내지 않는다(중복보다 누락). 전송이 `GONE`이면 구독 삭제. VAPID 키는 환경변수 `VAPID_PUBLIC_KEY`·`VAPID_PRIVATE_KEY`·`VAPID_SUBJECT` |
+| 배치 | 구현: 10분(`SessionBatch`, 3시간 초과 → `NEEDS_CONFIRM`), 1분(`NotificationBatch`, 60분 확인·확인 필요 푸시). `app.scheduling.enabled=false`로 끌 수 있다. 나머지 배치(공유방·광장·D-1 알림)는 없음 |
+| 테스트 | `backend/`의 `./gradlew test` (실제 PostgreSQL: Docker 없으면 zonky embedded-postgres, 루트 사용자는 `TEST_DATABASE_URL`로 외부 DB 지정). 시간대가 달라도 같은 결과임을 `-Dtest.tz=America/Los_Angeles`로도 확인 |
 
 ## 테이블
 
@@ -93,7 +114,8 @@
 | POST | `/books` | 소파에 올리기 (`READING`) |
 | PATCH | `/books/{id}` | 현재 쪽(`currentPage`), 전체 쪽(`totalPages`). 퍼센트는 서버·클라이언트가 계산 |
 | GET | `/books/search?q=` | 제목·저자·ISBN·책 링크로 검색 → `[{title, author, totalPages, isbn, coverUrl}]`. 서버가 알라딘(표지·쪽수)과 카카오 책 검색을 호출한다. 링크는 서버가 ISBN이나 서점 상품 번호를 해석해서 같은 책을 찾는다. API 키는 서버에만 둔다 |
-| POST | `/books/{id}/notes` | 메모·인용구 |
+| GET | `/books?status=` · `/books/{id}` | 내 책 목록(상태별)·한 권. 남의 책은 404 |
+| POST | `/books/{id}/notes` | 메모·인용구 (쪽을 적으면 현재 쪽이 더 클 때만 올라간다). `GET`으로 목록 |
 | POST | `/books/{id}/finish` | 별점, 한줄평 → `DONE` (실행 중인 세션 자동 종료. 세션이 `NEEDS_CONFIRM`이면 409로 거절하고 확인을 먼저 요구한다. 확인 없이 닫는 경로는 `last_check_at`까지만 기록한다) |
 | POST | `/books/{id}/drop` | `DROPPED` |
 

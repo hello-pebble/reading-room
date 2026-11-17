@@ -15,8 +15,8 @@
         "backend/README.md 에 실행·테스트 방법 3줄 이내 기록"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "jOOQ 코드 생성은 Flyway 적용 후 DB 기준 또는 jOOQ DDLDatabase 중 단순한 쪽을 택하고 README에 적는다."
+      "passes": true,
+      "notes": "jOOQ는 코드 생성 없이 DSLContext+SQL로 쓴다(README). Docker가 없어 zonky embedded-postgres를 쓰되, 루트 사용자에서는 TEST_DATABASE_URL로 외부 PostgreSQL을 줄 수 있다."
     },
     {
       "id": "US-002",

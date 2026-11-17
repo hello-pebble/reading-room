@@ -148,8 +148,8 @@
         "조회 규칙: 그 달 행 → 없으면 이른 달 중 최근 값 이어받기(goalInherited:true) → 가장 이른 행보다 앞선 달은 null"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "조회 로직은 US-011 의 /me/calendar 에서 재사용하도록 서비스로 분리."
+      "passes": true,
+      "notes": "조회·이어받기는 GoalService.lookup으로 분리(US-011에서 재사용). 확인용 GET /me/goal 추가(DATA_API엔 없음). '처음 값으로 돌아오면 changes 지움'은 같은 한국 날짜 안의 처음 값 기준으로 해석(CA-04: 같은 날 여러 번은 한 번으로 합치고 처음 값으로 돌아오면 지움). 새 사용자의 첫 변경은 기본 1권 행을 먼저 만든 뒤 1→N으로 기록된다. 이어받은 값과 같은 값을 보내면 행을 만들지 않는다."
     },
     {
       "id": "US-011",

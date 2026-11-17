@@ -554,7 +554,10 @@ const G3=(function(){
   matsDirty=true;dimKey=extraKey=shelfKey=mirrorKey=calKey=winKey='';
  }
  function collect(){FUR.forEach(f=>{const set=new Set();FG[f].traverse(n=>{if(n.isMesh&&!n.userData.hull&&!n.userData.nodim&&n.material)set.add(n.material)});matsOf[f]=[...set]})}
- function emis(f,on){const ms=f&&(matsOf[f]||vilMats[f]);if(!ms)return;ms.forEach(m=>{if(m.emissive&&!m.userData.keepEmis)m.emissive.setHex(on?0x3a3015:0)})}
+ function emis(f,on){const ms=f&&(matsOf[f]||vilMats[f]);if(!ms)return;
+  /* 모닥불은 돌·장작까지 통째로 빛나 선택된 것처럼 보이므로 호버 발광을 쓰지 않는다 */
+  if(on&&f&&(f.startsWith('room:')||f==='fire:new'))return;
+  ms.forEach(m=>{if(m.emissive&&!m.userData.keepEmis)m.emissive.setHex(on?0x3a3015:0)})}
  function setHover(f){if(hoverF===f)return;emis(hoverF,false);hoverF=f;emis(f,true)}
  function flash(f){flashUntil[f]=performance.now()+1000}
 

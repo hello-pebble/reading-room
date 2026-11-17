@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import kr.readingroom.app.common.ApiException;
+import kr.readingroom.app.common.Db;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.springframework.dao.DuplicateKeyException;
@@ -113,8 +114,8 @@ public class BookService {
         m.put("status", r.get("status", String.class));
         m.put("rating", r.get("rating", Short.class));
         m.put("oneLineReview", r.get("one_line_review", String.class));
-        m.put("startedAt", r.get("started_at", OffsetDateTime.class));
-        m.put("finishedAt", r.get("finished_at", OffsetDateTime.class));
+        m.put("startedAt", Db.instant(r, "started_at"));
+        m.put("finishedAt", Db.instant(r, "finished_at"));
         return m;
     }
 

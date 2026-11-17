@@ -164,8 +164,8 @@
         "경계 테스트: 한국 자정 직전·직후, 월말 연속일, 서버 시간대가 UTC 여도 동일"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "DECISIONS.md #41 날짜에 연도 저장. 프로토타입 calData 함수와 결과가 같아야 한다."
+      "passes": true,
+      "notes": "streak는 이번 달 조회에서만 숫자이고 지난 달은 null(DATA_API '이번 달만', CA-07). 이번 달보다 뒤의 month는 400(CA-07, 월 이동은 이번 달까지). days는 해당 월 날짜만, streak는 전체 기록으로 계산. 서버·JVM 시간대(UTC/America/Los_Angeles)를 바꿔도 같은 결과임을 -Dtest.tz로 확인. 응답의 시각은 Instant(UTC Z)로 통일. 프로토타입 calData의 '연도 없는 옛 날짜 짐작'은 서버가 timestamptz라 해당 없음. LATER/DROPPED 책은 완독 수·달력에 안 잡힘을 테스트로 확인."
     },
     {
       "id": "US-012",

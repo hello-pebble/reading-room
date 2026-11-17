@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import kr.readingroom.app.common.ApiException;
+import kr.readingroom.app.common.Db;
 import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.springframework.http.HttpStatus;
@@ -65,7 +66,7 @@ public class NoteService {
         m.put("type", r.get("type", String.class));
         m.put("content", r.get("content", String.class));
         m.put("page", r.get("page", Integer.class));
-        m.put("createdAt", r.get("created_at", OffsetDateTime.class));
+        m.put("createdAt", Db.instant(r, "created_at"));
         return m;
     }
 }

@@ -555,8 +555,6 @@ const G3=(function(){
  }
  function collect(){FUR.forEach(f=>{const set=new Set();FG[f].traverse(n=>{if(n.isMesh&&!n.userData.hull&&!n.userData.nodim&&n.material)set.add(n.material)});matsOf[f]=[...set]})}
  function emis(f,on){const ms=f&&(matsOf[f]||vilMats[f]);if(!ms)return;
-  /* 모닥불은 돌·장작까지 통째로 빛나 선택된 것처럼 보이므로 호버 발광을 쓰지 않는다 */
-  if(on&&f&&(f.startsWith('room:')||f==='fire:new'))return;
   ms.forEach(m=>{if(m.emissive&&!m.userData.keepEmis)m.emissive.setHex(on?0x3a3015:0)})}
  function setHover(f){if(hoverF===f)return;emis(hoverF,false);hoverF=f;emis(f,true)}
  function flash(f){flashUntil[f]=performance.now()+1000}
@@ -714,9 +712,9 @@ const G3=(function(){
   if(vilFiresG){villageG.remove(vilFiresG);dispose(vilFiresG)}
   vilFiresG=new THREE.Group();villageG.add(vilFiresG);vilFlames=[];
   vilLabels.filter(l=>l.fire).forEach(l=>l.el.remove());vilLabels=vilLabels.filter(l=>!l.fire);
-  const stone=mat('#9a958a',.95),logM=mat('#4a3322',.9);
+  const stone0=mat('#9a958a',.95),logM0=mat('#4a3322',.9);
   list.slice(0,VSLOTS.length).forEach((n,i)=>{const [x,z]=VSLOTS[i];
-   const g=new THREE.Group();g.position.set(x,0,z);vilFiresG.add(g);
+   const g=new THREE.Group(),stone=stone0.clone(),logM=logM0.clone();g.position.set(x,0,z);vilFiresG.add(g); /* 모닥불마다 재질을 따로 둬야 호버 발광이 그 불에만 켜진다 */
    for(let k=0;k<9;k++){const a=k/9*Math.PI*2;g.add(mesh(new THREE.BoxGeometry(.22,.16,.2),stone,[Math.cos(a)*.46,.08,Math.sin(a)*.46],[1,1,1],[0,-a,0]))}
    g.add(mesh(new THREE.BoxGeometry(.7,.1,.14),logM,[0,.14,0],[1,1,1],[0,.5,0]));g.add(mesh(new THREE.BoxGeometry(.7,.1,.14),logM,[0,.14,0],[1,1,1],[0,-.5,0]));
    const burn=n.kind==='OPEN'||(n.kind==='CLOSED'&&n.left>0);
@@ -732,7 +730,7 @@ const G3=(function(){
    addLabel(`<i class="dot ${n.kind.toLowerCase()}"></i>${esc(n.short)}${st}${n.unread?' <span class="vstar">✦</span>':''}`,x,1.75,z,true);
   });
   if(list.length<VSLOTS.length){ // 빈 모닥불 자리: 누르면 새 모닥불을 피운다
-   const [x,z]=VSLOTS[list.length],g=new THREE.Group();g.position.set(x,0,z);vilFiresG.add(g);
+   const [x,z]=VSLOTS[list.length],g=new THREE.Group(),stone=stone0.clone(),logM=logM0.clone();g.position.set(x,0,z);vilFiresG.add(g);
    for(let k=0;k<9;k++){const a=k/9*Math.PI*2;g.add(mesh(new THREE.BoxGeometry(.22,.16,.2),stone,[Math.cos(a)*.46,.08,Math.sin(a)*.46],[1,1,1],[0,-a,0]))}
    g.add(mesh(new THREE.BoxGeometry(.7,.1,.14),logM,[0,.14,0],[1,1,1],[0,.5,0]));g.add(mesh(new THREE.BoxGeometry(.7,.1,.14),logM,[0,.14,0],[1,1,1],[0,-.5,0]));
    vhull(g,-.8,-.8,0,1.6,1.6,1.3,'fire:new');vcollect('fire:new',g);

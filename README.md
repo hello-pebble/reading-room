@@ -20,6 +20,8 @@
 | `prototype/index-voxel.html` | 이전 복셀 캐릭터 버전 (SVG, 외부 의존성 없음). 되돌릴 때 사용 |
 | `prototype/toon-compare.html` | 소프트 3D와 툰 셰이딩을 나란히 보는 작은 비교 화면 |
 | `prototype/dolls.html` | 유령 단독 시안 (표정·장식·소품을 고르며 걸어다니는 확인용) |
+| `AGENTS.md` | 자동으로 일하는 에이전트(Ralph, 클라우드 세션 등)가 읽는 작업 지침 |
+| `package.json`, `tests/` | 자동 검사 `npm run verify` (문법 검사 + 시나리오 테스트). 아래 "자동 검사" 참고 |
 
 ## 출시 순서
 

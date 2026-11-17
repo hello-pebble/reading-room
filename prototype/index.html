@@ -94,6 +94,28 @@ select{font:inherit;color:inherit;width:100%;padding:9px 10px;border:1px solid v
 #goal::-webkit-outer-spin-button,#goal::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}   /* 목표 입력칸의 위아래 버튼은 없애고 [−] [+]만 둔다 */
 #goal{-moz-appearance:textfield;appearance:textfield}
 .reset.armed{color:var(--danger);border-color:var(--danger)}
+/* 마을 광장 대화창: 모달이 아니라 마을 화면 위에 뜨는 반투명 채팅창. 광장 안에 서 있을 때만 자동으로 뜬다 (결정 #40) */
+#plazaChat{display:none;position:absolute;z-index:4;left:12px;bottom:12px;width:300px;height:240px;max-height:calc(100% - 24px);flex-direction:column;overflow:hidden;   /* 크기는 글 수와 상관없이 고정 */
+ background:rgba(255,250,240,.72);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border:1px solid rgba(217,207,184,.9);border-radius:14px;box-shadow:0 4px 14px rgba(60,40,20,.18);color:var(--ink);font-size:13px}
+.stage-wrap.pz #plazaChat{display:flex}
+.stage-wrap.pz #online{display:none}
+#pzHead{border:0;background:none;display:flex;gap:6px;align-items:center;width:100%;padding:7px 10px;font-size:12px;color:var(--muted);text-align:left;min-height:0}
+#pzLog{flex:1;min-height:0;overflow-y:auto;padding:0 6px 2px 10px}   /* 스크롤바: 얇고 연한 둥근 막대, 화살표·바탕 없음 (크롬·엣지·사파리는 아래 ::-webkit-scrollbar, 파이어폭스는 @supports) */
+@supports not selector(::-webkit-scrollbar){#pzLog{scrollbar-width:thin;scrollbar-color:rgba(138,125,106,.42) transparent}}
+#pzLog::-webkit-scrollbar{width:6px}
+#pzLog::-webkit-scrollbar-track{background:transparent}
+#pzLog::-webkit-scrollbar-thumb{background:rgba(138,125,106,.42);border-radius:999px}
+#pzLog::-webkit-scrollbar-thumb:hover{background:rgba(138,125,106,.7)}
+#pzLog::-webkit-scrollbar-button{display:none;width:0;height:0}
+#pzLog .msg{font-size:13px;margin:3px 0;overflow-wrap:anywhere}
+#pzLog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
+#pzLog .msg.me{text-align:right}
+#pzForm{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px 8px}
+#pzForm input{flex:1;min-width:0;background:rgba(255,255,255,.88)}
+#pzForm #pzE{width:100%;min-height:0}
+#plazaChat.min #pzLog,#plazaChat.min #pzForm{display:none}
+#plazaChat.min{height:auto}
+@media (max-width:760px){#plazaChat{left:0;right:0;width:auto;height:230px;bottom:var(--kb,0px);max-height:55%;border-radius:14px 14px 0 0;border-width:1px 0 0 0}#plazaChat.min{height:auto}}
 .rchip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:#fff;font-size:13px;min-height:0}
 .vstar{color:#e0a100}
 .plog .msg{overflow-wrap:anywhere}.plog .msg.me{text-align:right}.plog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
@@ -194,6 +216,7 @@ input[type=range]{accent-color:var(--accent)}
    <div class="hint" id="hint">가구를 눌러 사용 · 바닥을 눌러 이동</div>
    <canvas id="minimap" width="224" height="224" aria-hidden="true"></canvas>
    <div id="online" aria-hidden="true"></div>
+   <div id="plazaChat" role="region" aria-label="마을 광장 대화"><button id="pzHead" type="button"></button><div id="pzLog" aria-live="polite"></div><div id="pzForm"><input id="pz" maxlength="40" placeholder="한 줄로 말해요" autocomplete="off" enterkeyhint="send"><button class="primary" id="pzSend" type="button" style="white-space:nowrap">보내기</button><div class="muted" id="pzE"></div></div></div>
    <div class="coach" id="coach" style="display:none"></div>
    <div class="coach notice" id="notice" style="display:none"></div>
    <div class="sr-btns" id="srBtns"></div>
@@ -876,7 +899,7 @@ function drawMini(){
  G3.npcs().forEach(([x,z])=>dot(x,z,'#5f9a5a',3));
  dot(sim.x,sim.z,'#3b3226',7);dot(sim.x,sim.z,'#ffd23f',4.6);
 }
-setInterval(drawMini,120);
+setInterval(()=>{drawMini();syncPlazaChat()},120);
 function hdrText(extra){const c=calData();return '@'+S.user.handle+' · 읽은 책 '+S.finished.length+'권'+(c.streak?' · '+c.streak+'일 연속 기록':'')+' · 오늘 '+todayMin()+'분'+(extra||'')}
 function render(){
  const a=avatarNow();
@@ -985,6 +1008,7 @@ function openF(f){
 function vTarget(f){if(f==='board')return [12.1,7.7];if(f==='plaza')return [PLAZA.cx,PLAZA.cz+1.5];const i=f==='fire:new'?S.news.length:Math.max(0,vilOrder().findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
 function openV(f){
  if(f==='home'){closePanel();walkTo(VIL.home[0],VIL.home[1],()=>leaveVillage());return}
+ if(f==='plaza'){closePanel();walkTo(...vTarget(f),()=>{if(canHover){const i=document.getElementById('pz');if(i&&pzShown)i.focus()}});return}   // 광장 단상을 누르면 걸어가고, 도착하면 대화창이 저절로 뜬다 (창을 따로 열지 않는다)
  panelOpen=f;panelView={};renderPanel();backdrop.classList.add('open');panel.scrollTop=0;tip.style.display='none';focusPanel();
  walkTo(...vTarget(f));
 }
@@ -1009,7 +1033,6 @@ function renderPanel(){
  if(f==='shelf')h=shelfPanel();
  if(f==='calendar')h=calendarPanel();
  if(f==='board')h=boardPanel();
- if(f==='plaza')h=plazaPanel();
  if(f==='fire:new')h=createPanel();
  if(f&&f.startsWith('room:'))h=roomPanel(f.slice(5));
  if(f==='mirror')h=mirrorPanel();
@@ -1201,16 +1224,23 @@ function boardPanel(){
 // ===== 마을 광장: 방에 들어가지 않고 하는 짧은 대화. 하루 뒤 사라진다 =====
 const hhmm=ts=>new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
 const plazaLogHtml=()=>S.plaza.length?S.plaza.slice(-30).map(m=>`<div class="msg ${m.mine?'me':''}"><b>${esc(m.who)}</b>${esc(m.text)}<i>${hhmm(m.ts)}</i></div>`).join(''):'<p class="muted">아직 아무도 말하지 않았어요. 첫 마디를 남겨 보세요.</p>';
-function plazaPanel(){
- return head('마을 광장')+'<p class="muted">책이 달라도 괜찮아요. 공유방 이야기는 모닥불 안에서만 해요.</p>'
-  +`<div class="plog" id="plazaLog">${plazaLogHtml()}</div>`
-  +`<div class="foot"><div class="row"><input id="pz" maxlength="40" placeholder="한 줄로 말해요" autocomplete="off"><button class="primary" data-act="plazaSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="pzE" style="margin-top:4px"></div></div>`;
-}
 function plazaSay(who,text,i,mine){
  S.plaza.push({who,text,ts:Date.now(),mine:!!mine});S.plaza=S.plaza.slice(-60);save();
  if(G3)G3.say(i,text);
- const lg=document.getElementById('plazaLog');if(panelOpen==='plaza'&&lg){lg.innerHTML=plazaLogHtml();lg.scrollTop=lg.scrollHeight}
+ const lg=document.getElementById('pzLog');if(pzShown&&lg){const atEnd=lg.scrollHeight-lg.scrollTop-lg.clientHeight<40||mine;lg.innerHTML=plazaLogHtml();if(atEnd)lg.scrollTop=lg.scrollHeight}
 }
+// 광장 대화창: 광장(돌바닥) 안에 있을 때만 보이고, 밖으로 나가면 사라진다. 제목을 누르면 접어 둘 수 있다.
+let pzShown=false;
+const pzBox=document.getElementById('plazaChat');
+const pzHeadText=()=>{document.getElementById('pzHead').textContent='💬 광장 이야기 · 접속 ('+String(NPCS.length+1).padStart(2,'0')+'/'+VMAX+') '+(pzBox.classList.contains('min')?'▴':'▾')};
+function syncPlazaChat(){
+ const on=VIEW==='village'&&inPlaza(sim.x,sim.z);if(on===pzShown)return;pzShown=on;
+ document.getElementById('stageWrap').classList.toggle('pz',on);
+ if(on){const lg=document.getElementById('pzLog');lg.innerHTML=plazaLogHtml();lg.scrollTop=lg.scrollHeight;pzHeadText()}}
+pzBox.addEventListener('click',e=>{if(e.target.closest('#pzHead')){pzBox.classList.toggle('min');pzHeadText()}if(e.target.closest('#pzSend'))plazaSend()});
+pzBox.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&e.target.id==='pz'){e.preventDefault();plazaSend()}});
+// 폰 키보드가 올라오면 하단 채팅창이 키보드 위로 올라오게 한다
+if(window.visualViewport){const vv=visualViewport,adj=()=>pzBox.style.setProperty('--kb',Math.max(0,innerHeight-vv.height-vv.offsetTop)+'px');vv.addEventListener('resize',adj);vv.addEventListener('scroll',adj)}
 function plazaSend(){
  const inp=document.getElementById('pz'),e=document.getElementById('pzE'),t=inp.value.trim().slice(0,40);if(!t){inp.value='';return}
  if(!inPlaza(sim.x,sim.z)){e.textContent='광장 안으로 걸어가는 중이에요. 도착하면 보낼 수 있어요';return}

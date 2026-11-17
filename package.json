@@ -1,0 +1,13 @@
+{
+  "name": "reading-room",
+  "private": true,
+  "description": "독서 공유방 프로토타입 (prototype/index.html 한 파일). 검사와 테스트 스크립트만 있다.",
+  "scripts": {
+    "check": "node tests/check-syntax.js",
+    "test": "node --test --test-force-exit tests/scenarios.test.js",
+    "verify": "npm run check && npm test"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

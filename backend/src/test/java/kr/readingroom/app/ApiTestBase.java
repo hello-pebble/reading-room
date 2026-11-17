@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
+@org.springframework.test.context.TestPropertySource(properties = "app.scheduling.enabled=false")
 @org.springframework.context.annotation.Import(ApiTestBase.ClockConfig.class)
 public abstract class ApiTestBase extends PgTestBase {
     @org.springframework.boot.test.context.TestConfiguration

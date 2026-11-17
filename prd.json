@@ -177,8 +177,8 @@
         "NEEDS_CONFIRM 전환 시각을 기록해 이후 푸시 중복 발송을 막을 수 있게 한다(컬럼 또는 이벤트)"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "SPEC.md 3시간 규칙 확인."
+      "passes": true,
+      "notes": "배치 로직은 SessionExpirer.expireOverdue()로 분리, SessionBatch(@Scheduled 10분, app.scheduling.enabled=false로 끌 수 있음)가 부른다. 전환 시각은 reading_session.needs_confirm_at(요청 시점 전환과 배치 모두 기록). started_at < now-3h 이면 전환(정확히 3시간은 아직 RUNNING)."
     },
     {
       "id": "US-013",

@@ -91,6 +91,9 @@ select{font:inherit;color:inherit;width:100%;padding:9px 10px;border:1px solid v
 .rlockinfo{font-size:12px;color:#8a5a00;background:#fff4c9;border-radius:8px;padding:4px 8px;margin-bottom:6px}
 .rband{display:flex;gap:10px;align-items:center;background:#fbe7d6;border-radius:12px;padding:8px 10px;margin:6px 0}
 .rband.hot{background:#f9d3c4}
+#goal::-webkit-outer-spin-button,#goal::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}   /* 목표 입력칸의 위아래 버튼은 없애고 [−] [+]만 둔다 */
+#goal{-moz-appearance:textfield;appearance:textfield}
+.reset.armed{color:var(--danger);border-color:var(--danger)}
 .rchip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:#fff;font-size:13px;min-height:0}
 .vstar{color:#e0a100}
 .plog .msg{overflow-wrap:anywhere}.plog .msg.me{text-align:right}.plog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
@@ -1135,7 +1138,8 @@ function shelfPanel(){
   if(tab==='rooms'){let lockedN=0;   // 쪽수 잠금: 이 책을 내가 읽은 쪽(완독·포기하면 전부)보다 뒤쪽 글은 가린다
    body=b.rooms.map(rm=>{const room={rtype:rm.rtype,pageLock:rm.pageLock,book:b.title};return `<div class="card"><b>${esc(rm.title)}</b><div class="muted">${rm.period} · 가져온 기록</div><div style="margin-top:8px">${rm.messages.map(m=>{const lk=rcLocked(room,m);if(lk)lockedN++;return `<div class="msg"><b>${esc(m.who)}</b>${lk?`🔒 ${m.page}쪽 이후 글 · 읽으면 열려요`:esc(m.text)}</div>`}).join('')}</div></div>`}).join('')+(lockedN?`<p class="muted">🔒 잠긴 글 ${lockedN}개는 이 책을 더 읽으면 열려요.</p>`:'')+'<p class="muted">다른 참여자 이름은 익명으로 보관돼요.</p>'}
   return head('책장')+`<button class="ghost" data-act="back" style="padding:4px 0">← 목록</button>
-   <div class="row" style="margin-top:6px">${bthumb(b)}<div><b>『${esc(b.title)}』</b><div class="muted">${esc(b.author)} · ${later?'나중에 읽을 책':v.drop?'포기':String(b.finishedAt).replace(/^\d{4}\./,'')+' 완독'}</div></div></div>
+   <div class="row" style="margin-top:6px">${bthumb(b)}<div><b>『${esc(b.title)}』</b><div class="muted">${esc(b.author)} · ${later?'나중에 읽을 책':v.drop?'포기':String(b.finishedAt).replace(/^\d{4}\./,'')+' 완독'}</div>${!later&&minOfBook(b.id)>0?`<div class="muted">⏱ 읽은 시간 ${fmtMin(minOfBook(b.id))} · 기록 ${S.sessions.filter(x=>x.bookId===b.id).length}번</div>`:''}</div></div>
+   ${later?`<button class="primary" data-act="laterToSofa" data-id="${b.id}" style="width:100%;margin-top:8px">소파에 올리기</button>`:''}
    <div class="tabs">${tabs.map(([k,l])=>`<button data-act="tab" data-t="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')}</div>${body}`}
  const showDrop=v.list==='drop',showLater=v.list==='later';
  const list=showLater?S.later.slice().reverse():showDrop?S.dropped:S.finished.slice().reverse();
@@ -1468,6 +1472,10 @@ panel.addEventListener('click',e=>{
   const li=S.later.findIndex(x=>x.title===t),lrooms=li>=0?S.later.splice(li,1)[0].rooms:[]; // 나중에 읽을 책에 있던 책이면 목록에서 빼고 공유방 기록을 이어 받는다
   S.reading={id:Date.now(),title:t,author:a,cover:panelView.cover||'',isbn:panelView.isbn||'',totalPages:tp,page:0,progress:0,notes:[],rooms:lrooms,startedAt:today()};panelView={};
   const wasOb=S.onboard===1;if(wasOb)S.onboard=2;save();render();renderPanel();toast('소파에 『'+t+'』을 올렸어요');return}
+ if(act==='laterToSofa'){const i=S.later.findIndex(x=>x.id===+b.dataset.id);if(i<0)return;   // 나중에 읽을 책을 책장에서 바로 소파에 올린다. 공유방 기록이 따라온다
+  if(S.reading){toast('소파에 이미 읽는 책이 있어요. 먼저 완독하거나 포기해 주세요');return}
+  const lb=S.later.splice(i,1)[0];S.reading={id:Date.now(),title:lb.title,author:lb.author||'',cover:lb.cover||'',isbn:lb.isbn||'',totalPages:lb.totalPages||null,page:0,progress:0,notes:[],rooms:lb.rooms||[],startedAt:today()};
+  save();closePanel();render();toast('소파에 『'+lb.title+'』을 올렸어요. 공유방 기록이 따라왔어요');return}
  if(act==='type'){panelView.type=b.dataset.t;renderPanel();return}
  if(act==='addNote'){const c=(panelView.draft||'').trim();if(!c){document.getElementById('ncE').textContent='내용을 입력해 주세요';return}
   const pg=Math.max(0,Math.round(+document.getElementById('np').value))||null,rd=S.reading;rd.notes.push({type:panelView.type||'MEMO',content:c,page:pg,at:today()});panelView.draft='';
@@ -1542,7 +1550,12 @@ panel.addEventListener('click',e=>{
   if(!bk){bk=S.later.find(x=>x.title===n.book);if(!bk){bk={id:Date.now(),title:n.book,author:n.author||'',cover:n.cover||'',isbn:n.isbn||'',addedAt:ymd(),notes:[],rooms:[]};S.later.push(bk);msg='『'+n.book+'』을 "나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요'}}
   if(!bk.rooms)bk.rooms=[];bk.rooms.push(rec);n.done=true;save();render();renderPanel();toast(msg);return}
 });
-document.getElementById('resetBtn').onclick=()=>{try{localStorage.removeItem('myroom-proto-v1')}catch(e){}S=defaultState();S.onboard=1;Object.assign(sim,{x:L.start[0],z:L.start[1],y:0,mode:'idle',after:null,mv:0,sit:0,k:0,rot:Math.PI/4});tempAvatar=null;closePanel();render();toast('처음 상태로 되돌렸어요');entryFlash()};
+// 데모 초기화는 기록을 모두 지우므로 4초 안에 한 번 더 눌러야 실행된다
+let resetArm=0,resetT;const resetBtn=document.getElementById('resetBtn');
+resetBtn.onclick=()=>{
+ if(!resetArm){resetArm=1;resetBtn.textContent='한 번 더 누르면 모두 지워요';resetBtn.classList.add('armed');clearTimeout(resetT);resetT=setTimeout(()=>{resetArm=0;resetBtn.textContent='데모 초기화';resetBtn.classList.remove('armed')},4000);return}
+ resetArm=0;clearTimeout(resetT);resetBtn.textContent='데모 초기화';resetBtn.classList.remove('armed');
+ try{localStorage.removeItem('myroom-proto-v1')}catch(e){}S=defaultState();S.onboard=1;Object.assign(sim,{x:L.start[0],z:L.start[1],y:0,mode:'idle',after:null,mv:0,sit:0,k:0,rot:Math.PI/4});tempAvatar=null;closePanel();render();toast('처음 상태로 되돌렸어요');entryFlash()};
 
 function entryFlash(){
  if(!window.matchMedia('(hover: none)').matches)return;
@@ -1593,6 +1606,7 @@ function fmtHMS(ms){const t=Math.max(0,Math.floor(ms/1000));const h=Math.floor(t
 function fmtClock(e){const d=new Date(e);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
 function fmtDay(e){const d=new Date(e);return (d.getMonth()+1)+'.'+String(d.getDate()).padStart(2,'0')}
 function minOfBook(id){return S.sessions.filter(x=>x.bookId===id).reduce((a,x)=>a+x.minutes,0)}
+const fmtMin=m=>m>=60?Math.floor(m/60)+'시간'+(m%60?' '+m%60+'분':''):m+'분';
 function todayMin(){const k=t=>new Date(t).toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}),t=k(Date.now());return S.sessions.filter(x=>k(x.endedAt||x.startedAt)===t).reduce((a,x)=>a+x.minutes,0)} // 달력과 같은 기준: 한국 시간, 종료일에 세션 전체를 센다
 function startTimer(){
  if(!S.reading||S.session)return;

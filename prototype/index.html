@@ -69,6 +69,30 @@ select{font:inherit;color:inherit;width:100%;padding:9px 10px;border:1px solid v
 .vbub{z-index:3;background:#fff;border:1px solid #d9cfb8;padding:4px 9px;border-radius:12px;font-size:12px;line-height:1.35;width:max-content;max-width:150px;overflow-wrap:anywhere;color:#3b3226;text-align:center;box-shadow:0 2px 6px rgba(60,40,20,.18)}
 .vbub.me{background:#fff4c9;border-color:#e8c96a}
 .plog{max-height:46vh;overflow-y:auto;margin:8px 0}
+/* 공유방 대화 (RC) */
+.rsub{font-size:13px;color:var(--muted);margin:0 0 6px}
+.rtabs{margin:6px 0 8px}
+.rlog{position:relative;max-height:min(38vh,330px);min-height:110px;overflow-y:auto;margin:6px 0}
+.rd{text-align:center;font-size:11px;color:var(--muted);margin:10px 0 6px}
+.rnew{text-align:center;font-size:12px;color:#8a5a00;border-top:1px solid #e8c96a;margin:10px 0 6px;padding-top:3px}
+.rm{background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 10px;margin:6px 26px 6px 0;overflow-wrap:anywhere}
+.rm.me{background:#fff4c9;border-color:#e8c96a;margin:6px 0 6px 26px}
+.rm.del{background:none;border-style:dashed;color:var(--muted);font-size:13px}
+.rm-h{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.rm-h i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.rm-h b{font-weight:normal;color:var(--ink)}
+.rm-h small{font-size:10px;background:#eee8dc;border-radius:999px;padding:0 6px}
+.rm-h .pg{background:#e4efe2;color:#2f5a3a;border-radius:999px;padding:0 7px;font-size:11px}
+.rm-h time{margin-left:auto}
+.rm-x{border:0;background:none;padding:0 4px;color:var(--muted);min-height:0}
+.rm-t{font-size:14px;margin-top:3px;white-space:pre-wrap}
+.rm.lk .rm-t{filter:blur(4px);user-select:none;color:#8a7d68}
+.rm .lkcap{font-size:12px;color:#8a5a00;margin-top:2px}
+.rlockinfo{font-size:12px;color:#8a5a00;background:#fff4c9;border-radius:8px;padding:4px 8px;margin-bottom:6px}
+.rband{display:flex;gap:10px;align-items:center;background:#fbe7d6;border-radius:12px;padding:8px 10px;margin:6px 0}
+.rband.hot{background:#f9d3c4}
+.rchip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:#fff;font-size:13px;min-height:0}
+.vstar{color:#e0a100}
 .plog .msg{overflow-wrap:anywhere}.plog .msg.me{text-align:right}.plog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
 .stage-wrap.vil #newMark,.stage-wrap.vil #newMarkWin,.stage-wrap.vil #newMarkSofa,.stage-wrap.vil #lampLabel{display:none!important}
 .bthumb{width:48px;height:68px;border-radius:6px;overflow:hidden;flex:none;box-shadow:0 1px 3px rgba(40,30,20,.25)}
@@ -663,7 +687,7 @@ const G3=(function(){
    }else if(n.kind==='CLOSED')g.add(mesh(new THREE.CylinderGeometry(.3,.34,.06,16),mat('#6d665e',.95),[0,.1,0]));
    vhull(g,-.8,-.8,0,1.6,1.6,1.3,'room:'+n.id);vcollect('room:'+n.id,g);
    const st=n.kind==='OPEN'?'':n.kind==='SOON'?' · '+(n.opens||'곧')+(n.alarm?' 🔔':''):' · '+(n.done?'✓ ':'')+'D-'+n.left;
-   addLabel(`<i class="dot ${n.kind.toLowerCase()}"></i>${esc(n.short)}${st}`,x,1.75,z,true);
+   addLabel(`<i class="dot ${n.kind.toLowerCase()}"></i>${esc(n.short)}${st}${n.unread?' <span class="vstar">✦</span>':''}`,x,1.75,z,true);
   });
   if(list.length<VSLOTS.length){ // 빈 모닥불 자리: 누르면 새 모닥불을 피운다
    const [x,z]=VSLOTS[list.length],g=new THREE.Group();g.position.set(x,0,z);vilFiresG.add(g);
@@ -796,7 +820,7 @@ const roomSub=n=>{
  return n.sub};
 // 모닥불 자리는 8개뿐이라 열린 방 → 곧 열릴 방 → 종료된 방 순으로 자리를 준다 (종료된 방은 게시판에는 계속 보인다)
 const vilOrder=()=>{const r={OPEN:0,SOON:1,CLOSED:2};return [...S.news].sort((a,b)=>r[a.kind]-r[b.kind])};
-const vilList=()=>vilOrder().map(n=>({id:n.id,kind:n.kind,short:shortTitle(n),done:!!n.done,alarm:!!n.alarm,left:roomLeft(n),opens:n.opensAt?mmdd(n.opensAt):''}));
+const vilList=()=>vilOrder().map(n=>({unread:rcUnread(n),id:n.id,kind:n.kind,short:shortTitle(n),done:!!n.done,alarm:!!n.alarm,left:roomLeft(n),opens:n.opensAt?mmdd(n.opensAt):''}));
 function enterVillage(){
  if(VIEW==='village')return;closePanel();
  const w=document.getElementById('stageWrap');w.classList.add('fading');
@@ -838,7 +862,7 @@ function render(){
  const ses=S.session,lampOn=!!ses&&ses.status==='RUNNING',lampWarn=!!ses&&ses.status==='NEEDS_CONFIRM';
  const sitting=isSit();
  const onboardDim=f=>S.onboard===1?(f!=='sofa'):S.onboard===2?(f!=='lamp'):false;
- const winNew=S.news.some(n=>n.kind==='CLOSED'&&!n.done&&!(n.messages&&!n.messages.length)&&!S.newsSeen[n.id]); // 가구는 움직이지 않고, 신규 알림은 노란 별로만 알린다
+ const winNew=S.news.some(n=>n.kind==='CLOSED'&&!n.done&&!(rcEmpty(n))&&!S.newsSeen[n.id])||S.news.some(rcUnread); // 가구는 움직이지 않고, 신규 알림은 노란 별로만 알린다. 참여 중인 방의 안 읽은 글도 별 (RC-16)
  const openRooms=S.news.filter(n=>n.kind==='OPEN').length;
  if(G3)G3.sync({a,reading,title:reading?S.reading.title:'',sitting,lampOn,lampWarn,dim:onboardDim,openRooms,newItem:S.newItem,winNew,books:S.finished.slice(-((L.K||7)*4)).map(b=>b.title),cal,win:windowScene(),vil:vilList()});
  // 화면 위 표시
@@ -968,6 +992,7 @@ function renderPanel(){
  if(f==='mirror')h=mirrorPanel();
  if(f==='window')h=windowPanel();
  panel.innerHTML=h;
+ if(f.startsWith('room:'))rcAfter(f.slice(5));
 }
 function homeCard(){
  const r=S.reading,ses=S.session;
@@ -1124,13 +1149,14 @@ function calendarPanel(){
   <div class="progress" style="margin:10px 0 6px"><i id="goalBar" style="width:${pct}%"></i></div><div class="muted" id="goalStat">완독 ${c.done}/${c.goal}권${c.done>=c.goal?' · 목표 달성':''} · 포기한 책은 세지 않아요</div></div>`;
 }
 // 공유방 카드: 마을 게시판, 모닥불 창이 함께 쓴다
-function roomCard(n){
+function roomCard(n,noAct){
  const K={OPEN:['진행 중',''],SOON:['예정','gray'],CLOSED:['종료','warn']}[n.kind];let act='';
  if(n.kind==='OPEN')act=`<button class="primary" data-act="enterRoom" data-id="${n.id}">들어가기</button>`;
  if(n.kind==='SOON')act=`<button data-act="alarm" data-id="${n.id}">${n.alarm?'알림 받는 중 ✓':'알림 받기'}</button>`;
- if(n.kind==='CLOSED')act=n.done?`<span class="muted">내 서재로 가져옴 ✓</span>`:(n.messages&&!n.messages.length)?`<span class="muted">가져올 대화가 없어요</span>`:`<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
+ if(n.kind==='CLOSED')act=n.done?`<span class="muted">내 서재로 가져옴 ✓</span>`:(rcEmpty(n))?`<span class="muted">가져올 대화가 없어요</span>`:`<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
+ if(noAct)act='';
  const tag=n.rtype?`<span class="badge gray">${n.rtype==='OWN'?'각자 읽기':'같은 책'}</span>`:'';
- return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}<b class="grow" style="font-weight:normal">${esc(n.title)}</b></div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period?' · '+esc(n.period):''}</div>${act}</div>`;
+ return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n)?'<span class="badge">새 글</span>':''}<b class="grow" style="font-weight:normal">${esc(n.title)}</b></div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period?' · '+esc(n.period):''}</div>${act}</div>`;
 }
 function boardPanel(){
  const sec=(t,k)=>{const l=S.news.filter(n=>n.kind===k);return l.length?`<label>${t}</label>`+l.map(roomCard).join(''):''};
@@ -1160,18 +1186,6 @@ function plazaSend(){
 }
 // 체험판: 가짜 이웃이 가끔 말을 건다
 setInterval(()=>{S.plaza=(S.plaza||[]).filter(m=>Date.now()-m.ts<864e5);if(VIEW!=='village'||Math.random()<.4)return;const i=Math.floor(Math.random()*NPCS.length);plazaSay('@'+NPCS[i].name,NPC_SAY[Math.floor(Math.random()*NPC_SAY.length)],i)},9000);
-function roomPanel(id){
- const n=S.news.find(x=>x.id===id);if(!n)return head('모닥불')+'<p class="muted">이 공유방은 사라졌어요.</p>';
- const note=n.kind==='OPEN'?(n.rtype==='OWN'?'각자 읽는 책 이야기를 나누는 모닥불이에요.':'모닥불이 활활 타고 있어요. 같은 책을 읽은 사람들이 모여 있어요.'):n.kind==='SOON'?'아직 불이 붙지 않았어요. 열리면 모닥불에 불이 붙어요.':'불이 작아지고 있어요. '+roomLeft(n)+'일 뒤에 꺼지고 기록이 사라져요. 그 전에 내 서재로 가져오세요.';
- let extra='';
- if(n.mine){
-  extra=(n.kind!=='CLOSED'?inviteBlock(n):'')
-   +`<div class="card muted">${n.rtype==='OWN'?'내가 읽는 책':'함께 읽는 책'}: ${n.book?'『'+esc(n.book)+'』':'아직 안 정했어요'}<br>공개 범위: ${n.vis==='public'?'마을에 공개':'초대 링크로만'}${n.rtype==='SAME'?'<br>쪽수 잠금: '+(n.pageLock?'켜짐':'꺼짐'):''}</div>`
-   +(n.kind!=='CLOSED'?`<button style="width:100%;margin-top:6px;color:var(--danger)" data-act="closeRoom" data-id="${n.id}">${n.kind==='SOON'?'모닥불 취소':'일찍 끝내기'}</button>`:'')
-   +(n.kind!=='CLOSED'?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구</summary><div class="row wrap" style="margin-top:8px"><button data-act="friendIn" data-id="${n.id}">친구 1명 들어오기</button></div><p class="muted">친구가 링크로 들어오면 인원이 늘어요. 정원이 차면 더 들어올 수 없어요.</p></details>`:'');
- }
- return head(shortTitle(n))+roomCard(n)+`<p class="muted">${note}</p>`+extra;
-}
 // ===== 모닥불 피우기 (공유방 개설) =====
 const RDEF=()=>({kind:'SAME',bookSel:S.reading?'sofa':'',bookTitle:'',name:'',start:'now',when:'',days:7,vis:'invite',max:8,lock:true});
 const nfBook=nf=>{
@@ -1183,6 +1197,149 @@ const defaultRoomName=nf=>{const b=nfBook(nf);return nf.kind==='SAME'?(b?'『'+b
 const inviteLink=n=>location.href.split('#')[0]+'#join='+n.inviteCode;
 const genCode=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<8;i++)s+=c[Math.floor(Math.random()*c.length)];return s};
 function inviteBlock(n){return `<div class="card"><b>초대 링크</b><input id="invLink" readonly value="${esc(inviteLink(n))}" style="margin-top:6px"><div class="row" style="margin-top:8px"><button class="grow" data-act="copyLink" data-id="${n.id}">링크 복사</button>${navigator.share?`<button class="grow" data-act="shareLink" data-id="${n.id}">공유</button>`:''}</div><div class="muted" style="margin-top:6px">초대 코드 ${n.inviteCode}${n.vis==='public'?' · 마을 게시판에도 보여요':''}</div><div class="muted">체험판에서는 이 브라우저에서 만든 모닥불만 열려요.</div></div>`}
+// ===== 공유방 대화 (결정 #38, 기능 정의서 RC-01~RC-17) =====
+const MAXMSG=300,SEND_GAP=5000;let rcLast=0;
+const NAMEPOOL=['@나무','@달빛','@구름','@바다','@모래','@하늘','@바람','@여울','@노을','@이끼','@솔','@봄비','@담쟁이','@반딧불','@물결','@새벽','@고래','@해님','@도토리','@별빛','@안개','@돌담','@산들','@풀잎','@종이배','@낮달','@오솔길','@소나기','@온새미','@아침'];
+const BOOKPOOL=['아몬드','어린 왕자','사피엔스','채식주의자','불편한 편의점','모순','데미안','82년생 김지영'];
+const ROOM_SAY=['처음엔 느리게 읽히다가 중반부터 확 빨려 들어갔어요','이 장면에서 한참 멈춰 있었어요','문장이 너무 좋아서 밑줄 쳤어요','저는 이 인물이 이해되면서도 답답했어요','여기까지 읽은 분 계세요?','다음 장이 기대돼요','잠깐 덮어 두고 생각 좀 했어요','오늘은 여기까지 읽고 쉴게요','마음에 남는 문장이 있어요','예상 못 한 전개였어요','분위기가 확 달라지는 부분이었어요','같이 읽으니까 끝까지 읽게 돼요'];
+const rcKey=s=>String(s||'').replace(/[『』\s]/g,'');
+const roomBook=n=>n.book||shortTitle(n);
+const rcMine=m=>m.who==='나'&&!m.left;
+const rcName=m=>m.left?'나간 참여자':m.who==='나'?S.user.nickname:m.who;
+const rcHash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h};
+const rcColor=s=>SPINE[rcHash(s)%SPINE.length];
+const rcEmpty=n=>n.messages&&!n.messages.some(m=>!m.del);
+// 내 읽기 위치: 다 읽었거나 포기한 책이면 전부 열림(all), 읽는 중이면 현재 쪽, 아니면 쪽수 없음
+function myPos(n){const b=rcKey(roomBook(n));
+ if([...S.finished,...S.dropped].some(x=>rcKey(x.title)===b))return {all:true};
+ if(S.reading&&rcKey(S.reading.title)===b)return {page:S.reading.page>0?S.reading.page:null};
+ return {page:null}}
+// 쪽수 잠금 (RC-06): 내 쪽보다 뒤쪽 글, 내 쪽수를 안 적었으면 쪽수가 붙은 글 모두. 잠긴 글은 내용을 화면에 아예 싣지 않는다
+function rcLocked(n,m){if(n.rtype==='OWN'||n.pageLock===false||m.del||rcMine(m)||m.page==null)return false;const p=myPos(n);return !p.all&&(p.page==null||m.page>p.page)}
+function rcUnread(n){return !!(n.agreed&&n.kind==='OPEN'&&n.messages.some(m=>!m.del&&!rcMine(m)&&m.ts>(n.lastRead||0)))}
+const rcPage=n=>{if(panelView.pg!==undefined)return panelView.pg;const p=myPos(n);return p.all?null:p.page}
+const rcMembersOf=(n,c)=>{const o=rcHash(n.id)%NAMEPOOL.length;return Array.from({length:Math.max(0,Math.min(c,NAMEPOOL.length))},(_,i)=>NAMEPOOL[(o+i)%NAMEPOOL.length])};
+// 옛 형식 방을 대화용 필드로 보정하고, 열린 남의 방에는 시연용 글을 몇 개 깔아 둔다
+function rcNorm(n){
+ if(!n.rtype)n.rtype='SAME';if(n.pageLock===undefined)n.pageLock=n.rtype==='SAME';
+ if(!n.book)n.book=shortTitle(n);
+ if(!n.max)n.max=30;
+ if(!n.people){const m=/(\d+)명/.exec(n.sub||'');n.people=m?+m[1]:n.mine?1:n.kind==='CLOSED'?3:12}
+ if(!n.inviteCode)n.inviteCode=genCode();
+ if(!n.members)n.members=n.mine?[]:rcMembersOf(n,n.people-1);
+ if(n.owner===undefined)n.owner=n.mine?'나':(n.members[0]||'');
+ if(!n.messages)n.messages=[];
+ n.messages.forEach((m,i)=>{if(!m.id)m.id='m'+n.id+'_'+i;if(!m.ts)m.ts=Date.now()-(n.messages.length-i)*5*3600e3});
+ if(n.agreed===undefined)n.agreed=n.kind==='CLOSED'&&n.messages.length>0;
+ if(n.lastRead===undefined)n.lastRead=0;
+ if(n.kind==='OPEN'&&!n.mine&&!n.seeded&&!n.messages.length&&n.members.length){n.seeded=true;
+  [12,34,52,88,121,160,205,260].forEach((pg,i)=>n.messages.push({id:'m'+n.id+'s'+i,who:n.members[i%n.members.length],text:ROOM_SAY[i%ROOM_SAY.length],page:n.rtype==='OWN'?null:pg,ts:Date.now()-(8-i)*4*3600e3}))}
+}
+S.news.forEach(rcNorm);save();
+function rcFakeMsg(n){
+ if(!n.members.length)return;const who=n.members[Math.floor(Math.random()*n.members.length)],p=myPos(n).page;let page=null;
+ if(n.rtype!=='OWN')page=p?Math.max(1,Math.round(p+Math.random()*100-25)):Math.round(10+Math.random()*300);
+ n.messages.push({id:'m'+Date.now()+Math.floor(Math.random()*99),who,text:ROOM_SAY[Math.floor(Math.random()*ROOM_SAY.length)],page,ts:Date.now()});
+ if(n.messages.length>300)n.messages.splice(0,n.messages.length-300);
+ const viewing=panelOpen==='room:'+n.id&&(panelView.tab||'chat')==='chat';if(viewing)n.lastRead=Date.now();
+ save();render();if(viewing)rcRefresh(n)}
+// 체험판: 참여 중인 열린 방에 가짜 참여자가 가끔 글을 보낸다
+setInterval(()=>{const l=S.news.filter(n=>n.kind==='OPEN'&&n.agreed&&n.members.length);if(l.length&&Math.random()<.6)rcFakeMsg(l[Math.floor(Math.random()*l.length)])},12000);
+function rcSnapshot(n){const names={};let k=0;return n.messages.filter(m=>!m.del&&!rcLocked(n,m)).map(m=>{
+ if(rcMine(m))return {who:'나',text:m.text,page:m.page};
+ const key=m.left?'나간':m.who;if(!names[key])names[key]='참여자 '+String.fromCharCode(65+(k++%26));return {who:names[key],text:m.text,page:m.page}})}
+function rcLogHtml(n){
+ const live=n.messages.filter(m=>!m.del);let locked=0,out='',day='',div=false;
+ const newN=panelView.readAt?live.filter(m=>!rcMine(m)&&m.ts>panelView.readAt).length:0;
+ if(!live.length&&!n.messages.length)return n.kind==='CLOSED'?'<p class="muted">대화가 없는 방이에요.</p>':'<p class="muted">아직 아무 글이 없어요. 첫 마디를 남겨 보세요.</p>';
+ n.messages.forEach(m=>{
+  const d=mmdd(m.ts);if(d!==day){out+=`<div class="rd">${d}</div>`;day=d}
+  if(!div&&newN&&!m.del&&!rcMine(m)&&m.ts>panelView.readAt){out+=`<div class="rnew" id="rcNew">새 글 ${newN}개</div>`;div=true}
+  if(m.del){out+=`<div class="rm del">삭제된 글</div>`;return}
+  const mine=rcMine(m),lk=rcLocked(n,m);if(lk)locked++;
+  const ask=panelView.delAsk===m.id;
+  out+=`<div class="rm${mine?' me':''}${lk?' lk':''}"><div class="rm-h"><i style="background:${rcColor(m.left?'나간':m.who)}"></i><b>${esc(rcName(m))}</b>${m.who===n.owner&&!m.left?'<small>개설자</small>':''}${m.page!=null?`<span class="pg">${m.page}쪽</span>`:''}<time>${hhmm(m.ts)}</time>${mine&&n.kind==='OPEN'&&!ask?`<button class="rm-x" data-act="rcDelAsk" data-id="${m.id}" aria-label="내 글 메뉴">⋯</button>`:''}</div>`
+   +(lk?`<div class="rm-t">읽으면 열리는 글이에요 · 아직 보이지 않아요</div><div class="lkcap">🔒 ${m.page}쪽 이후 글 · 읽으면 열려요</div>`:`<div class="rm-t">${esc(m.text)}</div>`)
+   +(ask?`<div class="row" style="margin-top:6px"><span class="muted grow">이 글을 삭제할까요?</span><button data-act="rcDelNo">취소</button><button data-act="rcDelYes" data-id="${m.id}" style="color:var(--danger)">삭제</button></div>`:'')+`</div>`});
+ return (locked?`<div class="rlockinfo">🔒 잠긴 글 ${locked}개 · 소파에서 쪽수를 적으면 열려요</div>`:'')+out}
+function rcRefresh(n,force){const lg=document.getElementById('rcLog');if(!lg)return;
+ const atBottom=lg.scrollHeight-lg.scrollTop-lg.clientHeight<40;lg.innerHTML=rcLogHtml(n);
+ const dn=document.getElementById('rcDown');if(force||atBottom){lg.scrollTop=lg.scrollHeight;if(dn)dn.style.display='none'}else if(dn)dn.style.display='inline-block'}
+function rcAfter(id){
+ const n=S.news.find(x=>x.id===id);if(!n||!n.agreed||(panelView.tab||'chat')!=='chat')return;
+ const lg=document.getElementById('rcLog');if(lg){const nw=document.getElementById('rcNew');lg.scrollTop=nw?Math.max(0,nw.offsetTop-8):lg.scrollHeight}
+ if(rcUnread(n)){n.lastRead=Date.now();save();render()}}
+function rcBand(n){
+ if(n.kind!=='CLOSED')return '';const left=roomLeft(n),k=Math.max(.3,Math.min(1,left/7));
+ const act=n.done?'<span class="muted">내 서재로 가져옴 ✓</span>':rcEmpty(n)?'<span class="muted">가져올 대화가 없어요</span>':`<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
+ return `<div class="rband${left<=1?' hot':''}"><span style="font-size:${Math.round(14+16*k)}px">🔥</span><div class="grow"><b>종료됐어요 · 가져오기 마감 D-${left}</b><div class="muted">${left<=1?'내일 사라져요':'불이 꺼지면 기록이 사라져요'}</div></div>${act}</div>`}
+function rcFoot(n){
+ if(n.kind!=='OPEN')return '';let chip='';
+ if(n.rtype!=='OWN'){const pg=rcPage(n);
+  chip=panelView.chipEdit?`<div class="row" style="margin-bottom:6px"><input id="rcPg" type="number" min="1" max="9999" value="${pg??''}" placeholder="쪽수" style="width:90px"><button data-act="rcChipOk">적용</button><button data-act="rcChipNone">쪽수 빼기</button></div>`
+   :`<div style="margin-bottom:6px"><button class="rchip" data-act="rcChip">📖 ${pg!=null?pg+'쪽':'쪽수 없음'}</button>${pg==null?' <span class="muted">소파에서 쪽수를 적으면 글에 붙어요</span>':''}</div>`}
+ return `<div class="foot">${chip}<div class="row"><textarea id="rc" rows="2" maxlength="${MAXMSG}" placeholder="이야기를 남겨요" style="flex:1;resize:none">${esc(panelView.draft||'')}</textarea><button class="primary" data-act="rcSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="rcE" style="margin-top:4px"></div></div>`}
+function rcSend(n){
+ const ta=document.getElementById('rc'),e=document.getElementById('rcE'),t=ta.value.trim().slice(0,MAXMSG);if(!t)return;
+ if(Date.now()-rcLast<SEND_GAP){e.textContent='조금 뒤에 보내 주세요';return}
+ const pg=n.rtype==='OWN'?null:rcPage(n);
+ n.messages.push({id:'m'+Date.now(),who:'나',text:t,page:pg??null,ts:Date.now()});if(n.messages.length>300)n.messages.splice(0,n.messages.length-300);
+ rcLast=Date.now();panelView.draft='';ta.value='';e.textContent='';n.lastRead=Date.now();save();render();rcRefresh(n,true);ta.focus()}
+function rcMembersHtml(n){
+ const rows=[{name:S.user.nickname+' (나)',owner:n.owner==='나'},...n.members.map(x=>({name:x,owner:x===n.owner,book:n.rtype==='OWN'?BOOKPOOL[rcHash(x)%BOOKPOOL.length]:''}))];
+ return `<div class="muted" style="margin-bottom:6px">참여 ${n.people}/${n.max}명</div>`+rows.map(r=>`<div class="card" style="margin:6px 0"><div class="row"><i style="width:10px;height:10px;border-radius:50%;background:${rcColor(r.name.replace(' (나)',''))};display:inline-block"></i><b class="grow" style="font-weight:normal">${esc(r.name)}</b>${r.owner?'<span class="badge gray">개설자</span>':''}</div>${r.book?`<div class="muted" style="margin-top:4px">읽는 책 『${esc(r.book)}』</div>`:''}</div>`).join('')
+  +'<p class="muted">다른 사람의 진행 정도는 보이지 않아요. 글에 붙은 쪽수만 보여요.</p>'}
+function rcInfoHtml(n){
+ const state=n.kind==='OPEN'?(n.rtype==='OWN'?'각자 읽는 책 이야기를 나누는 모닥불이에요.':'모닥불이 활활 타고 있어요. 같은 책을 읽은 사람들이 모여 있어요.'):n.kind==='SOON'?'아직 불이 붙지 않았어요. 열리면 모닥불에 불이 붙어요.':'불이 작아지고 있어요. '+roomLeft(n)+'일 뒤에 꺼지고 기록이 사라져요. 그 전에 내 서재로 가져오세요.';
+ let h=`<p class="muted">${state}</p><div class="card muted">${n.rtype==='OWN'?'각자 읽기':'같은 책'} · ${n.rtype==='OWN'?'내가 읽는 책':'함께 읽는 책'}: ${n.book?'『'+esc(n.book)+'』':'아직 안 정했어요'}<br>기간: ${esc(n.period||'')}<br>공개 범위: ${n.vis==='public'?'마을에 공개':'초대 링크로만'}<br>${n.rtype==='SAME'?'쪽수 잠금: '+(n.pageLock?'켜짐':'꺼짐'):'각자 읽기 방은 쪽수 잠금이 없어요'}</div>`;
+ if(n.kind!=='CLOSED')h+=inviteBlock(n);
+ if(n.mine&&n.kind!=='CLOSED')h+=`<button style="width:100%;margin-top:6px;color:var(--danger)" data-act="closeRoom" data-id="${n.id}">${n.kind==='SOON'?'모닥불 취소':'일찍 끝내기'}</button>`;
+ if(!n.mine&&n.kind==='OPEN'&&n.agreed)h+=panelView.leaveAsk
+  ?`<div class="card"><b>방에서 나갈까요?</b><div class="muted">내가 쓴 글은 남고 이름은 "나간 참여자"로 바뀌어요. 다시 들어올 수 있어요.</div><div class="row" style="margin-top:8px"><button class="grow" data-act="rcLeaveNo">취소</button><button class="grow" style="color:var(--danger)" data-act="rcLeave" data-id="${n.id}">나가기</button></div></div>`
+  :`<button style="width:100%;margin-top:6px;color:var(--danger)" data-act="rcLeaveAsk">방 나가기</button>`;
+ if(n.kind==='OPEN'&&(n.agreed||n.mine))h+=`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구</summary><div class="row wrap" style="margin-top:8px">${n.agreed&&n.rtype!=='OWN'?`<button data-act="rcTest" data-id="${n.id}" data-v="sofa">이 책을 소파에 올리기</button><button data-act="rcTest" data-id="${n.id}" data-v="page">내 쪽 +30쪽</button>`:''}${n.agreed?`<button data-act="rcTest" data-id="${n.id}" data-v="msg">새 글 도착시키기</button>`:''}${n.mine?`<button data-act="friendIn" data-id="${n.id}">친구 1명 들어오기</button>`:''}</div><p class="muted">쪽수 잠금을 확인해 보세요: 소파에 이 책을 올리고 쪽수를 늘리면 잠긴 글이 열려요. 친구는 정원이 차면 더 들어올 수 없어요.</p></details>`;
+ return h+'<p class="muted" style="margin-top:10px">공유방 기록은 종료 후 7일 동안만 보관돼요.</p>'}
+function roomPanel(id){
+ const n=S.news.find(x=>x.id===id);if(!n)return head('모닥불')+'<p class="muted">이 공유방은 사라졌어요.</p>';
+ const t=shortTitle(n);
+ if(panelView.readAt===undefined)panelView.readAt=n.lastRead||0;
+ if(n.kind==='SOON')return head(t)+roomCard(n)+rcInfoHtml(n);                                   // RC-01 예정 방
+ if(!n.agreed){
+  if(n.kind==='CLOSED')return head(t)+roomCard(n,true)+'<p class="muted">참여하지 않은 방이라 기록을 볼 수 없어요.</p>';
+  return head(t)+roomCard(n,true)+`<div class="card"><b>들어가기 전에</b><p style="margin:6px 0 0">이 방의 글은 종료 후 7일 뒤에 사라져요. 내 서재로 가져가면 다른 사람 이름은 '참여자 A'처럼 바뀌어요.</p></div><div class="foot"><div class="row"><button class="grow" data-act="rcNo">취소</button><button class="primary grow" data-act="rcAgree" data-id="${n.id}">동의하고 들어가기</button></div></div>`}   // RC-03
+ const tab=panelView.tab||'chat';
+ const state=n.kind==='CLOSED'?'종료 · D-'+roomLeft(n):(n.closesAt?mmdd(n.closesAt)+' 종료':'진행 중');
+ const tabs=`<div class="seg rtabs">${[['chat','대화'],['members','참여자'],['info','방 정보']].map(([v,l])=>`<button data-act="rctab" data-v="${v}" class="${tab===v?'on':''}">${l}</button>`).join('')}</div>`;
+ let body='';
+ if(tab==='chat')body=rcBand(n)+`<div class="rlog" id="rcLog">${rcLogHtml(n)}</div><div style="text-align:center"><button class="rchip" id="rcDown" data-act="rcDown" style="display:none">↓ 맨 아래로</button></div>`+rcFoot(n);
+ if(tab==='members')body=rcMembersHtml(n);
+ if(tab==='info')body=rcInfoHtml(n);
+ return head(t)+`<div class="rsub">『${esc(roomBook(n))}』 · 참여 ${n.people}/${n.max}명 · ${state}</div>`+tabs+body}
+// 대화 화면의 버튼들. 처리했으면 true
+function rcAct(act,b){
+ const n=(b&&b.dataset.id&&S.news.find(x=>x.id===b.dataset.id))||S.news.find(x=>'room:'+x.id===panelOpen);   // data-id가 글 번호일 때는 지금 열린 방
+ if(act==='enterRoom'){if(!n)return true;if(VIEW!=='village'){closePanel();enterVillage();setTimeout(()=>openV('room:'+n.id),900)}else openV('room:'+n.id);return true}
+ if(act==='rcNo'){closePanel();return true}
+ if(act==='rcAgree'){if(!n)return true;if(n.left&&n.people>=n.max){toast('정원이 가득 찼어요 ('+n.people+'/'+n.max+'명)');return true}
+  if(n.left){n.people++;n.left=false}n.agreed=true;n.agreedAt=Date.now();save();panelView.readAt=n.lastRead||0;renderPanel();render();return true}
+ if(act==='rctab'){panelView.tab=b.dataset.v;panelView.leaveAsk=false;panelView.delAsk=null;renderPanel();return true}
+ if(act==='rcChip'){panelView.chipEdit=true;renderPanel();const i=document.getElementById('rcPg');if(i)i.focus();return true}
+ if(act==='rcChipOk'){const v=Math.round(+document.getElementById('rcPg').value);panelView.pg=v>=1&&v<=9999?v:null;panelView.chipEdit=false;renderPanel();return true}
+ if(act==='rcChipNone'){panelView.pg=null;panelView.chipEdit=false;renderPanel();return true}
+ if(act==='rcSend'){if(n)rcSend(n);return true}
+ if(act==='rcDown'){const lg=document.getElementById('rcLog');if(lg)lg.scrollTop=lg.scrollHeight;b.style.display='none';return true}
+ if(act==='rcDelAsk'){panelView.delAsk=b.dataset.id;if(n)rcRefresh(n);return true}
+ if(act==='rcDelNo'){panelView.delAsk=null;if(n)rcRefresh(n);return true}
+ if(act==='rcDelYes'){if(!n)return true;const m=n.messages.find(x=>x.id===b.dataset.id);if(m&&rcMine(m)){m.del=true;m.text='';}panelView.delAsk=null;save();rcRefresh(n);return true}
+ if(act==='rcLeaveAsk'){panelView.leaveAsk=true;renderPanel();return true}
+ if(act==='rcLeaveNo'){panelView.leaveAsk=false;renderPanel();return true}
+ if(act==='rcLeave'){if(!n)return true;n.messages.forEach(m=>{if(m.who==='나')m.left=true});n.agreed=false;n.left=true;n.people=Math.max(1,n.people-1);save();render();closePanel();toast('방에서 나왔어요. 내 글은 "나간 참여자"로 남아요');return true}
+ if(act==='rcTest'&&n){const v=b.dataset.v,k=rcKey(roomBook(n));
+  if(v==='sofa'){if(S.reading&&rcKey(S.reading.title)!==k)toast('소파에 다른 책이 있어요. 먼저 정리해 주세요');else if(!S.reading){S.reading={id:Date.now(),title:roomBook(n),author:n.author||'',cover:'',isbn:'',totalPages:400,page:0,progress:0,notes:[],startedAt:today()};save();render();toast('소파에 『'+roomBook(n)+'』을 올렸어요 (0쪽)')}else toast('이미 소파에 있어요')}
+  if(v==='page'){if(!S.reading||rcKey(S.reading.title)!==k)toast('먼저 소파에 이 책을 올려 주세요');else{S.reading.page=Math.min(S.reading.totalPages||9999,(S.reading.page||0)+30);updProgress(S.reading);save();render();toast(S.reading.page+'쪽까지 읽은 걸로 기록했어요')}}
+  if(v==='msg')rcFakeMsg(n);
+  return true}
+ return false}
 function createPanel(){
  if(panelView.created){const n=S.news.find(x=>x.id===panelView.created);if(n)return head('모닥불을 피웠어요')+`<div class="card"><b>${esc(n.title)}</b><div class="muted" style="margin-top:4px">${esc(roomSub(n))}</div></div>`+inviteBlock(n)+'<p class="muted">친구에게 링크를 보내 보세요. 링크를 받은 사람이 열면 이 모닥불로 들어와요.</p>'}
  const nf=panelView.nf||(panelView.nf=RDEF()),same=nf.kind==='SAME';
@@ -1214,7 +1371,7 @@ function createRoom(){
  if(nf.start==='later'){opens=new Date(nf.when).getTime();if(!(opens>now+60000))return err('시작 시각은 지금보다 뒤로 정해 주세요')}
  const name=(nf.name||'').trim()||defaultRoomName(nf),closes=opens+nf.days*DAY;
  const room={id:'r'+now,kind:opens<=now?'OPEN':'SOON',title:name,sub:'',book:b?b.title:'',author:b?b.author:'',cover:b?b.cover:'',isbn:b?b.isbn:'',rtype:nf.kind,mine:true,people:1,max,vis:nf.vis,inviteCode:genCode(),pageLock:nf.kind==='SAME'&&nf.lock,opensAt:opens,closesAt:closes,alarm:true,done:false,messages:[],period:mmdd(opens)+' ~ '+mmdd(closes)};
- S.news.push(room);save();panelView.created=room.id;render();renderPanel();buildSr();toast('모닥불을 피웠어요');
+ rcNorm(room);S.news.push(room);save();panelView.created=room.id;render();renderPanel();buildSr();toast('모닥불을 피웠어요');
 }
 async function copyLink(n){const link=inviteLink(n);try{await navigator.clipboard.writeText(link);toast('링크를 복사했어요')}catch(e){const i=document.getElementById('invLink');if(i){i.select();try{document.execCommand('copy');toast('링크를 복사했어요')}catch(_){toast('링크를 길게 눌러 복사해 주세요')}}}}
 function findByCode(c){c=String(c||'').trim();const m=/join=([A-Za-z0-9]+)/i.exec(c);if(m)c=m[1];c=c.toUpperCase();return S.news.find(n=>n.inviteCode===c)}
@@ -1230,8 +1387,8 @@ function windowPanel(){
  return head('창문')+`<div class="muted" style="margin:0 0 8px">오늘 창밖은 ${sc.season} ${sc.weather}이에요.</div>`+S.news.map(n=>{const [l,c]=K[n.kind];let act='';
   if(n.kind==='OPEN')act=`<button data-act="goVillage">마을로 가기</button>`;
   if(n.kind==='SOON')act=`<button data-act="alarm" data-id="${n.id}">${n.alarm?'알림 받는 중 ✓':'알림 받기'}</button>`;
-  if(n.kind==='CLOSED')act=n.done?`<span class="muted">내 서재로 가져옴 ✓</span>`:(n.messages&&!n.messages.length)?`<span class="muted">가져올 대화가 없어요</span>`:`<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
-  return `<div class="card"><div class="row"><span class="badge ${c}">${l}</span><b class="grow" style="font-weight:normal">${esc(n.title)}</b></div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}</div>${act}</div>`}).join('')+'<p class="muted">공유방 기록은 종료 후 7일 동안만 보관돼요.</p>'
+  if(n.kind==='CLOSED')act=n.done?`<span class="muted">내 서재로 가져옴 ✓</span>`:(rcEmpty(n))?`<span class="muted">가져올 대화가 없어요</span>`:`<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
+  return `<div class="card"><div class="row"><span class="badge ${c}">${l}</span>${rcUnread(n)?'<span class="badge">새 글</span>':''}<b class="grow" style="font-weight:normal">${esc(n.title)}</b></div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}</div>${act}</div>`}).join('')+'<p class="muted">공유방 기록은 종료 후 7일 동안만 보관돼요.</p>'
   +`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구 (창밖 풍경 바꿔 보기)</summary><div class="row wrap" style="margin-top:8px"><button data-act="sceneNext">다른 날씨 보기</button></div><p class="muted">실제로는 날짜마다 풍경이 바뀌어요. 여기서는 다음 날씨로 넘겨 봐요.</p></details>`
   +(S.news.some(n=>n.kind==='SOON')?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구 (개방 시각 앞당기기)</summary><div class="row wrap" style="margin-top:8px">${S.news.filter(n=>n.kind==='SOON').map(n=>`<button data-act="openNow" data-id="${n.id}">${esc(n.title)} 지금 열기</button>`).join('')}</div><p class="muted">알림 받기를 켜 둔 방은 열릴 때 알림이 와요.</p></details>`:'');
 }
@@ -1256,6 +1413,7 @@ panel.addEventListener('input',e=>{
   document.getElementById('pgHint').textContent=pgHint(r);render()}
  if(e.target.id==='bq'){panelView.q=e.target.value}
  if(e.target.id==='btp'){panelView.tp=e.target.value}
+ if(e.target.id==='rc'){panelView.draft=e.target.value}
  if(e.target.id==='nc'){panelView.draft=e.target.value;document.getElementById('ncE').textContent=''}
  if(e.target.id==='bt'){panelView.t=e.target.value;document.getElementById('btE').textContent=''}
  if(e.target.id==='ba'){panelView.a=e.target.value;document.getElementById('baE').textContent=''}
@@ -1264,7 +1422,8 @@ panel.addEventListener('input',e=>{
   document.getElementById('spv').textContent=tot&&pgv!=null?Math.min(100,Math.max(0,Math.round(pgv/tot*100)))+'%':''}
  if(e.target.id==='sm'){panelView.memo=e.target.value}
 });
-panel.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='bq'){e.preventDefault();runSearch()}if(e.key==='Enter'&&e.target.id==='pz'&&!e.isComposing){e.preventDefault();plazaSend()}});
+panel.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='bq'){e.preventDefault();runSearch()}if(e.key==='Enter'&&e.target.id==='pz'&&!e.isComposing){e.preventDefault();plazaSend()}
+ if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='rc'&&!e.isComposing){e.preventDefault();const n=S.news.find(x=>'room:'+x.id===panelOpen);if(n)rcSend(n)}});
 panel.addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
  if(act==='close')return closePanel();
@@ -1327,7 +1486,7 @@ panel.addEventListener('click',e=>{
   if(n.alarm&&notifyState()==='ask')askNotify();
   render();renderPanel();if(n.alarm)toast(notifyState()==='off'||notifyState()==='none'?'브라우저 알림이 꺼져 있어요. 열려 있을 때 화면으로만 알려드려요':'개방되면 알려드릴게요');return}
  if(act==='askNotify'){askNotify();return}
- if(act==='enterRoom'){toast('공유방 대화는 다음 단계에서 열려요');return}
+ if(rcAct(act,b))return;
  if(act==='newRoom'){openV('fire:new');return}
  if(act==='joinLink'){joinByCode(document.getElementById('jl').value);return}
  if(act==='rkind'){panelView.nf.kind=b.dataset.v;renderPanel();return}
@@ -1337,12 +1496,12 @@ panel.addEventListener('click',e=>{
  if(act==='rcreate'){createRoom();return}
  if(act==='copyLink'){const n=S.news.find(x=>x.id===b.dataset.id);if(n)copyLink(n);return}
  if(act==='shareLink'){const n=S.news.find(x=>x.id===b.dataset.id);if(n)navigator.share({title:'모닥불에 초대해요',text:n.title,url:inviteLink(n)}).catch(()=>{});return}
- if(act==='friendIn'){const n=S.news.find(x=>x.id===b.dataset.id);if(!n)return;if(n.people>=n.max){toast('정원이 가득 찼어요 ('+n.people+'/'+n.max+'명)');return}n.people++;save();render();renderPanel();toast('친구가 들어왔어요 ('+n.people+'/'+n.max+'명)');return}
+ if(act==='friendIn'){const n=S.news.find(x=>x.id===b.dataset.id);if(!n)return;if(n.people>=n.max){toast('정원이 가득 찼어요 ('+n.people+'/'+n.max+'명)');return}n.people++;n.members.push(NAMEPOOL.find(x=>!n.members.includes(x))||'@친구');save();render();renderPanel();toast('친구가 들어왔어요 ('+n.people+'/'+n.max+'명)');return}
  if(act==='closeRoom'){const n=S.news.find(x=>x.id===b.dataset.id);if(!n)return;
   if(n.kind==='SOON'){S.news=S.news.filter(x=>x!==n);toast('모닥불을 취소했어요')}else{n.kind='CLOSED';n.closesAt=Date.now();n.deleteAt=Date.now()+7*DAY;toast('모닥불을 일찍 껐어요. 7일 뒤에 사라져요')}
   save();render();buildSr();closePanel();return}
  if(act==='openNow'){const n=S.news.find(x=>x.id===b.dataset.id);n.opensAt=Date.now();fireDue();return}
- if(act==='import'){const n=S.news.find(x=>x.id===b.dataset.id);if(n.messages&&!n.messages.length){toast('가져올 대화가 없어요');return}if(!n.book){toast('이 방에는 내 책이 정해지지 않아서 가져올 곳이 없어요');return}const rec={title:n.title,period:n.period,messages:n.messages};
+ if(act==='import'){const n=S.news.find(x=>x.id===b.dataset.id);if(rcEmpty(n)){toast('가져올 대화가 없어요');return}if(!n.book){toast('이 방에는 내 책이 정해지지 않아서 가져올 곳이 없어요');return}const rec={title:n.title,period:n.period,messages:rcSnapshot(n)};   // 다른 참여자는 익명, 잠긴 글(내 쪽수보다 뒤)과 삭제된 글은 뺀다
   // 내가 읽은 책(다 읽은 책·포기한 책·읽는 중)에 있으면 거기에 붙이고, 없으면 "나중에 읽을 책"에 담는다 (다 읽은 책으로 세지 않는다)
   let bk=S.finished.find(x=>x.title===n.book)||S.dropped.find(x=>x.title===n.book),msg='『'+n.book+'』에 공유방 탭이 생겼어요';
   if(!bk&&S.reading&&S.reading.title===n.book){bk=S.reading;if(!bk.rooms)bk.rooms=[];msg='『'+n.book+'』을 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요'}

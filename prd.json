@@ -29,7 +29,7 @@
         "테스트: 헤더 없음 401, 있음 200"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "사용자 행이 없으면 테스트용 생성 엔드포인트(POST /dev/users, dev 프로파일 전용)를 둔다."
     },
     {

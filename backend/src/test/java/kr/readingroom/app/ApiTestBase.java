@@ -19,13 +19,23 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
+@org.springframework.context.annotation.Import(ApiTestBase.ClockConfig.class)
 public abstract class ApiTestBase extends PgTestBase {
+    @org.springframework.boot.test.context.TestConfiguration
+    static class ClockConfig {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        TestClock testClock() { return new TestClock(); }
+    }
+
+    @Autowired protected TestClock clock;
     @Autowired protected MockMvc mvc;
     @Autowired protected DSLContext dsl;
     @Autowired protected ObjectMapper json;
 
     @BeforeEach
     void cleanDb() {
+        clock.set("2026-11-17T03:00:00Z");
         dsl.execute("truncate app_user restart identity cascade");
     }
 

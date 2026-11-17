@@ -44,6 +44,12 @@
 | `room_message` | id, room_id, user_id, content, page, created_at | 종료 후 7일 |
 | `book_room_archive` | id, book_id, room_id, room_title, opened_at, closed_at, snapshot(JSON), imported_at | 영구. unique(book_id, room_id) |
 
+### 마을 광장
+
+| 테이블 | 컬럼 | 수명 |
+|---|---|---|
+| `plaza_message` | id, user_id, content(최대 40자), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 열린 결정 N 이후 |
+
 ### 알림
 
 | 테이블 | 컬럼 | 제약 |
@@ -137,6 +143,13 @@
 | GET | `/rooms?status=` | 마을 게시판, 창문 소식. `PUBLIC` 방과 내가 참여한 방만 내려준다 |
 | POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 책이 없으면 생성 |
 
+### 마을 광장
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| GET | `/plaza/messages?since=` | 최근 24시간 대화 (최대 30개). 광장 창을 열고 있는 동안 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
+| POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거). 사용자당 5초에 1건 제한, 넘으면 429 |
+
 ## 배치 작업 (`@Scheduled`)
 
 | 주기 | 작업 |
@@ -147,6 +160,7 @@
 | 1분 | `status='OPEN' AND close_at <= now()` → `CLOSED`, `closed_at = now()` (이때부터 7일 보관) |
 | 10분 | `status='RUNNING' AND started_at + 3h < now()` → `NEEDS_CONFIRM` |
 | 매일 새벽 | `close_at + 7일 < now()` 공유방 하드 삭제 (메시지 → 참여자 → 방) |
+| 1시간 | `plaza_message.created_at + 24h < now()` 하드 삭제 |
 | 매일 | 가져오기 마감 D-1 알림 |
 
 ## 클라이언트 타이머 표시 (웹)

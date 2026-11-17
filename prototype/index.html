@@ -60,6 +60,13 @@ select{font:inherit;color:inherit;width:100%;padding:9px 10px;border:1px solid v
 .vlab{background:rgba(255,250,240,.94);padding:2px 8px;border-radius:8px;font-size:11.5px;color:#3b3226;text-align:center;line-height:1.3;white-space:nowrap}
 .vlab .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;background:#b9b2a2}
 .vlab .dot.open{background:#e8764a}.vlab .dot.closed{background:#7aa7e0}
+.stage-wrap.vil .hint{max-width:calc(100% - 150px);border-radius:14px;line-height:1.4}  /* 마을: 오른쪽 위 미니맵과 윗선을 맞추고 겹치지 않게 줄바꿈 */
+#minimap{display:none;position:absolute;top:12px;right:12px;width:112px;height:112px;z-index:3;pointer-events:none;background:rgba(255,250,240,.88);border:1px solid #d9cfb8;border-radius:10px;box-shadow:0 2px 6px rgba(60,40,20,.15)}
+.stage-wrap.vil #minimap{display:block}
+.vbub{z-index:3;background:#fff;border:1px solid #d9cfb8;padding:4px 9px;border-radius:12px;font-size:12px;line-height:1.35;max-width:150px;color:#3b3226;text-align:center;box-shadow:0 2px 6px rgba(60,40,20,.18)}
+.vbub.me{background:#fff4c9;border-color:#e8c96a}
+.plog{max-height:46vh;overflow-y:auto;margin:8px 0}
+.plog .msg.me{text-align:right}.plog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
 .stage-wrap.vil #newMark,.stage-wrap.vil #newMarkWin,.stage-wrap.vil #newMarkSofa,.stage-wrap.vil #lampLabel{display:none!important}
 .bthumb{width:48px;height:68px;border-radius:6px;overflow:hidden;flex:none;box-shadow:0 1px 3px rgba(40,30,20,.25)}
 .bthumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -152,6 +159,7 @@ input[type=range]{accent-color:var(--accent)}
    <div class="ov" id="nameTag"></div><div class="ov" id="lampLabel" style="display:none"></div><div class="ov" id="newMark" style="display:none">✦</div><div class="ov" id="newMarkWin" style="display:none">✦</div><div class="ov" id="newMarkSofa" style="display:none">✦</div>
    <div class="fail" id="fail">이 브라우저에서는 3D를 그릴 수 없어요. 크롬이나 엣지에서 열어 주세요.</div>
    <div class="hint" id="hint">가구를 눌러 사용 · 바닥을 눌러 이동</div>
+   <canvas id="minimap" width="224" height="224" aria-hidden="true"></canvas>
    <div class="coach" id="coach" style="display:none"></div>
    <div class="coach notice" id="notice" style="display:none"></div>
    <div class="sr-btns" id="srBtns"></div>
@@ -218,6 +226,7 @@ if(!S.sessions)S.sessions=[];if(S.session===undefined)S.session=null;if(S.readin
 if(!S.avatar||!S.avatar.expr)S.avatar=defAvatar();
 if(!S.newsSeen)S.newsSeen={};
 if(!S.goal)S.goal=1;
+if(!S.plaza)S.plaza=[];S.plaza=S.plaza.filter(m=>Date.now()-m.ts<864e5); // 광장 대화는 하루 뒤 사라진다
 S.news.forEach(n=>{if(n.kind==='SOON'&&!n.opensAt)n.opensAt=Date.UTC(2026,10,19,15,0,0);if(n.kind==='CLOSED'&&!n.deleteAt){const m=/D-(\d+)/.exec(n.sub||'');n.deleteAt=Date.now()+(m?+m[1]:3)*864e5}});
 S.onboard=0; // 첫 방문 안내는 평소에 뜨지 않고, 데모 초기화를 눌렀을 때만 뜬다
 const save=()=>{try{localStorage.setItem('myroom-proto-v1',JSON.stringify(S))}catch(e){}};
@@ -238,8 +247,16 @@ const LAY={
 let L,TARGET,SIT,STAND;
 const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
 // 마을: 문으로 나가면 들어가는 장면. 방과 같이 크기가 고정이다.
-const VSLOTS=[[6.4,10.4],[10.6,15.8],[15.2,11.8],[20.4,14.6],[22.6,8.2],[9.4,17.8],[17.0,17.4],[24.0,17.8]]; // 공유방 모닥불 자리 (빈 자리 하나는 "모닥불 피우기")
-const VIL={X:26,Y:20,minX:1.2,minZ:3.4,start:[4.0,4.0],home:[4.0,3.8]}; // 걸어 다니는 큰 마을. 카메라가 유령을 따라간다
+// 마을은 두 구역으로 나뉜다: 가운데 돌바닥 "광장"(누구와도 짧게 대화)과 동쪽 흙바닥 "모닥불 구역"(공유방, 대화는 방 안에서만)
+const VSLOTS=[[26.0,6.2],[32.0,8.7],[26.0,11.2],[32.0,13.7],[26.0,16.2],[32.0,18.7],[26.0,21.2],[32.0,23.7]]; // 공유방 모닥불 자리 (빈 자리 하나는 "모닥불 피우기")
+const PLAZA={x0:8.6,z0:7.0,x1:21.6,z1:17.0,cx:15.1,cz:12.0}; // 대화 가능 구역 (13×10칸). 이 안에 있을 때만 말풍선으로 말할 수 있다
+const ZONE={x0:23.0,z0:4.0,x1:35.4,z1:25.6,g0:11.0,g1:13.2}; // 모닥불 구역 (12×21.6칸). g0~g1은 울타리 입구
+const inPlaza=(x,z)=>x>PLAZA.x0&&x<PLAZA.x1&&z>PLAZA.z0&&z<PLAZA.z1;
+// 체험판용 가짜 이웃. 서버가 생기면 그날 광장에 온 실제 사람으로 바뀐다
+const NPCS=[{name:'나무',x:11.6,z:9.6,av:{color:'#e6f4e0',expr:'happy',face:'none',head:'sprout',prop:'mug'}},{name:'달빛',x:19.0,z:9.8,av:{color:'#e8e4ff',expr:'sleepy',face:'glasses',head:'none',prop:'book'}},{name:'구름',x:12.6,z:14.8,av:{color:'#ffe6ec',expr:'wink',face:'none',head:'bow',prop:'balloon'}},{name:'바다',x:18.6,z:14.6,av:{color:'#e0f0fb',expr:'normal',face:'sunglasses',head:'none',prop:'lantern'}},{name:'모래',x:15.4,z:8.6,av:{color:'#fbeed6',expr:'surprised',face:'none',head:'beanie',prop:'none'}}];
+const NPC_SAY=['오늘 몇 쪽 읽었어요?','방금 한 권 완독했어요!','비 오는 날엔 스탠드 켜고 읽는 게 최고예요','『아몬드』 읽어 본 분 계세요?','저는 지금 150쪽쯤이에요','모닥불에서 같이 읽을 분~','30분만 읽어도 오늘은 성공이죠','다음엔 어떤 책 읽을지 고민 중이에요'];
+const NPC_REPLY=['저도요!','오, 좋은데요','어떤 책이에요?','화이팅이에요','같이 읽어요'];
+const VIL={X:36,Y:27,minX:1.2,minZ:3.4,start:[4.0,4.0],home:[4.0,3.8]}; // 걸어 다니는 큰 마을. 카메라가 유령을 따라간다
 let VIEW='room',ROOM_L=null;
 const sim={x:0,y:0,z:0,rot:Math.PI/4,mode:'idle',tx:0,tz:0,after:null,t:0,mv:0,sit:0,k:0,fx:0,fz:0};
 function setLayout(n){L=LAY[n];const d=L.d;
@@ -401,7 +418,7 @@ const G3=(function(){
  const cam=new THREE.OrthographicCamera(-8,8,8,-8,.1,100),T=new THREE.Vector3(5,1.1,4),dirV=new THREE.Vector3(1,.82,1).normalize();
  const FUR=['sofa','lamp','shelf','calendar','mirror','window','door'];
  let roomG=null,FG={},matsOf={},pickables=[],floorMesh=null,bulb=null,lampGlow=null,lampLight=null,sofaExtra=null,shelfBooks=null,doorGlow=null,mirrorCv=null,mirrorTex=null,calCv=null,calTex=null,winCv=null,winTex=null;
- let view='room',villageG=null,vilPick=[],vilMats={},vilFlames=[],vilWins=[],vilLabels=[],vilKey='',vilFiresG=null,vilLamp=false;
+ let view='room',villageG=null,vilPick=[],vilMats={},vilFlames=[],vilWins=[],vilLabels=[],vilKey='',vilFiresG=null,vilLamp=false,vilBub=[],vilNpcs=[],vilHouses=[];
  let M=null,ghostKey='',dimKey='',extraKey='',shelfKey='',mirrorKey='',calKey='',winKey='',pulseF=null,hoverF=null,matsDirty=true,ov={},flashUntil={};
  const clear=g=>{while(g.children.length){const c=g.children.pop();dispose(c)}};
  function buildRoom(){
@@ -544,24 +561,37 @@ const G3=(function(){
  }
  /* 마을: 문으로 나가면 보이는 장면. 내 집, 마을 게시판, 공유방마다 모닥불, 이웃집(창문에 불이 켜짐) */
  const SKYC={맑음:['#9fd8ff','#eaf6ff'],구름:['#a8d6fb','#eef7ff'],흐림:['#b4bec7','#e3e8ec'],비:['#8d9cab','#c3ccd5'],눈:['#c3cfdb','#f1f5f9'],안개:['#dde2e5','#f3f5f6']};
- const clearLabels=()=>{vilLabels.forEach(l=>l.el.remove());vilLabels=[]};
+ const clearLabels=()=>{vilLabels.forEach(l=>l.el.remove());vilLabels=[];vilBub.forEach(b=>b.el.remove());vilBub=[];vilNpcs=[]};
+ // 말풍선: i=-1이면 내 유령, 아니면 가짜 이웃 번호. 몇 초 뒤 저절로 사라진다
+ function say(i,text,ms=5200){vilBub=vilBub.filter(b=>{if(b.i===i){b.el.remove();return false}return true});
+  if(view!=='village')return;const e=document.createElement('div');e.className='ov vbub'+(i<0?' me':'');e.textContent=text;wrap.appendChild(e);vilBub.push({el:e,i,until:performance.now()+ms})}
  const addLabel=(html,x,y,z,fire)=>{const e=document.createElement('div');e.className='ov vlab';e.innerHTML=html;wrap.appendChild(e);vilLabels.push({el:e,x,y,z,fire:!!fire})};
  function vcollect(f,g){const set=new Set();g.traverse(n=>{if(n.isMesh&&!n.userData.hull&&!n.userData.nodim&&n.material&&n.material.isMeshStandardMaterial)set.add(n.material)});vilMats[f]=[...set]}
  function buildVillage(){
-  villageG=new THREE.Group();scene.add(villageG);vilPick=[];vilMats={};vilWins=[];vilFlames=[];vilFiresG=null;vilKey='';
+  villageG=new THREE.Group();scene.add(villageG);vilPick=[];vilMats={};vilWins=[];vilFlames=[];vilFiresG=null;vilKey='';vilHouses=[];
   const sn=windowScene().season;
   const grass={봄:'#9ccf7a',여름:'#6fbb62',가을:'#c9a24e',겨울:'#eef3f7'}[sn];
   const BB=(x,y,z,w,dp,h,c,g=villageG,m=null)=>{const k=mesh(new THREE.BoxGeometry(w,h,dp),m||mat(c,.9),[x+w/2,z+h/2,y+dp/2]);g.add(k);return k};
   const vhull=(g,x,y,z,w,dp,h,f)=>{const k=new THREE.Mesh(new THREE.BoxGeometry(w,h,dp),new THREE.MeshBasicMaterial({visible:false}));k.position.set(x+w/2,z+h/2,y+dp/2);k.userData={f,hull:true};g.add(k);vilPick.push(k)};
-  BB(-8,-8,-.4,42,36,.4,'#8a6a45');
-  const ground=BB(-8,-8,0,42,36,.02,grass);ground.userData.floor=true;vilPick.push(ground);
+  BB(-70,-70,-.4,166,160,.4,'#8a6a45');   // 땅을 걷는 범위(26×20)보다 훨씬 크게 깔아 지도 끝이 화면에 보이지 않게 한다
+  const ground=BB(-70,-70,0,166,160,.02,grass);ground.userData.floor=true;vilPick.push(ground);
   const road='#cdb890',stone='#d9cfb8';
-  BB(8.6,7.0,.02,9.0,7.4,.02,stone);                                   // 중앙 광장
+  BB(PLAZA.x0,PLAZA.z0,.02,PLAZA.x1-PLAZA.x0,PLAZA.z1-PLAZA.z0,.02,stone);   // 대화 광장 (돌바닥)
+  const curb='#b3a78c';[[PLAZA.x0,PLAZA.z0,PLAZA.x1-PLAZA.x0,.16],[PLAZA.x0,PLAZA.z1-.16,PLAZA.x1-PLAZA.x0,.16],[PLAZA.x0,PLAZA.z0,.16,PLAZA.z1-PLAZA.z0],[PLAZA.x1-.16,PLAZA.z0,.16,PLAZA.z1-PLAZA.z0]].forEach(([x,y,w,d])=>BB(x,y,.02,w,d,.1,curb));
   BB(3.6,3.0,.02,1.0,5.0,.02,road);BB(3.6,7.5,.02,5.2,1.0,.02,road);   // 내 집 앞길 → 광장
-  BB(17.6,10.0,.02,7.4,1.0,.02,road);BB(12.6,14.4,.02,1.0,5.2,.02,road);
+  BB(PLAZA.x1,ZONE.g0,.02,ZONE.x0-PLAZA.x1,ZONE.g1-ZONE.g0,.02,road);   // 광장 → 모닥불 구역 입구
+  BB(ZONE.x0,ZONE.z0,.03,ZONE.x1-ZONE.x0,ZONE.z1-ZONE.z0,.02,'#a88f68'); // 모닥불 구역 (흙바닥)
+  {const fp='#6a4527',fx=ZONE.x0-.2;for(let z=ZONE.z0;z<ZONE.z1;z+=1.1){if(z>ZONE.g0-.3&&z<ZONE.g1+.1)continue;BB(fx,z,0,.12,.12,.7,fp)}
+   BB(fx+.04,ZONE.z0,.42,.05,ZONE.g0-ZONE.z0,.07,fp);BB(fx+.04,ZONE.g1,.42,.05,ZONE.z1-ZONE.g1,.07,fp);   // 울타리. g0~g1이 입구
+   BB(fx-.04,ZONE.g0-.2,0,.16,.16,1.5,'#7d5330');BB(fx-.04,ZONE.g1,0,.16,.16,1.5,'#7d5330');BB(fx-.08,ZONE.g0-.2,1.5,.24,ZONE.g1-ZONE.g0+.36,.12,'#7d5330')}
+  {const st=new THREE.Group();st.position.set(PLAZA.cx,0,PLAZA.cz);villageG.add(st);   // 광장 단상: 누르면 대화
+   st.scale.setScalar(1.3);st.add(mesh(new THREE.CylinderGeometry(1.0,1.1,.22,24),mat('#a8743f',.8),[0,.13,0]));st.add(mesh(new THREE.CylinderGeometry(.8,.8,.04,24),mat('#c99560',.8),[0,.25,0]));
+   st.add(mesh(new THREE.CylinderGeometry(.05,.06,1.1,8),mat('#5a4332',.8),[.7,.8,0]));st.add(mesh(sph(.17),mat('#fff3c4',.4,{emissive:'#ffe08a',emissiveIntensity:.7}),[.7,1.45,0]));
+   vhull(st,-1.1,-1.1,0,2.2,2.2,1.4,'plaza');vcollect('plaza',st)}
+  NPCS.forEach((p,i)=>{const gm=build(p.av);gm.root.userData.nodim=true;villageG.add(gm.root);vilNpcs.push({M:gm,x:p.x,z:p.z,rot:Math.atan2(PLAZA.cx-p.x,PLAZA.cz-p.z),ph:i*2.3});addLabel('@'+p.name,p.x,2.65,p.z)});
   BB(1.5,14.2,.03,5.2,4.2,.02,'#7fb6d8');                              // 연못
   const house=(f,x,y,w,d,h,wall,roof,nWin,seed,mine)=>{
-   const g=new THREE.Group();villageG.add(g);
+   const g=new THREE.Group();villageG.add(g);vilHouses.push([x,y,w,d,!!mine]);
    BB(x,y,0,w,d,h,0,g,wm({base:wall,planks:8,vertical:true,seed}));
    const rf=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*.78,h*.7,4),mat(roof,.8));rf.rotation.y=Math.PI/4;rf.position.set(x+w/2,h+h*.35,y+d/2);rf.castShadow=true;g.add(rf);
    for(let i=0;i<nWin;i++){const wx=x+w/(nWin+1)*(i+1)-.17,wmat=mat('#ffd66b',.4,{emissive:'#ffcf5a',emissiveIntensity:1});BB(wx,y+d,h*.45,.34,.05,.4,0,g,wmat);vilWins.push({m:wmat,mine:!!mine,i:seed+i})}
@@ -569,7 +599,7 @@ const G3=(function(){
    if(f){vhull(g,x-.1,y-.1,0,w+.2,d+.5,h+.8,f);vcollect(f,g)}
   };
   house('home',3.0,1.0,2.0,2.0,1.7,'#c9a06a','#b5653a',2,41,true);
-  [[7.2,.6,1.8,1.6,1.4,'#d8b27a','#7d9a6a',2,43],[11.0,.5,1.5,1.3,1.3,'#caa070','#a8663d',1,47],[14.6,.6,1.9,1.7,1.5,'#d3ad78','#6f8fa8',2,53],[18.4,.5,1.6,1.4,1.3,'#c99e68','#a85d4a',1,59],[22.0,.6,1.8,1.6,1.4,'#d8b27a','#8a7aa8',2,61]]
+  [[7.2,.6,1.8,1.6,1.4,'#d8b27a','#7d9a6a',2,43],[11.0,.5,1.5,1.3,1.3,'#caa070','#a8663d',1,47],[14.6,.6,1.9,1.7,1.5,'#d3ad78','#6f8fa8',2,53],[18.4,.5,1.6,1.4,1.3,'#c99e68','#a85d4a',1,59],[22.0,.6,1.8,1.6,1.4,'#d8b27a','#8a7aa8',2,61],[25.8,.6,1.7,1.5,1.4,'#d3ad78','#7a9a6a',2,67],[29.6,.5,1.5,1.4,1.3,'#c99e68','#a8663d',1,71],[33.2,.6,1.7,1.5,1.4,'#d8b27a','#6f8fa8',2,73]]
    .forEach(([x,y,w,d,h,wall,roof,n,sd])=>house(null,x,y,w,d,h,wall,roof,n,sd,false));
   const bg=new THREE.Group();villageG.add(bg);const bx=11.3,bz=6.3;
   BB(bx,bz,0,.15,.15,1.7,'#7d5330',bg);BB(bx+1.4,bz,0,.15,.15,1.7,'#7d5330',bg);
@@ -577,18 +607,21 @@ const G3=(function(){
   BB(bx-.2,bz-.05,1.7,2.0,.35,.1,'#6a4527',bg);
   [[.3,1.05,'#fbf4e2'],[.8,1.2,'#fff0a8'],[1.2,1.0,'#cdf0e0'],[.55,1.45,'#ffd6e4']].forEach(([dx,nz,c])=>BB(bx+dx,bz+.15,nz,.32,.02,.36,c,bg));
   vhull(bg,bx-.2,bz-.1,0,2.0,.8,2.0,'board');vcollect('board',bg);
-  [[8.2,6.6],[17.8,6.6],[8.2,14.6],[17.8,14.6]].forEach(([x,z])=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
+  [[PLAZA.x0-.4,PLAZA.z0-.4],[PLAZA.x1+.2,PLAZA.z0-.4],[PLAZA.x0-.4,PLAZA.z1+.2],[PLAZA.x1+.2,PLAZA.z1+.2]].forEach(([x,z])=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
    g.add(mesh(new THREE.CylinderGeometry(.05,.06,1.7,8),mat('#5a4332',.8),[0,.85,0]));g.add(mesh(sph(.16),mat('#ffd66b',.4,{emissive:'#ffcf5a',emissiveIntensity:.9}),[0,1.8,0]))});
   let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
-  const rects=[[2.4,.2,26,4.4],[8.0,6.6,18.2,15.0],[3.2,2.8,5.0,9.0],[3.2,7.2,9.4,8.8],[17.2,9.6,25.2,11.4],[12.2,14.0,14.0,19.6],[1.2,13.8,7.0,18.6]];
+  const rects=[[2.4,.2,VIL.X,4.4],[PLAZA.x0-.6,PLAZA.z0-.4,PLAZA.x1+.6,PLAZA.z1+.6],[3.2,2.8,5.0,9.0],[3.2,7.2,9.4,8.8],[ZONE.x0-.6,3.4,VIL.X,VIL.Y],[1.2,13.8,7.0,18.6]];
   const near=(x,z)=>VSLOTS.some(([a,b])=>Math.hypot(a-x,b-z)<2.2)||Math.hypot(x-VIL.start[0],z-VIL.start[1])<2.2;
   const tree=(x,z,s)=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
    g.add(mesh(new THREE.CylinderGeometry(.07*s,.1*s,.7*s,8),mat('#7a5536',.9),[0,.35*s,0]));
    if(sn==='겨울')g.add(mesh(sph(.34*s),mat('#ffffff',.9),[0,.95*s,0],[1,.6,1]));
    else{const cols=sn==='가을'?['#e0892f','#c9452f','#e8b73a']:sn==='봄'?['#f4b6c8','#f8c9d6']:['#4f9a4a','#5faa5a'];g.add(mesh(sph(.5*s),mat(cols[Math.floor(x*7+z*3)%cols.length],.85),[0,.95*s,0]))}};
-  for(let gx=.6;gx<25.5;gx+=2.2)for(let gz=.6;gz<19.8;gz+=2.2){const x=gx+rnd()*1.2,z=gz+rnd()*1.2;
+  for(let gx=.6;gx<VIL.X-.5;gx+=2.2)for(let gz=.6;gz<VIL.Y-.2;gz+=2.2){const x=gx+rnd()*1.2,z=gz+rnd()*1.2;
    if(rects.some(([a,b,c,d])=>x>a&&x<c&&z>b&&z<d)||near(x,z)||rnd()<.35)continue;tree(x,z,.8+rnd()*.5)}
+  for(let gx=-24;gx<VIL.X+24;gx+=3)for(let gz=-24;gz<VIL.Y+24;gz+=3){const x=gx+rnd()*1.8,z=gz+rnd()*1.8; // 지도 바깥 숲: 끝없이 이어지는 느낌
+   if(x>-.5&&x<VIL.X+.5&&z>-.5&&z<VIL.Y+.5||rnd()<.3)continue;tree(x,z,.8+rnd()*.6)}
   addLabel('<b>내 방</b>',4.0,2.5,2.0);addLabel('<b>마을 게시판</b>',bx+.8,2.5,bz+.1);
+  addLabel('<b>광장 · 이야기</b>',PLAZA.cx,1.5,PLAZA.cz-.9);addLabel('<b>모닥불 구역</b>',ZONE.x0-.2,2.8,(ZONE.g0+ZONE.g1)/2);
  } function syncVillage(list){
   const key=JSON.stringify(list);if(key===vilKey||!villageG)return;vilKey=key;
   if(vilFiresG){villageG.remove(vilFiresG);dispose(vilFiresG)}
@@ -691,13 +724,15 @@ const G3=(function(){
    vilFlames.forEach(f=>f.g.scale.set(f.base*(1+.06*Math.sin(t*7+f.ph)),f.base*(1+.1*Math.sin(t*9+f.ph)+.05*Math.sin(t*17+f.ph)),f.base*(1+.06*Math.cos(t*8+f.ph))));
    vilWins.forEach(w=>{const on=w.mine?vilLamp:((w.i*7+mn)%3!==0);w.m.emissiveIntensity=on?1:0;w.m.color.set(on?'#ffd66b':'#6b5a48')});
    vilLabels.forEach(l=>place(l.el,l.x,l.y,l.z));
+   vilNpcs.forEach(n=>applyPose(n.M,{x:n.x,y:0,z:n.z,rot:n.rot,t:t+n.ph,mv:0,sit:0}));
+   vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:vilNpcs[b.i]&&vilNpcs[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+3.3,p.z);return true});
   }
   R.render(scene,cam);
  }
  buildRoom();
  new ResizeObserver(fit).observe(wrap);fit();
  requestAnimationFrame(frame);
- return {sync,pick,setHover,flash,relayout,snap,fit,setView,winImg:()=>winCv.toDataURL()};
+ return {sync,pick,setHover,flash,relayout,snap,fit,setView,say,houses:()=>vilHouses,npcs:()=>vilNpcs.map(n=>[n.x,n.z]),winImg:()=>winCv.toDataURL()};
 })();
 document.getElementById('fail').style.display=G3?'none':'flex';
 MQ.addEventListener('change',()=>{if(VIEW==='village'){VIEW='room';if(G3)G3.setView('room')}setLayout(MQ.matches?'tall':'wide');if(G3)G3.relayout();buildSr();render()});
@@ -751,6 +786,27 @@ function leaveVillage(){
  setTimeout(()=>{VIEW='room';L=ROOM_L;Object.assign(sim,{x:TARGET.door[0],z:TARGET.door[1]+.3,y:0,mode:'idle',after:null,mv:0,sit:0,k:0,rot:Math.PI/4});
   if(G3)G3.setView('room');buildSr();render();w.classList.remove('fading')},260);
 }
+// 마을 미니맵: 정사각형 상자에 마을 전체를 위에서 내려다본 모양으로 보여준다 (x는 오른쪽, z는 아래). 위아래 남는 자리는 바깥 숲 색. 노란 점이 나
+const mini=document.getElementById('minimap'),mctx=mini.getContext('2d');
+function drawMini(){
+ if(VIEW!=='village'||!G3)return;
+ const W=mini.width,H=mini.height,pad=8,k=(W-2*pad)/VIL.X,ox=pad,oy=(H-VIL.Y*k)/2;
+ const P=(x,z)=>[ox+x*k,oy+z*k];
+ const quad=(x0,z0,x1,z1,c)=>{const [a,b]=P(x0,z0),[e,f]=P(x1,z1);mctx.fillStyle=c;mctx.fillRect(a,b,e-a,f-b)};
+ const dot=(x,z,c,r,ring)=>{const [a,b]=P(x,z);mctx.beginPath();mctx.arc(a,b,r,0,7);if(ring){mctx.strokeStyle=c;mctx.lineWidth=2;mctx.stroke()}else{mctx.fillStyle=c;mctx.fill()}};
+ const txt=(s,x,z)=>{const [a,b]=P(x,z);mctx.fillText(s,a,b)};
+ mctx.fillStyle='#8fbf78';mctx.fillRect(0,0,W,H);
+ quad(0,0,VIL.X,VIL.Y,'#a9d48c');quad(1.5,14.2,6.7,18.4,'#7fb6d8');
+ quad(PLAZA.x0,PLAZA.z0,PLAZA.x1,PLAZA.z1,'#e6dcc4');quad(ZONE.x0,ZONE.z0,ZONE.x1,ZONE.z1,'#a88f68');
+ G3.houses().forEach(([x,y,w,d,m])=>quad(x,y,x+w,y+d,m?'#c0542f':'#8a6a45'));
+ mctx.font='bold 20px sans-serif';mctx.textAlign='center';mctx.textBaseline='middle';mctx.fillStyle='#6b5f4c';
+ txt('광장',PLAZA.cx,PLAZA.z1-1.6);
+ S.news.slice(0,VSLOTS.length).forEach((n,i)=>dot(VSLOTS[i][0],VSLOTS[i][1],n.kind==='OPEN'?'#e8764a':n.kind==='SOON'?'#f3f0e8':(n.done?'#7aa7e0':'#6d665e'),5));
+ if(S.news.length<VSLOTS.length){const s=VSLOTS[S.news.length];dot(s[0],s[1],'#f3f0e8',4.5,true)}
+ G3.npcs().forEach(([x,z])=>dot(x,z,'#5f9a5a',3));
+ dot(sim.x,sim.z,'#3b3226',7);dot(sim.x,sim.z,'#ffd23f',4.6);
+}
+setInterval(drawMini,120);
 function hdrText(extra){const c=calData();return '@'+S.user.handle+' · 읽은 책 '+S.finished.length+'권'+(c.streak?' · '+c.streak+'일 연속 기록':'')+' · 오늘 '+todayMin()+'분'+(extra||'')}
 function render(){
  const a=avatarNow();
@@ -792,14 +848,15 @@ function stateLabel(f){
  if(f==='door')return '문 · 마을로 나가기';
  if(f==='board')return '마을 게시판 · 열린 방 '+S.news.filter(n=>n.kind==='OPEN').length+'개';
  if(f==='home')return '내 방으로 들어가기';
+ if(f==='plaza')return '마을 광장 · 이웃과 이야기하기';
  if(f==='fire:new')return '빈 모닥불 자리 · 모닥불 피우기';
  if(f&&f.startsWith('room:')){const n=S.news.find(x=>x.id===f.slice(5));return n?shortTitle(n)+' · '+({OPEN:'열려 있어요',SOON:'곧 열려요',CLOSED:'종료 · '+roomSub(n)})[n.kind]:''}
 }
 // sr buttons in tab order
 const ORDER=['sofa','lamp','shelf','calendar','mirror','window','door'];
 const srWrap=document.getElementById('srBtns');
-const curOrder=()=>VIEW==='village'?['board',...S.news.slice(0,VSLOTS.length).map(n=>'room:'+n.id),...(S.news.length<VSLOTS.length?['fire:new']:[]),'home']:ORDER;
-const labelOf=f=>f==='board'?'마을 게시판':f==='home'?'내 방으로':f==='fire:new'?'모닥불 피우기':f.startsWith('room:')?shortTitle(S.news.find(n=>n.id===f.slice(5))||{})+' 모닥불':LABEL[f];
+const curOrder=()=>VIEW==='village'?['board','plaza',...S.news.slice(0,VSLOTS.length).map(n=>'room:'+n.id),...(S.news.length<VSLOTS.length?['fire:new']:[]),'home']:ORDER;
+const labelOf=f=>f==='board'?'마을 게시판':f==='plaza'?'광장 이야기':f==='home'?'내 방으로':f==='fire:new'?'모닥불 피우기':f.startsWith('room:')?shortTitle(S.news.find(n=>n.id===f.slice(5))||{})+' 모닥불':LABEL[f];
 function buildSr(){srWrap.innerHTML='';curOrder().forEach(f=>{const b=document.createElement('button');b.dataset.f=f;b.textContent=labelOf(f);
  b.addEventListener('focus',()=>{b.setAttribute('aria-label',stateLabel(f));hl(f,true)});b.addEventListener('blur',()=>hl(f,false));
  b.addEventListener('click',()=>VIEW==='village'?openV(f):openF(f));srWrap.appendChild(b)})}
@@ -837,7 +894,7 @@ let tt;function toast(m){const t=document.getElementById('toast');t.textContent=
 // panel
 const panel=document.getElementById('panel'),backdrop=document.getElementById('backdrop');
 backdrop.addEventListener('click',e=>{if(e.target===backdrop)closePanel()});
-const FIRST={mirror:'거울에서 캐릭터를 꾸밀 수 있어요. 꾸민 모습은 마을과 공유방에서도 보여요.',window:'열린 공유방과 가져오기 마감일이 여기 떠요.',board:'공유방 일정과 지난 방을 한눈에 봐요. 종료된 방은 7일 안에 내 서재로 가져오세요.','fire:new':'친구와 함께할 모닥불을 직접 피워요. 만들면 초대 링크가 생겨요.',lamp:'스탠드는 책을 읽는 동안 켜져 있어요.',calendar:'독서한 날이 표시되고, 이번 달 완독 목표를 정할 수 있어요.',shelf:'다 읽은 책이 꽂혀요. 책을 누르면 기록과 공유방 대화를 다시 볼 수 있어요.'};
+const FIRST={plaza:'광장에서는 방에 들어가지 않아도 이웃과 짧게 이야기해요. 한 줄로 말하면 머리 위에 말풍선이 떠요. 글은 하루 뒤에 사라져요.',mirror:'거울에서 캐릭터를 꾸밀 수 있어요. 꾸민 모습은 마을과 공유방에서도 보여요.',window:'열린 공유방과 가져오기 마감일이 여기 떠요.',board:'공유방 일정과 지난 방을 한눈에 봐요. 종료된 방은 7일 안에 내 서재로 가져오세요.','fire:new':'친구와 함께할 모닥불을 직접 피워요. 만들면 초대 링크가 생겨요.',lamp:'스탠드는 책을 읽는 동안 켜져 있어요.',calendar:'독서한 날이 표시되고, 이번 달 완독 목표를 정할 수 있어요.',shelf:'다 읽은 책이 꽂혀요. 책을 누르면 기록과 공유방 대화를 다시 볼 수 있어요.'};
 function openF(f){
  if(S.onboard===1&&f!=='sofa'){toast('먼저 소파에 읽을 책을 올려보세요');return}
  if(S.onboard===2&&f!=='lamp'){S.onboard=0;save()}
@@ -854,7 +911,7 @@ function openF(f){
  if(f!=='mirror')zoom(false);
 }
 // 마을의 게시판·모닥불·내 방
-function vTarget(f){if(f==='board')return [12.1,7.7];const i=f==='fire:new'?S.news.length:Math.max(0,S.news.findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
+function vTarget(f){if(f==='board')return [12.1,7.7];if(f==='plaza')return [PLAZA.cx,PLAZA.cz+1.5];const i=f==='fire:new'?S.news.length:Math.max(0,S.news.findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
 function openV(f){
  if(f==='home'){closePanel();walkTo(VIL.home[0],VIL.home[1],()=>leaveVillage());return}
  panelOpen=f;panelView={};renderPanel();backdrop.classList.add('open');panel.scrollTop=0;tip.style.display='none';
@@ -878,6 +935,7 @@ function renderPanel(){
  if(f==='shelf')h=shelfPanel();
  if(f==='calendar')h=calendarPanel();
  if(f==='board')h=boardPanel();
+ if(f==='plaza')h=plazaPanel();
  if(f==='fire:new')h=createPanel();
  if(f&&f.startsWith('room:'))h=roomPanel(f.slice(5));
  if(f==='mirror')h=mirrorPanel();
@@ -1053,6 +1111,27 @@ function boardPanel(){
   +'<label for="jl">초대 링크로 들어가기</label><div class="row"><input id="jl" placeholder="초대 링크나 코드"><button data-act="joinLink">들어가기</button></div>'
   +'<p class="muted" style="margin-top:10px">공유방 기록은 종료 후 7일 동안만 보관돼요. 모닥불이 작아지다 꺼지면 사라져요.</p>';
 }
+// ===== 마을 광장: 방에 들어가지 않고 하는 짧은 대화. 하루 뒤 사라진다 =====
+const hhmm=ts=>new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
+const plazaLogHtml=()=>S.plaza.length?S.plaza.slice(-30).map(m=>`<div class="msg ${m.mine?'me':''}"><b>${esc(m.who)}</b>${esc(m.text)}<i>${hhmm(m.ts)}</i></div>`).join(''):'<p class="muted">아직 아무도 말하지 않았어요. 첫 마디를 남겨 보세요.</p>';
+function plazaPanel(){
+ return head('마을 광장')+'<p class="muted">책이 달라도 괜찮아요. 공유방 이야기는 모닥불 안에서만 해요.</p>'
+  +`<div class="plog" id="plazaLog">${plazaLogHtml()}</div>`
+  +`<div class="foot"><div class="row"><input id="pz" maxlength="40" placeholder="한 줄로 말해요" autocomplete="off"><button class="primary" data-act="plazaSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="pzE" style="margin-top:4px"></div></div>`;
+}
+function plazaSay(who,text,i,mine){
+ S.plaza.push({who,text,ts:Date.now(),mine:!!mine});S.plaza=S.plaza.slice(-60);save();
+ if(G3)G3.say(i,text);
+ const lg=document.getElementById('plazaLog');if(panelOpen==='plaza'&&lg){lg.innerHTML=plazaLogHtml();lg.scrollTop=lg.scrollHeight}
+}
+function plazaSend(){
+ const inp=document.getElementById('pz'),e=document.getElementById('pzE'),t=inp.value.trim();if(!t)return;
+ if(!inPlaza(sim.x,sim.z)){e.textContent='광장 안으로 걸어가는 중이에요. 도착하면 보낼 수 있어요';return}
+ e.textContent='';inp.value='';inp.focus();plazaSay('나',t,-1,true);
+ setTimeout(()=>{if(VIEW==='village')plazaSay('@'+NPCS[1].name,NPC_REPLY[Math.floor(Math.random()*NPC_REPLY.length)],1)},2200+Math.random()*2000);
+}
+// 체험판: 가짜 이웃이 가끔 말을 건다
+setInterval(()=>{S.plaza=S.plaza.filter(m=>Date.now()-m.ts<864e5);if(VIEW!=='village'||Math.random()<.4)return;const i=Math.floor(Math.random()*NPCS.length);plazaSay('@'+NPCS[i].name,NPC_SAY[Math.floor(Math.random()*NPC_SAY.length)],i)},9000);
 function roomPanel(id){
  const n=S.news.find(x=>x.id===id);if(!n)return head('모닥불')+'<p class="muted">이 공유방은 사라졌어요.</p>';
  const note=n.kind==='OPEN'?(n.rtype==='OWN'?'각자 읽는 책 이야기를 나누는 모닥불이에요.':'모닥불이 활활 타고 있어요. 같은 책을 읽은 사람들이 모여 있어요.'):n.kind==='SOON'?'아직 불이 붙지 않았어요. 열리면 모닥불에 불이 붙어요.':'불이 작아지고 있어요. '+roomLeft(n)+'일 뒤에 꺼지고 기록이 사라져요. 그 전에 내 서재로 가져오세요.';
@@ -1156,10 +1235,11 @@ panel.addEventListener('input',e=>{
   document.getElementById('spv').textContent=tot&&pgv!=null?Math.min(100,Math.round(pgv/tot*100))+'%':''}
  if(e.target.id==='sm'){panelView.memo=e.target.value}
 });
-panel.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='bq'){e.preventDefault();runSearch()}});
+panel.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='bq'){e.preventDefault();runSearch()}if(e.key==='Enter'&&e.target.id==='pz'&&!e.isComposing){e.preventDefault();plazaSend()}});
 panel.addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
  if(act==='close')return closePanel();
+ if(act==='plazaSend')return plazaSend();
  if(act==='home'){openF(b.dataset.f);return}
  if(act==='handle')return panel.classList.toggle('full');
  if(act==='addBook'){const t=(panelView.t||'').trim(),a=(panelView.a||'').trim();let bad=false;

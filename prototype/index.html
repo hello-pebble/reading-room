@@ -243,7 +243,7 @@ function defaultState(){return{
  dropped:[],
  avatar:defAvatar(),
  unlocked:{glasses:true},newItem:true,session:null,sessions:[],
- onboard:0,seen:{},newsSeen:{},goal:1,plaza:[],later:[], // later: 나중에 읽을 책 (공유방에서 가져왔는데 내 책장에 없는 책)
+ onboard:0,seen:{},newsSeen:{},goals:{},plaza:[],later:[], // later: 나중에 읽을 책 (공유방에서 가져왔는데 내 책장에 없는 책)
  news:[
   {id:'n1',kind:'OPEN',title:'『작별하지 않는다』 같이 읽기',sub:'오늘 22:00 종료 · 12명 참여 중'},
   {id:'n2',kind:'SOON',title:'『소년이 온다』 이야기방',sub:'11.20 개방',alarm:false,opensAt:Date.UTC(2026,10,19,15,0,0)},
@@ -257,7 +257,9 @@ if(!S)S=defaultState();
 if(!S.sessions)S.sessions=[];if(S.session===undefined)S.session=null;if(S.reading&&!S.reading.id)S.reading.id=Date.now();
 if(!S.avatar||!S.avatar.expr)S.avatar=defAvatar();
 if(!S.newsSeen)S.newsSeen={};
-if(!S.goal)S.goal=1;
+// 월 목표 이력 (결정 #39): 예전의 한 값(S.goal)은 이번 달부터만 기록하고, 그 이전 달은 "목표 기록 없음"으로 둔다
+if(!S.goals){S.goals={};if(S.goal>=1)S.goals[new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).slice(0,7)]={goal:Math.min(99,Math.round(S.goal)),changes:[]}}
+delete S.goal;
 if(!S.later)S.later=[];if(!S.plaza)S.plaza=[];S.plaza=S.plaza.filter(m=>Date.now()-m.ts<864e5); // 광장 대화는 하루 뒤 사라진다
 S.news.forEach(n=>{if(n.kind==='SOON'&&!n.opensAt)n.opensAt=Date.UTC(2026,10,19,15,0,0);if(n.kind==='CLOSED'&&!n.deleteAt){const m=/D-(\d+)/.exec(n.sub||'');n.deleteAt=Date.now()+(m?+m[1]:3)*864e5}});
 // 완독일에 연도를 붙인다. 예전 저장값은 '월.일'뿐이라, 오늘(한국 시간) 이전에서 가장 가까운 그 날짜로 정한다
@@ -787,20 +789,35 @@ MQ.addEventListener('change',()=>{closePanel();if(VIEW==='village'){VIEW='room';
 
 function bookColor(t){let h=0;for(const c of t)h=(h*31+c.charCodeAt(0))>>>0;return SPINE[h%SPINE.length]}
 
-// 달력: 한국 시간 기준. 독서등을 끄며 저장한 날과 완독한 날을 독서한 날로 센다.
-function calData(){
+// 월 목표 (결정 #39): 달마다 따로 보관한다. 정해 둔 값이 없으면 직전에 정한 값을 이어받고, 첫 기록 이전 달은 null(목표 기록 없음).
+// 지난 달 목표는 바뀌지 않는다(이어받기는 앞으로만 간다). 이번 달에만 고칠 수 있고, 고치면 "목표를 바꿨어요" 기록(changes)이 남는다.
+const curYM=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).slice(0,7);
+function goalFor(ym){const e=S.goals[ym];if(e)return {goal:e.goal,changes:e.changes||[],set:true};
+ const ks=Object.keys(S.goals).filter(k=>k<ym).sort();return {goal:ks.length?S.goals[ks[ks.length-1]].goal:null,changes:[],set:false}}
+function setGoal(v){
+ const ym=curYM(),prev=goalFor(ym);v=Math.min(99,Math.max(1,Math.round(+v)||1));
+ const e=S.goals[ym]||(S.goals[ym]={goal:prev.goal==null?v:prev.goal,changes:[]});if(e.goal===v)return;
+ const day=ts=>new Date(ts).toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}),last=e.changes[e.changes.length-1];
+ if(last&&day(last.at)===day(Date.now())){last.to=v;last.at=Date.now();if(last.from===v)e.changes.pop()}   // 같은 날 여러 번 눌러도 한 번의 변경으로 본다
+ else e.changes.push({at:Date.now(),from:e.goal,to:v});
+ e.goal=v;save()}
+// 달력: 한국 시간 기준. 독서등을 끄며 저장한 날과 완독한 날을 독서한 날로 센다. off는 이번 달 기준으로 몇 달 전인지(0=이번 달, -1=지난 달).
+function calData(off=0){
  const kst=ts=>new Date(ts).toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'});
  const todayS=kst(Date.now()),[ty,tm,td]=todayS.split('-').map(Number),pad=n=>String(n).padStart(2,'0');
- const days=new Set();
+ const tg=new Date(Date.UTC(ty,tm-1+off,1)),Y=tg.getUTCFullYear(),Mo=tg.getUTCMonth()+1,ym=Y+'-'+pad(Mo);
+ const days=new Set(),RE=/^(?:(\d{4})\.)?(\d+)\.(\d+)$/,finY=m=>m[1]?+m[1]:((+m[2]>tm||(+m[2]===tm&&+m[3]>td))?ty-1:ty);   // 연도 없는 예전 값은 오늘 기준으로 연도를 짐작
  S.sessions.forEach(x=>days.add(kst(x.endedAt||x.startedAt)));
- S.finished.forEach(b=>{const m=/^(?:(\d{4})\.)?(\d+)\.(\d+)$/.exec(b.finishedAt||'');if(!m)return;const mo=+m[2],d=+m[3];const y=m[1]?+m[1]:((mo>tm||(mo===tm&&d>td))?ty-1:ty);days.add(y+'-'+pad(mo)+'-'+pad(d))});
- const dt=new Date(Date.UTC(ty,tm-1,td));let streak=0;
- if(!days.has(todayS))dt.setUTCDate(dt.getUTCDate()-1);
- while(days.has(dt.toISOString().slice(0,10))){streak++;dt.setUTCDate(dt.getUTCDate()-1)}
- const dim=new Date(Date.UTC(ty,tm,0)).getUTCDate(),first=new Date(Date.UTC(ty,tm-1,1)).getUTCDay();
- const marks=[];for(let d=1;d<=dim;d++)if(days.has(ty+'-'+pad(tm)+'-'+pad(d)))marks.push(d);
- const done=S.finished.filter(b=>{const m=/^(?:(\d{4})\.)?(\d+)\./.exec(b.finishedAt||'');return m&&+m[2]===tm&&(!m[1]||+m[1]===ty)}).length; // 연도가 있으면 올해 이번 달만 센다 (연도 없는 예전 값은 월만 비교)
- return {y:ty,m:tm,today:td,dim,first,marks,streak,done,goal:S.goal||1};
+ S.finished.forEach(b=>{const m=RE.exec(b.finishedAt||'');if(!m)return;days.add(finY(m)+'-'+pad(+m[2])+'-'+pad(+m[3]))});
+ let streak=0;if(off===0){const dt=new Date(Date.UTC(ty,tm-1,td));
+  if(!days.has(todayS))dt.setUTCDate(dt.getUTCDate()-1);
+  while(days.has(dt.toISOString().slice(0,10))){streak++;dt.setUTCDate(dt.getUTCDate()-1)}}
+ const dim=new Date(Date.UTC(Y,Mo,0)).getUTCDate(),first=new Date(Date.UTC(Y,Mo-1,1)).getUTCDay();
+ const marks=[];for(let d=1;d<=dim;d++)if(days.has(ym+'-'+pad(d)))marks.push(d);
+ const done=S.finished.filter(b=>{const m=RE.exec(b.finishedAt||'');return m&&finY(m)===Y&&+m[2]===Mo}).length;
+ if(off===0&&!S.goals[ym]&&goalFor(ym).goal==null){S.goals[ym]={goal:1,changes:[]};save()}   // 처음 쓰는 사람은 기본 1권
+ const g=goalFor(ym),earliest=[...Object.keys(S.goals),...[...days].map(d=>d.slice(0,7))].sort()[0]||ym;
+ return {y:Y,m:Mo,ym,off,today:off===0?td:0,dim,first,marks,streak,done,goal:g.goal,goalSet:g.set,changes:g.changes,canPrev:earliest<ym,canNext:off<0};
 }
 // 창밖 풍경: 계절은 월로, 날씨는 날짜마다 바뀐다 (오프라인에서도 동작). 인터넷이 있으면 실제 날씨로 바꿀 수도 있다.
 function windowScene(){
@@ -1115,7 +1132,8 @@ function shelfPanel(){
   let body='';
   if(tab==='notes')body=b.notes.length?b.notes.map(n=>noteHTML(n)).join(''):'<p class="muted">남긴 메모가 없어요.</p>';
   if(tab==='review')body=`<div class="card">${b.rating?`<div style="color:#e0a43a">${'★'.repeat(b.rating)}<span style="color:#d6c9ad">${'★'.repeat(5-b.rating)}</span></div>`:''}<div>${b.review?esc(b.review):'<span class="muted">한줄평이 없어요.</span>'}</div></div>`;
-  if(tab==='rooms')body=b.rooms.map(rm=>`<div class="card"><b>${esc(rm.title)}</b><div class="muted">${rm.period} · 가져온 기록</div><div style="margin-top:8px">${rm.messages.map(m=>`<div class="msg"><b>${esc(m.who)}</b>${esc(m.text)}</div>`).join('')}</div></div>`).join('')+'<p class="muted">다른 참여자 이름은 익명으로 보관돼요.</p>';
+  if(tab==='rooms'){let lockedN=0;   // 쪽수 잠금: 이 책을 내가 읽은 쪽(완독·포기하면 전부)보다 뒤쪽 글은 가린다
+   body=b.rooms.map(rm=>{const room={rtype:rm.rtype,pageLock:rm.pageLock,book:b.title};return `<div class="card"><b>${esc(rm.title)}</b><div class="muted">${rm.period} · 가져온 기록</div><div style="margin-top:8px">${rm.messages.map(m=>{const lk=rcLocked(room,m);if(lk)lockedN++;return `<div class="msg"><b>${esc(m.who)}</b>${lk?`🔒 ${m.page}쪽 이후 글 · 읽으면 열려요`:esc(m.text)}</div>`}).join('')}</div></div>`}).join('')+(lockedN?`<p class="muted">🔒 잠긴 글 ${lockedN}개는 이 책을 더 읽으면 열려요.</p>`:'')+'<p class="muted">다른 참여자 이름은 익명으로 보관돼요.</p>'}
   return head('책장')+`<button class="ghost" data-act="back" style="padding:4px 0">← 목록</button>
    <div class="row" style="margin-top:6px">${bthumb(b)}<div><b>『${esc(b.title)}』</b><div class="muted">${esc(b.author)} · ${later?'나중에 읽을 책':v.drop?'포기':String(b.finishedAt).replace(/^\d{4}\./,'')+' 완독'}</div></div></div>
    <div class="tabs">${tabs.map(([k,l])=>`<button data-act="tab" data-t="${k}" class="${tab===k?'on':''}">${l}</button>`).join('')}</div>${body}`}
@@ -1139,17 +1157,25 @@ function mirrorPanel(){
   </div></div>
   <div class="row foot" style="margin-top:16px"><button data-act="cancelMirror" class="grow">취소</button><button class="primary grow" data-act="saveMirror">저장</button></div>`;
 }
+// 목표 카드의 "목표를 바꿨어요" 표시 (결정 #39). 달 중간에 바꾸면 그 달에 기록이 남고, 지난 달을 볼 때도 보인다.
+function goalNoteText(c){const ch=c.changes;
+ if(ch.length)return '🔁 목표를 바꿨어요 · '+ch[0].from+'→'+c.goal+'권 ('+mmdd(ch[ch.length-1].at)+(ch.length>1?', '+ch.length+'번':'')+')';
+ if(c.off===0&&!c.goalSet&&c.goal!=null)return '지난 달 목표를 이어받았어요';return ''}
+const goalStatText=c=>c.goal==null?'완독 '+c.done+'권 · 이 달은 목표 기록이 없어요':'완독 '+c.done+'/'+c.goal+'권'+(c.done>=c.goal?' · 목표 달성':c.off<0?' · 목표 미달성':'')+' · 포기한 책은 세지 않아요';
 function calendarPanel(){
- const c=calData(),pct=Math.min(100,Math.round(c.done/c.goal*100));
+ const off=Math.min(0,panelView.calOff||0),c=calData(off),cur=off===0,pct=c.goal?Math.min(100,Math.round(c.done/c.goal*100)):0;
  const heads=['일','월','화','수','목','금','토'].map(n=>`<b>${n}</b>`).join('');
  let cells='';for(let i=0;i<c.first;i++)cells+='<i></i>';
  for(let d=1;d<=c.dim;d++)cells+=`<i class="${c.marks.includes(d)?'on':''}${d===c.today?' today':''}">${d}</i>`;
- return head('달력')+`<div class="card"><b>${c.y}년 ${c.m}월</b>
+ const goalCard=cur
+  ?`<div class="card"><div class="row"><span class="grow">이번 달 완독 목표</span><button data-act="goalDec" aria-label="목표 줄이기">−</button><input id="goal" type="number" min="1" max="99" value="${c.goal}" style="width:64px;text-align:center"><button data-act="goalInc" aria-label="목표 늘리기">+</button><span>권</span></div>`
+  :`<div class="card"><div class="row"><span class="grow">${c.m}월 완독 목표</span><b style="font-weight:normal;font-size:20px">${c.goal!=null?c.goal+'권':'기록 없음'}</b></div>`;
+ return head('달력')+`<div class="card"><div class="row"><button data-act="calPrev" aria-label="이전 달" ${c.canPrev?'':'disabled'}>‹</button><b class="grow" style="text-align:center">${c.y}년 ${c.m}월</b><button data-act="calNext" aria-label="다음 달" ${c.canNext?'':'disabled'}>›</button></div>
   <div class="cal" style="margin-top:8px">${heads}${cells}</div>
   <div class="muted" style="margin-top:8px">초록색에 점이 찍힌 날은 책을 읽었거나 완독한 날이에요.</div></div>
-  <div class="card"><div class="row"><span class="grow">연속 독서일</span><b style="font-weight:normal;font-size:20px">${c.streak}일</b></div><div class="muted">오늘 또는 어제부터 이어서 센 날수예요. 같은 날 여러 번 읽어도 하루예요.</div></div>
-  <div class="card"><div class="row"><span class="grow">이번 달 완독 목표</span><button data-act="goalDec" aria-label="목표 줄이기">−</button><input id="goal" type="number" min="1" max="99" value="${c.goal}" style="width:64px;text-align:center"><button data-act="goalInc" aria-label="목표 늘리기">+</button><span>권</span></div>
-  <div class="progress" style="margin:10px 0 6px"><i id="goalBar" style="width:${pct}%"></i></div><div class="muted" id="goalStat">완독 ${c.done}/${c.goal}권${c.done>=c.goal?' · 목표 달성':''} · 포기한 책은 세지 않아요</div></div>`;
+  ${cur?`<div class="card"><div class="row"><span class="grow">연속 독서일</span><b style="font-weight:normal;font-size:20px">${c.streak}일</b></div><div class="muted">오늘 또는 어제부터 이어서 센 날수예요. 같은 날 여러 번 읽어도 하루예요.</div></div>`:''}
+  ${goalCard}
+  ${c.goal!=null?`<div class="progress" style="margin:10px 0 6px"><i id="goalBar" style="width:${pct}%"></i></div>`:''}<div class="muted" id="goalStat">${goalStatText(c)}</div><div class="muted" id="goalNote" style="margin-top:6px">${goalNoteText(c)}</div>${cur?'':'<div class="muted" style="margin-top:6px">지난 달의 목표는 바꿀 수 없어요.</div>'}</div>`;
 }
 // 공유방 카드: 마을 게시판, 모닥불 창이 함께 쓴다
 function roomCard(n,noAct){
@@ -1248,7 +1274,8 @@ function rcFakeMsg(n){
  save();render();if(viewing)rcRefresh(n)}
 // 체험판: 참여 중인 열린 방에 가짜 참여자가 가끔 글을 보낸다
 setInterval(()=>{const l=S.news.filter(n=>n.kind==='OPEN'&&n.agreed&&n.members.length);if(l.length&&Math.random()<.6)rcFakeMsg(l[Math.floor(Math.random()*l.length)])},12000);
-function rcSnapshot(n){const names={};let k=0;return n.messages.filter(m=>!m.del&&!rcLocked(n,m)).map(m=>{
+// 가져오기 스냅샷: 삭제된 글만 뺀다. 잠긴 글(내 쪽수보다 뒤쪽)은 쪽수와 함께 보존하고, 책장에서 보여줄 때 잠근다 (Codex QA)
+function rcSnapshot(n){const names={};let k=0;return n.messages.filter(m=>!m.del).map(m=>{
  if(rcMine(m))return {who:'나',text:m.text,page:m.page};
  const key=m.left?'나간':m.who;if(!names[key])names[key]='참여자 '+String.fromCharCode(65+(k++%26));return {who:names[key],text:m.text,page:m.page}})}
 function rcLogHtml(n){
@@ -1400,16 +1427,16 @@ function cancelMirror(){tempAvatar=null;zoom(false);render()}
 panel.addEventListener('change',e=>{
  if(e.target.id==='rbook'){panelView.nf.bookSel=e.target.value;renderPanel()}
  if(e.target.id==='rlock'){panelView.nf.lock=e.target.checked}
- if(e.target.id==='goal'){const s=e.target.value;S.goal=s===''?S.goal:Math.min(99,Math.max(1,Math.round(+s)));save();renderPanel();render()} // 칸을 벗어나면 1~99로 맞춰 화면과 저장값을 일치시킨다
+ if(e.target.id==='goal'){const s=e.target.value;if(s!=='')setGoal(+s);save();renderPanel();render()} // 칸을 벗어나면 1~99로 맞춰 화면과 저장값을 일치시킨다
 });
 panel.addEventListener('input',e=>{
  if(e.target.id==='rname')panelView.nf.name=e.target.value;
  if(e.target.id==='rmax')panelView.nf.max=e.target.value;
  if(e.target.id==='rbookt')panelView.nf.bookTitle=e.target.value;
  if(e.target.id==='rwhen')panelView.nf.when=e.target.value;
- if(e.target.id==='goal'){let v=Math.round(+e.target.value);if(!(v>=1))return;v=Math.min(99,v);if(v!==+e.target.value)e.target.value=v;S.goal=v;save();
-  const c=calData(),bar=document.getElementById('goalBar'),st=document.getElementById('goalStat');
-  if(bar)bar.style.width=Math.min(100,Math.round(c.done/c.goal*100))+'%';if(st)st.textContent='완독 '+c.done+'/'+c.goal+'권'+(c.done>=c.goal?' · 목표 달성':'')+' · 포기한 책은 세지 않아요';render()}
+ if(e.target.id==='goal'){let v=Math.round(+e.target.value);if(!(v>=1))return;v=Math.min(99,v);if(v!==+e.target.value)e.target.value=v;setGoal(v);
+  const c=calData(),bar=document.getElementById('goalBar'),st=document.getElementById('goalStat'),nt=document.getElementById('goalNote');
+  if(bar)bar.style.width=Math.min(100,Math.round(c.done/c.goal*100))+'%';if(st)st.textContent=goalStatText(c);if(nt)nt.textContent=goalNoteText(c);render()}
  if(e.target.id==='pg'||e.target.id==='tp'){const r=S.reading,pg=document.getElementById('pg').value,tp=document.getElementById('tp').value;
   r.page=pg===''?null:Math.max(0,Math.round(+pg));r.totalPages=Math.round(+tp)>=1?Math.min(9999,Math.round(+tp)):null;updProgress(r);save();
   document.getElementById('pv').textContent=r.totalPages?r.progress+'%':'';const bar=panel.querySelector('.card .progress i');if(bar)bar.style.width=(r.progress||0)+'%';
@@ -1421,7 +1448,7 @@ panel.addEventListener('input',e=>{
  if(e.target.id==='bt'){panelView.t=e.target.value;document.getElementById('btE').textContent=''}
  if(e.target.id==='ba'){panelView.a=e.target.value;document.getElementById('baE').textContent=''}
  if(e.target.id==='rv'){panelView.review=e.target.value}
- if(e.target.id==='sp'||e.target.id==='stp'){const r=S.reading,sp=document.getElementById('sp'),stp=document.getElementById('stp'),tot=r.totalPages||(stp&&+stp.value)||0,pgv=sp.value===''?null:+sp.value;
+ if(e.target.id==='sp'||e.target.id==='stp'){const r=S.reading,sp=document.getElementById('sp'),stp=document.getElementById('stp'),tot=r.totalPages||(stp&&Math.max(0,Math.min(9999,+stp.value)))||0,pgv=sp.value===''?null:+sp.value;
   document.getElementById('spv').textContent=tot&&pgv!=null?Math.min(100,Math.max(0,Math.round(pgv/tot*100)))+'%':''}
  if(e.target.id==='sm'){panelView.memo=e.target.value}
 });
@@ -1451,7 +1478,8 @@ panel.addEventListener('click',e=>{
  if(act==='drop'){panelView.mode='drop';renderPanel();return}
  if(act==='cancelFinish'){panelView.mode=null;renderPanel();return}
  if(act==='star'){panelView.rating=+b.dataset.n===panelView.rating?0:+b.dataset.n;renderPanel();return}
- if(act==='doFinish'){if(S.session&&S.session.status==='NEEDS_CONFIRM'){openF('lamp');toast('먼저 스탠드 시간을 확인해 주세요');return}if(S.session)endSession(Date.now(),'FINISH',true);const r=S.reading;const id=r.id||Date.now();S.finished.push({id,title:r.title,author:r.author,cover:r.cover||'',isbn:r.isbn||'',totalPages:r.totalPages||null,rating:panelView.rating||0,review:(panelView.review||'').trim(),finishedAt:ymd(),notes:r.notes,rooms:r.rooms||[]});
+ if(act==='doFinish'){if(S.session&&S.session.status==='NEEDS_CONFIRM'){openF('lamp');toast('먼저 스탠드 시간을 확인해 주세요');return}const rating=panelView.rating||0,review=(panelView.review||'').trim();   // endSession()이 panelView를 비우기 전에 별점·한줄평을 챙긴다 (Codex QA)
+ if(S.session)endSession(Date.now(),'FINISH',true);const r=S.reading;const id=r.id||Date.now();S.finished.push({id,title:r.title,author:r.author,cover:r.cover||'',isbn:r.isbn||'',totalPages:r.totalPages||null,rating,review,finishedAt:ymd(),notes:r.notes,rooms:r.rooms||[]});
   S.reading=null;panelView={};save();closePanel();render();if(G3)G3.flash('shelf');toast('『'+r.title+'』을 책장에 꽂았어요');return}
  if(act==='doDrop'){if(S.session&&S.session.status==='NEEDS_CONFIRM'){openF('lamp');toast('먼저 스탠드 시간을 확인해 주세요');return}if(S.session)endSession(Date.now(),'FINISH',true);const r=S.reading;S.dropped.push({id:r.id||Date.now(),title:r.title,author:r.author,cover:r.cover||'',isbn:r.isbn||'',totalPages:r.totalPages||null,rating:0,review:'',finishedAt:ymd(),notes:r.notes,rooms:r.rooms||[]});S.reading=null;panelView={};save();closePanel();render();toast('소파를 비웠어요');return}
  if(act==='goSofa'){openF('sofa');return}
@@ -1460,7 +1488,8 @@ panel.addEventListener('click',e=>{
  if(act==='stopAsk'){panelView={mode:'stop'};renderPanel();return}
  if(act==='back2'){panelView={};renderPanel();return}
  if(act==='stopSave'){const r=S.reading,sp=document.getElementById('sp'),stp=document.getElementById('stp');
-  if(stp&&stp.value)r.totalPages=Math.max(1,Math.round(+stp.value));if(sp&&sp.value!=='')r.page=Math.max(0,Math.round(+sp.value));updProgress(r);const m=(panelView.memo||'').trim();if(m)r.notes.push({type:'MEMO',content:m,page:null,at:today()});endSession(Date.now(),'LAMP');return}
+  if(stp&&stp.value){const tp=Math.round(+stp.value);r.totalPages=tp>=1?Math.min(9999,tp):null}   // 소파 입력과 같은 규칙: 1~9999, 아니면 비움 (#36)
+  if(sp&&sp.value!=='')r.page=Math.max(0,Math.round(+sp.value));updProgress(r);const m=(panelView.memo||'').trim();if(m)r.notes.push({type:'MEMO',content:m,page:null,at:today()});endSession(Date.now(),'LAMP');return}
  if(act==='discard'){if(pipWin)pipDone(0);S.session=null;save();panelView={};render();renderPanel();toast('기록하지 않고 스탠드를 껐어요');return}
  if(act==='ff'){const ms=+b.dataset.m*60000;S.session.startedAt-=ms;S.session.lastCheckAt-=ms;if(+b.dataset.m>=180)S.session.lastCheckAt=S.session.startedAt+70*60000;save();checkSession(true);return}
  if(act==='confirmLast'){endSession(S.session.lastCheckAt,'CONFIRM');return}
@@ -1481,7 +1510,9 @@ panel.addEventListener('click',e=>{
  if(act==='bsearch'){runSearch();return}
  if(act==='bpick'){const it=(panelView.res||[])[+b.dataset.i];if(!it)return;Object.assign(panelView,{t:it.title,a:it.author,tp:it.pages||'',cover:it.cover,isbn:it.isbn,res:null,msg:''});renderPanel();return}
  if(act==='bclear'){Object.assign(panelView,{cover:'',isbn:'',res:null,msg:''});renderPanel();return}
- if(act==='goalDec'||act==='goalInc'){S.goal=Math.max(1,Math.min(99,(S.goal||1)+(act==='goalInc'?1:-1)));save();renderPanel();render();return}
+ if(act==='goalDec'||act==='goalInc'){setGoal(calData().goal+(act==='goalInc'?1:-1));renderPanel();render();return}
+ if(act==='calPrev'){panelView.calOff=(panelView.calOff||0)-1;renderPanel();return}
+ if(act==='calNext'){panelView.calOff=Math.min(0,(panelView.calOff||0)+1);renderPanel();return}
  if(act==='cancelMirror'){closePanel();return}
  if(act==='saveMirror'){S.avatar={...tempAvatar};tempAvatar=null;save();panelOpen=null;closePanel();render();toast('새 모습을 저장했어요');return}
  if(act==='goVillage'){closePanel();openF('door');return}
@@ -1504,7 +1535,7 @@ panel.addEventListener('click',e=>{
   if(n.kind==='SOON'){S.news=S.news.filter(x=>x!==n);toast('모닥불을 취소했어요')}else{n.kind='CLOSED';n.closesAt=Date.now();n.deleteAt=Date.now()+7*DAY;toast('모닥불을 일찍 껐어요. 7일 뒤에 사라져요')}
   save();render();buildSr();closePanel();return}
  if(act==='openNow'){const n=S.news.find(x=>x.id===b.dataset.id);n.opensAt=Date.now();fireDue();return}
- if(act==='import'){const n=S.news.find(x=>x.id===b.dataset.id);if(rcEmpty(n)){toast('가져올 대화가 없어요');return}if(!n.book){toast('이 방에는 내 책이 정해지지 않아서 가져올 곳이 없어요');return}const rec={title:n.title,period:n.period,messages:rcSnapshot(n)};   // 다른 참여자는 익명, 잠긴 글(내 쪽수보다 뒤)과 삭제된 글은 뺀다
+ if(act==='import'){const n=S.news.find(x=>x.id===b.dataset.id);if(rcEmpty(n)){toast('가져올 대화가 없어요');return}if(!n.book){toast('이 방에는 내 책이 정해지지 않아서 가져올 곳이 없어요');return}const rec={title:n.title,period:n.period,rtype:n.rtype,pageLock:n.pageLock,messages:rcSnapshot(n)};   // 다른 참여자는 익명, 삭제된 글은 뺀다. 잠금 판단에 쓰는 방 종류·잠금 여부도 함께 담는다
   // 내가 읽은 책(다 읽은 책·포기한 책·읽는 중)에 있으면 거기에 붙이고, 없으면 "나중에 읽을 책"에 담는다 (다 읽은 책으로 세지 않는다)
   let bk=S.finished.find(x=>x.title===n.book)||S.dropped.find(x=>x.title===n.book),msg='『'+n.book+'』에 공유방 탭이 생겼어요';
   if(!bk&&S.reading&&S.reading.title===n.book){bk=S.reading;if(!bk.rooms)bk.rooms=[];msg='『'+n.book+'』을 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요'}

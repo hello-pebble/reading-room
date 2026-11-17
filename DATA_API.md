@@ -8,7 +8,7 @@
 
 | 테이블 | 컬럼 | 제약 |
 |---|---|---|
-| `app_user` | id, handle, nickname, avatar(JSON), monthly_goal, status, beta_tester, created_at | handle unique (영소문자·숫자·`_`, 3~15자). monthly_goal은 1~99 |
+| `app_user` | id, handle, nickname, avatar(JSON), status, beta_tester, created_at | handle unique (영소문자·숫자·`_`, 3~15자). 월 목표는 `monthly_goal` 테이블(월별 이력, 결정 #39) |
 | `auth_identity` | id, user_id, provider, provider_user_id, created_at | unique(provider, provider_user_id) |
 | `invite_code` | code, created_by, max_uses, used_count, expires_at | |
 
@@ -101,11 +101,13 @@
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| GET | `/me/calendar?month=YYYY-MM` | 생략하면 한국 시간 기준 이번 달. `{month, days, streak, finishedCount, goal, serverNow}` 반환 |
-| PUT | `/me/goal` | body `{monthlyGoal}`. 1~99가 아니면 400. 같은 값을 다시 보내면 200 (멱등) |
+| GET | `/me/calendar?month=YYYY-MM` | 생략하면 한국 시간 기준 이번 달. 지난 달도 조회할 수 있다. `{month, days, streak(이번 달만), finishedCount, goal(없으면 null), goalChanges, goalInherited, serverNow}` 반환 |
+| PUT | `/me/goal` | body `{monthlyGoal}`. **이번 달 목표만** 바꾼다(지난 달은 바꿀 수 없다, 달 지정 없음). 1~99가 아니면 400. 같은 값을 다시 보내면 200 (멱등) |
 
-- `monthly_goal`은 `app_user`의 컬럼이다. 기본 1, 사용자당 값 하나를 모든 달에 적용한다 (과거 달의 목표 이력은 두지 않는다).
-- 마이그레이션: `ALTER TABLE app_user ADD COLUMN monthly_goal smallint NOT NULL DEFAULT 1 CONSTRAINT app_user_monthly_goal_range CHECK (monthly_goal BETWEEN 1 AND 99);`
+- **월별 목표 이력 (결정 #39)**: `monthly_goal(user_id, year_month 'YYYY-MM', goal smallint 1~99, changes jsonb, updated_at)`, unique(`user_id`, `year_month`). `changes`는 `[{at, from, to}]`로 "목표를 바꿨어요" 표시에 쓴다. 같은 한국 날짜 안에서 여러 번 바꾸면 한 번의 변경으로 합치고, 처음 값으로 돌아오면 기록을 지운다.
+- **조회 규칙**: 그 달의 행이 있으면 그 값, 없으면 그보다 이른 달 중 가장 최근에 정한 값을 이어받는다(`goalInherited: true`). 이어받기는 앞으로만 가므로 지난 달 값은 이번 달 변경에 영향받지 않는다. 가장 이른 행보다 앞선 달은 `goal: null`("목표 기록 없음"). 새 사용자는 첫 조회 때 이번 달 행을 기본 1권으로 만든다.
+- **마이그레이션**: 기존 `app_user.monthly_goal` 값은 **이관한 달의 행으로만** 옮기고 이전 달은 행을 만들지 않는다(이전 달에 현재 값을 채우면 소급 문제가 다시 생긴다). 이관 뒤 `app_user.monthly_goal` 컬럼은 삭제한다.
+- 새 테이블: `CREATE TABLE monthly_goal (user_id bigint NOT NULL REFERENCES app_user(id), year_month char(7) NOT NULL, goal smallint NOT NULL CHECK (goal BETWEEN 1 AND 99), changes jsonb NOT NULL DEFAULT '[]', updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (user_id, year_month));`
 - 날짜는 모두 `Asia/Seoul` 기준으로 자른다. 서버가 계산해서 내려주고, 클라이언트는 다시 계산하지 않는다 (폰 시간대 차이 방지).
 - `days`: 그 달에 독서한 날(`YYYY-MM-DD` 목록). 아래 둘 중 하나라도 있는 날이다.
   - `reading_session`이 `DONE`이고 `source`가 `TIMER`/`MANUAL`인 기록의 `ended_at` 날짜 (`RUNNING`·`NEEDS_CONFIRM`·`DISCARDED`는 제외)
@@ -146,7 +148,7 @@
 | DELETE | `/rooms/{id}/messages/{mid}` | 내 글 삭제 (남의 글은 403) |
 | POST | `/rooms/{id}/read` | 마지막으로 읽은 시각(`last_read_at`) 저장. 새 글 별(✦) 계산에 쓴다 |
 | GET | `/rooms?status=` | 마을 게시판, 창문 소식. `PUBLIC` 방과 내가 참여한 방만 내려준다 |
-| POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
+| POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 삭제된 글만 빼고 **잠긴 글도 `page`와 함께 저장**하며(`room_type`, `page_lock`도 스냅샷에 담는다), 책의 공유방 탭을 조회하는 API가 내 진행 기준으로 잠긴 글의 `content`를 빼고 내려준다. 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
 
 ### 마을 광장
 

@@ -133,8 +133,8 @@
         "LATER 는 완독 수·달력에 세지 않는다"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "DECISIONS.md #36(나중에 읽을 책)과 FEATURE_DEFINITION.md 책장 절 참고."
+      "passes": true,
+      "notes": "finish/drop은 READING 책만 가능(이미 DONE/DROPPED면 같은 결과로 200, LATER는 409). 포기 책의 finished_at은 비워 둔다(완독 수·달력은 DONE만 센다). LATER가 완독 수·달력에서 빠지는 것은 US-011 테스트에서 확인한다."
     },
     {
       "id": "US-010",

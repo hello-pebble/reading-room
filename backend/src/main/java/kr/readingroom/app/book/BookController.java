@@ -13,11 +13,26 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/books")
 public class BookController {
     private final BookService books;
+    private final BookEndService ends;
     private final IdempotencyService idem;
 
-    public BookController(BookService books, IdempotencyService idem) {
+    public BookController(BookService books, BookEndService ends, IdempotencyService idem) {
         this.books = books;
+        this.ends = ends;
         this.idem = idem;
+    }
+
+    @PostMapping("/{id}/finish")
+    public ResponseEntity<Object> finish(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long id,
+                                         @RequestBody(required = false) JsonNode body,
+                                         @RequestHeader(value = "Idempotency-Key", required = false) String key) {
+        return idem.run(uid, key, "/books/" + id + "/finish", HttpStatus.OK, () -> ends.finish(uid, id, body));
+    }
+
+    @PostMapping("/{id}/drop")
+    public ResponseEntity<Object> drop(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long id,
+                                       @RequestHeader(value = "Idempotency-Key", required = false) String key) {
+        return idem.run(uid, key, "/books/" + id + "/drop", HttpStatus.OK, () -> ends.drop(uid, id));
     }
 
     @PostMapping

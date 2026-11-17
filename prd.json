@@ -59,8 +59,8 @@
         "테스트: 허용 값 저장, 해금 전 400, 해금 후 200, 모르는 키 무시"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "해금 규칙은 SPEC.md 거울 절과 대조한다."
+      "passes": true,
+      "notes": "차이: 프로토타입은 initial state에서 glasses를 처음부터 열어 두지만(unlocked:{glasses:true}) SPEC·DATA_API는 '첫 책 기록 후'라서 서버는 문서를 따른다(book 1건 이상, 상태 무관). 모르는 값은 400이 아니라 기본값으로 채운다(DATA_API 26행); 400은 해금 미충족만."
     },
     {
       "id": "US-005",

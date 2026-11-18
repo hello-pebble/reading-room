@@ -40,9 +40,9 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 ## 지금 상태와 다음 작업
 
 - **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 승인 대기), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치). 화면은 아직 서버에 연결되지 않았고 `localStorage`로 동작한다(책 검색만 주소 끝 `?searchApi=`로 연결).
-- **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, 하루 횟수 기록 `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(대화·읽음)에 필요한 점은 `docs/DATA_API.md` 끝의 "공유방 다음 단계 메모"에 있다.
-- **다음 작업: 공유방(모닥불) 백엔드의 남은 부분(개설·입장은 끝).** 이미 있는 테이블 `shared_room`·`room_participant`(`V8__village.sql`)를 쓰고, `docs/DATA_API.md`의 `/rooms` 표를 따른다: 개설 `POST /rooms`(진행 1~7시간, 동시 2개, 하루 3번·한국 시간 기준 취소해도 셈, 최대 인원 2~10, 초대 코드 8자리), 초대 미리보기 `GET /rooms/invite/{code}`, 입장 `POST /rooms/join`, 닫기 `POST /rooms/{id}/close`, 나가기, 보관 동의 `POST /rooms/{id}/agree`, 대화 `GET·POST /rooms/{id}/messages`(300자, 5초 1건, 삭제·수정 없음), 읽음 `POST /rooms/{id}/read`, 가져오기 `POST /rooms/{id}/import`, 시각이 되면 열리고 끝나는 배치. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56 을 따른다.
-- 한 번에 한 기능(예: 개설 → 입장 → 대화 순)씩 만들고, 기능마다 통합 테스트를 추가한다.
+- **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(끝남): 대화 `GET·POST /rooms/{id}/messages`(300자, 5초 1건, 삭제·수정 없음)·읽음 `POST /rooms/{id}/read`·게시판 `unread`(`V10__room_message.sql`, 결정 #60).
+- **다음 작업: 공유방(모닥불) 백엔드의 남은 부분.** 가져오기 `POST /rooms/{id}/import`(테이블 `book_room_archive`), 시각이 되면 열리고 끝나는 1분 배치와 7일 지난 방 삭제 배치, 알림 `room_alarm`, 모닥불 머문 시간 합산. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60 을 따른다.
+- 한 번에 한 기능씩 만들고, 기능마다 통합 테스트를 추가한다.
 
 ## 작업 방식
 

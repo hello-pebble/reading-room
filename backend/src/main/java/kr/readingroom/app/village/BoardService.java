@@ -67,7 +67,7 @@ public class BoardService {
         boolean mine = r.get("created_by", Long.class) == userId;
         return new RoomResponse(r.get("id", Long.class), r.get("kind", String.class), r.get("title", String.class), r.get("isbn", String.class),
                 state, open, close, closed, deleteAt, r.get("participants", Long.class).intValue(), r.get("max_participants", Integer.class),
-                mine, r.get("joined", Boolean.class), r.get("agreed", Boolean.class), r.get("owner_nickname", String.class),
+                mine, r.get("joined", Boolean.class), r.get("agreed", Boolean.class), r.get("unread", Boolean.class), r.get("owner_nickname", String.class),
                 mine ? r.get("invite_code", String.class) : null);
     }
 }

@@ -24,7 +24,7 @@
 | `push` | 푸시 구독, 알림 대상 선정 |
 | `user` | 계정·아바타 (임시 로그인 `X-User-Id`) |
 | `village` | 마을 게시판 읽기(`GET /rooms`), 광장 채팅(`/plaza/messages`, 24시간 삭제 배치). 방 한 줄 응답(`RoomResponse`)과 시각 상태 계산(`BoardService.state`)은 `room`도 쓴다 |
-| `room` | 공유방(모닥불) 개설 `POST /rooms`, 초대 미리보기 `GET /rooms/invite/{code}`, 닫기 `POST /rooms/{id}/close`, 입장 `POST /rooms/join`, 나가기 `DELETE /rooms/{id}/participants/me`, 보관 동의 `POST /rooms/{id}/agree` (V9: 초대 코드·방 이름 제약, 개설 기록 `room_open_log`). 대화·읽음·가져오기·개방/종료 배치는 다음 단계(`docs/DATA_API.md` 끝 메모) |
+| `room` | 공유방(모닥불) 개설 `POST /rooms`, 초대 미리보기 `GET /rooms/invite/{code}`, 닫기 `POST /rooms/{id}/close`, 입장 `POST /rooms/join`, 나가기 `DELETE /rooms/{id}/participants/me`, 보관 동의 `POST /rooms/{id}/agree` (V9: 초대 코드·방 이름 제약, 개설 기록 `room_open_log`), 대화 `GET·POST /rooms/{id}/messages`·읽음 `POST /rooms/{id}/read` (V10: `room_message`, `RoomMessage*`). 가져오기·개방/종료 배치는 다음 단계(`docs/DATA_API.md` 끝 메모) |
 | `common` | 오류·CORS·멱등키·공통 설정 |
 
 예: 책 등록은 `BookController → BookService.create → BookRepository.insert`이며, 입력은 `CreateBookRequest`, 출력은 `BookResponse`다. Repository는 인터페이스 없이 구체 클래스로 두고 jOOQ의 `fetchOne(SQL, 값...)`을 사용한다. 사용자 입력은 SQL 문자열에 붙이지 않고 `?`에 바인딩한다. JPA와 jOOQ 코드 생성은 사용하지 않는다.

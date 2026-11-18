@@ -13,7 +13,9 @@ public class RoomRepository {
             + "r.created_by, u.nickname as owner_nickname, "
             + "(select count(*) from room_participant p where p.room_id = r.id and p.left_at is null) as participants, "
             + "(me.user_id is not null and me.left_at is null) as joined, "
-            + "(me.agreed_at is not null) as agreed "
+            + "(me.agreed_at is not null) as agreed, "
+            + "(me.user_id is not null and me.left_at is null and exists (select 1 from room_message m where m.room_id = r.id and m.user_id <> me.user_id "
+            + "and (me.last_read_at is null or m.created_at > me.last_read_at))) as unread "
             + "from shared_room r join app_user u on u.id = r.created_by "
             + "left join room_participant me on me.room_id = r.id and me.user_id = ? ";
     private final DSLContext dsl;
@@ -71,6 +73,11 @@ public class RoomRepository {
     /** 초대 미리보기용: 코드로 찾는다. 로그인 전이라 내 참여 정보는 비어 있다. */
     public Record viewByCode(String code) {
         return dsl.fetchOne(VIEW + "where r.invite_code = ?", 0L, code);
+    }
+
+    /** 방 행을 잠그지 않고 읽는다(대화처럼 자주 오가는 요청용) */
+    public Record find(long roomId) {
+        return dsl.fetchOne("select * from shared_room where id = ?", roomId);
     }
 
     /** 방 행을 잠그고 읽는다 (닫기·입장이 동시에 와도 한 줄씩 처리) */

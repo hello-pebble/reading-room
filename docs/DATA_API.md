@@ -2,12 +2,12 @@
 
 스택 가정: Java 21, Spring, jOOQ, Flyway, PostgreSQL. **내 방 부분은 `backend/`에 구현됐다** (아래 "구현 상태와 차이").
 
-## 이웃집 추천의 프로토타입 저장 (2026-11-18, 서버 미구현)
+## 이웃집 추천의 프로토타입 저장 (2026-11-18, 화면은 아직 localStorage — 서버 API는 구현됨, 아래 "이웃집 책 추천")
 
 - `myroom-proto-v1`의 `S.recommendations`에 집 ID별 미확인 추천 한 권을 저장한다. 이전 저장 상태에는 빈 객체를 추가한다. 키 `neighbor-0`~`neighbor-7`은 시연용 이웃집이고 `me`는 내 집이다.
 - 값은 `{from, book:{title,author,cover,isbn}, at}`다. `at`는 Unix 밀리초이며 표시 날짜는 한국 시간을 사용한다. 독서 메모·평점·진행률은 복사하지 않는다. 현재 읽는 책이나 완독 목록에서 선택한 순간의 책 정보만 복사한다.
 - 이미 차 있는 집은 덮어쓰지 않으며, 집 주인이 확인하면 해당 키를 삭제한다. 원본 책 목록과 추천받은 사람의 독서 목록은 변경하지 않는다.
-- 실제 사용자 간 API는 아직 없다. 서버 연결 때는 발신자의 책 소유·현재 상태, 받는 집의 빈 칸을 서버에서 검사하고 집별 미확인 한 권 제약을 원자적으로 보장해야 한다. 확인 처리는 수신자 본인만 허용한다. 프로토타입의 집 주인 시점 테스트 도구는 실제 인증 기능이 아니다.
+- 실제 사용자 간 API는 `neighbor` 패키지에 구현됐다(결정 #62): 발신자의 책 소유·현재 상태와 받는 집의 빈 칸을 서버에서 검사하고, 집별 미확인 한 권은 DB 부분 유니크 인덱스로 원자적으로 보장하며, 확인은 집 주인 본인만 한다. 화면은 아직 이 API에 연결되지 않았다. 프로토타입의 집 주인 시점 테스트 도구는 실제 인증 기능이 아니다.
 
 ## 백엔드 역할 분리 (2026-11-18)
 
@@ -15,7 +15,7 @@
 
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의·대화(`GET·POST /rooms/{id}/messages`)·읽음(`POST /rooms/{id}/read`)도 같은 패키지에 있다(테이블 `room_message`는 `V10__room_message.sql`). 공유방 가져오기, 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: **이웃집 책 추천(`GET /neighbors/{handle}`, `POST /neighbors/{handle}/recommendation`, `GET /me/recommendation`, `POST /me/recommendation/confirm`, `neighbor` 패키지, 테이블 `neighbor_recommendation`은 `V11__neighbor_recommendation.sql`)**, 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의·대화(`GET·POST /rooms/{id}/messages`)·읽음(`POST /rooms/{id}/read`)도 같은 패키지에 있다(테이블 `room_message`는 `V10__room_message.sql`). 공유방 가져오기, 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
@@ -83,6 +83,12 @@
 | 테이블 | 컬럼 | 수명 |
 |---|---|---|
 | `plaza_message` | id, user_id, content(최대 40자), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 공개 가입 전에 만든다(#41) |
+
+### 이웃집 책 추천
+
+| 테이블 | 컬럼 | 수명 |
+|---|---|---|
+| `neighbor_recommendation` | id, to_user(집 주인), from_user, isbn, title, author, cover_url, created_at, confirmed_at | 확인해도 행은 남긴다(`confirmed_at` 기록). 받는 사람·보낸 사람이 탈퇴하면 함께 삭제. **집마다 `confirmed_at`이 없는 행은 한 개**(부분 유니크 인덱스 `to_user WHERE confirmed_at IS NULL`). DB도 자기 집 추천 금지(`from_user <> to_user`)·제목 비움 금지·`confirmed_at >= created_at`를 지킨다. 책 정보는 추천할 때 복사한 값이라 원본 책을 바꾸거나 지워도 영향이 없다(메모·평점·진행률은 복사하지 않는다) |
 
 ### 알림
 
@@ -192,6 +198,17 @@
 | GET | `/plaza/messages?since=` | 최근 24시간 대화. `since`(ISO 시각, 예 `2026-11-18T03:00:00Z`)가 없으면 가장 최근 30개, 있으면 그 이후 글을 오래된 순으로 최대 30개(24시간보다 오래된 `since`는 24시간 전으로 본다). 응답 `[{id, userId, handle, nickname, avatar, content, createdAt}]`, 잘못된 `since`는 400. 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
 | GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/100)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 100명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
 | POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거, 글자는 코드 포인트 기준). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 공유방 대화와 같은 `ChatRate`이지만 따로 센다. 같은 사람의 동시 전송은 DB 잠금으로 한 줄로 세운다), 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`. 성공하면 201과 만든 글 |
+
+### 이웃집 책 추천 API
+
+집은 사용자의 `handle`로 가리킨다(대소문자·공백 무시). 전부 로그인(`X-User-Id`) 필요.
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| GET | `/neighbors/{handle}` | 이웃집 방문. 응답 `{handle, nickname, occupied, mine, book}`. `occupied`는 아래 칸에 확인 전 추천이 있는지, `book`은 그 추천을 **내가** 꽂았을 때(`mine`)만 내려가고 남이 꽂은 책은 알려 주지 않는다. 없는 핸들은 404(`HOUSE_NOT_FOUND`), 내 집은 400(`OWN_HOUSE`) |
+| POST | `/neighbors/{handle}/recommendation` | 내 책 한 권을 그 집에 꽂는다. body `{bookId}`(정수, 아니면 400 `BAD_BOOK_ID`). 201과 `{id, book:{isbn,title,author,coverUrl}, createdAt}`. 내 책이 아니거나 없으면 404(`BOOK_NOT_FOUND`), **읽는 중(`READING`)·완독(`DONE`)이 아니면 400(`BOOK_NOT_ELIGIBLE`)** — 꽂는 순간의 상태로 다시 검사한다. 그 집에 확인 전 추천이 있으면 409(`HOUSE_OCCUPIED`, 덮어쓰지 않는다). 동시에 여러 명이 꽂아도 한 명만 201이다. 내 책과 기록은 바꾸지 않는다 |
+| GET | `/me/recommendation` | 내 집에 도착한 확인 전 추천 `{id, book, createdAt}`. 없으면 204. **보낸 사람은 알려 주지 않는다**(몰래 꽂아 두기) |
+| POST | `/me/recommendation/confirm` | 집 주인이 [확인했어요]. 204. 확인할 추천이 없으면 404(`NO_RECOMMENDATION`). 경로가 내 집이라 집 주인 본인만 확인할 수 있다. 확인만으로 내 책장에 책을 더하지 않고, 칸이 비어 다시 추천받을 수 있다 |
 
 ## 배치 작업 (`@Scheduled`)
 

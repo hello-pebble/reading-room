@@ -89,6 +89,8 @@ test('각자 읽기 방: 부제에 책 제목 대신 "각자 읽기"를, 이름 
   const room = a.state().news.find(n => n.title === '책 자랑');
   assert.equal(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나')`), ' 『데미안』');
   assert.match(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나무')`), /^ 『.+』$/);
+  a.ev(`S.news.find(n=>n.id==='${room.id}').book='채식주의자 같은 아주 긴 책 제목'`);
+  assert.equal(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나')`), ' 『채식주의자』');
   a.ev(`S.news.find(n=>n.id==='${room.id}').rtype='SAME'`);
   assert.equal(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나')`), '');
   fin(a);

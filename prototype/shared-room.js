@@ -81,7 +81,8 @@ const ROOM_SAY=['처음엔 느리게 읽히다가 중반부터 확 빨려 들어
 const rcKey=s=>String(s||'').replace(/[『』\s]/g,'');
 const roomBook=n=>n.book||shortTitle(n);
 const rcMine=m=>m.who==='나'&&!m.left;
-const rcBookTag=(n,name)=>n.rtype==='OWN'?' 『'+(name==='나'?n.book:BOOKPOOL[rcHash(name)%BOOKPOOL.length])+'』':'';   // 각자 읽기 방은 이름 옆에 그 사람이 읽는 책을 붙인다
+const tagBook=t=>{t=String(t||'').trim();return t.length>8?t.split(/\s+/)[0]:t};   // 제목이 8자를 넘으면 맨 앞 단어만
+const rcBookTag=(n,name)=>n.rtype==='OWN'?' 『'+tagBook(name==='나'?n.book:BOOKPOOL[rcHash(name)%BOOKPOOL.length])+'』':'';   // 각자 읽기 방은 이름 옆에 그 사람이 읽는 책을 붙인다
 const rcName=m=>m.left?'나간 참여자':m.who==='나'?S.user.nickname:m.who;
 const rcHash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h};
 const rcColor=s=>SPINE[rcHash(s)%SPINE.length];

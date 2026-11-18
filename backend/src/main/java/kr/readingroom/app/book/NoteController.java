@@ -1,8 +1,7 @@
 package kr.readingroom.app.book;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import kr.readingroom.app.book.dto.*;
 import java.util.List;
-import java.util.Map;
 import kr.readingroom.app.common.IdempotencyService;
 import kr.readingroom.app.common.UserIdFilter;
 import org.springframework.http.ResponseEntity;
@@ -21,13 +20,13 @@ public class NoteController {
     }
 
     @PostMapping
-    public ResponseEntity<Object> add(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long bookId, @RequestBody JsonNode body,
+    public ResponseEntity<NoteCreatedResponse> add(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long bookId, @RequestBody NoteRequest body,
                                       @RequestHeader(value = "Idempotency-Key", required = false) String key) {
-        return idem.run(uid, key, "/books/" + bookId + "/notes", HttpStatus.CREATED, () -> notes.add(uid, bookId, body));
+        return idem.run(uid, key, "/books/" + bookId + "/notes", HttpStatus.CREATED, NoteCreatedResponse.class, () -> notes.add(uid, bookId, body));
     }
 
     @GetMapping
-    public List<Map<String, Object>> list(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long bookId) {
+    public List<NoteResponse> list(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long bookId) {
         return notes.list(uid, bookId);
     }
 }

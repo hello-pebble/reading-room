@@ -7,31 +7,33 @@
 
 ## 폴더 구조
 
+루트에는 `README.md`, `AGENTS.md`와 `backend/`(서버), `frontend/`(화면: `index.html`·`js/`·`css/`·`vendor/`), `docs/`(기획·결정·API 문서), `tests/`(검사)만 둔다 (결정 #57).
+
 | 경로 | 내용 |
 |---|---|
 | `README.md` | 지금 이 문서. 개요, 진행 상태, 다음 할 일 |
-| `SPEC.md` | 확정된 기능 명세 (방, 가구, 타이머, 거울, 마을, 공유방, 계정, 온보딩) |
-| `DATA_API.md` | 테이블 설계, API, 배치 작업 |
-| `DECISIONS.md` | 결정 기록과 아직 열려 있는 결정 |
-| `FEATURE_DEFINITION.md` | 내 방 기능 정의서 (기능 ID, 동작, 규칙·예외, 데이터, 제약) |
-| `FEATURE_GUIDE.md` | 내 방 기능 설명서 (사용자용 사용법) |
-| `prototype/index.html` | 화면 뼈대와 CSS·스크립트 로드 순서. `prototype` 폴더 전체를 함께 두면 파일로도 열림 |
-| `prototype/common.css` | 공용 색상·글꼴·버튼·입력칸·모달·전체 레이아웃 |
-| `prototype/room.css` | 내 방 전용 스타일: 책·메모·별점·책장·달력·거울 |
-| `prototype/village.css` | 마을 전용 스타일: 광장 채팅·미니맵·접속 표시 |
-| `prototype/shared-room.css` | 공유방 전용 스타일: 모닥불·대화·참여자·방 정보·초대 |
-| `prototype/room.js` | 내 방 화면 문구·입력·버튼 동작·독서 기록·타이머·바탕화면 창 |
-| `prototype/village.js` | 마을 구역·이웃·이동·미니맵·게시판·광장 대화 |
-| `prototype/shared-room.js` | 공유방 개설·초대·대화·참여자·방 정보·기록 가져오기 |
-| `prototype/neighbor.js`, `neighbor.css` | 이웃집 방문·추천 조건·한 집 한 권·집 주인 확인·추천 화면 스타일 |
-| `prototype/scene.js` | 방·마을·공유방 3D와 캐릭터. `createScene()`으로 시작 |
-| `prototype/app.js` | 공용 상태·저장·모달·장면 전환과 각 기능의 시작 순서 |
-| `prototype/EDITING.md` | 직접 수정할 때 보는 파일·함수 안내와 확인 방법 |
-| `prototype/vendor/three.min.js` | 3D 라이브러리 three.js r149 (MIT, 약 0.6MB). 오프라인용으로 함께 둠 |
-| `prototype/index-voxel.html` | 이전 복셀 캐릭터 버전 (SVG, 외부 의존성 없음). 되돌릴 때 사용 |
-| `prototype/toon-compare.html` | 소프트 3D와 툰 셰이딩을 나란히 보는 작은 비교 화면 |
-| `prototype/dolls.html` | 유령 단독 시안 (표정·장식·소품을 고르며 걸어다니는 확인용) |
-| `backend/` | 내 방 API 서버 (Java 21, Spring Boot, jOOQ, Flyway, PostgreSQL). 실행·테스트는 `backend/README.md`, 설계와 차이는 `DATA_API.md` |
+| `docs/SPEC.md` | 확정된 기능 명세 (방, 가구, 타이머, 거울, 마을, 공유방, 계정, 온보딩) |
+| `docs/DATA_API.md` | 테이블 설계, API, 배치 작업 |
+| `docs/DECISIONS.md` | 결정 기록과 아직 열려 있는 결정 |
+| `docs/FEATURE_DEFINITION.md` | 내 방 기능 정의서 (기능 ID, 동작, 규칙·예외, 데이터, 제약) |
+| `docs/FEATURE_GUIDE.md` | 내 방 기능 설명서 (사용자용 사용법) |
+| `frontend/index.html` | 화면 뼈대와 CSS·스크립트 로드 순서. `frontend` 폴더 전체를 함께 두면 파일로도 열림 |
+| `frontend/css/common.css` | 공용 색상·글꼴·버튼·입력칸·모달·전체 레이아웃 |
+| `frontend/css/room.css` | 내 방 전용 스타일: 책·메모·별점·책장·달력·거울 |
+| `frontend/css/village.css` | 마을 전용 스타일: 광장 채팅·미니맵·접속 표시 |
+| `frontend/css/shared-room.css` | 공유방 전용 스타일: 모닥불·대화·참여자·방 정보·초대 |
+| `frontend/js/room.js` | 내 방 화면 문구·입력·버튼 동작·독서 기록·타이머·바탕화면 창 |
+| `frontend/js/village.js` | 마을 구역·이웃·이동·미니맵·게시판·광장 대화 |
+| `frontend/js/shared-room.js` | 공유방 개설·초대·대화·참여자·방 정보·기록 가져오기 |
+| `frontend/js/neighbor.js`, `neighbor.css` | 이웃집 방문·추천 조건·한 집 한 권·집 주인 확인·추천 화면 스타일 |
+| `frontend/js/scene.js` | 방·마을·공유방 3D와 캐릭터. `createScene()`으로 시작 |
+| `frontend/js/app.js` | 공용 상태·저장·모달·장면 전환과 각 기능의 시작 순서 |
+| `frontend/EDITING.md` | 직접 수정할 때 보는 파일·함수 안내와 확인 방법 |
+| `frontend/vendor/three.min.js` | 3D 라이브러리 three.js r149 (MIT, 약 0.6MB). 오프라인용으로 함께 둠 |
+| `frontend/index-voxel.html` | 이전 복셀 캐릭터 버전 (SVG, 외부 의존성 없음). 되돌릴 때 사용 |
+| `frontend/toon-compare.html` | 소프트 3D와 툰 셰이딩을 나란히 보는 작은 비교 화면 |
+| `frontend/dolls.html` | 유령 단독 시안 (표정·장식·소품을 고르며 걸어다니는 확인용) |
+| `backend/` | 내 방 API 서버 (Java 21, Spring Boot, jOOQ, Flyway, PostgreSQL). 실행·테스트는 `backend/README.md`, 설계와 차이는 `docs/DATA_API.md` |
 | `AGENTS.md` | 자동으로 일하는 에이전트(Ralph, 클라우드 세션 등)가 읽는 작업 지침 |
 | `package.json`, `tests/` | 자동 검사 `npm run verify` (문법 검사 + 시나리오 테스트). 아래 "자동 검사" 참고 |
 
@@ -46,11 +48,13 @@
 
 ## 진행 상태
 
+2026-11-18 백엔드 역할 분리 완료: SQL은 `*Repository`, 요청·응답은 기능별 `dto/`, 검증·트랜잭션은 `*Service`에서 관리한다. 기존 API와 DB 스키마를 유지하며 수정 위치는 `backend/README.md`에 정리했다.
+
 | 영역 | 상태 | 비고 |
 |---|---|---|
 | 내 방 기획 | ✅ 확정 | 가구 6개 + 문, 퀵바 없음, 가운데 모달 (예외: 마을 광장 채팅창, #40) |
-| 내 방 프로토타입 | ✅ 동작 | `prototype/index.html`. 2026-11-18 내 방 기능·3D·공용/전용 CSS 분리. 저장 방식은 기존 localStorage 유지, 백엔드 API 연결은 아직 |
-| 프론트 코드 구성 | ✅ 분리 완료 (2026-11-18) | 내 방 `room.js/css`, 마을 `village.js/css`, 공유방 `shared-room.js/css`. 공용 상태·모달은 `app.js`, 공용 스타일은 `common.css`, 3D는 `scene.js`. 수정 위치는 `prototype/EDITING.md` |
+| 내 방 프로토타입 | ✅ 동작 | `frontend/index.html`. 2026-11-18 내 방 기능·3D·공용/전용 CSS 분리. 저장 방식은 기존 localStorage 유지, 백엔드 API 연결은 아직 |
+| 프론트 코드 구성 | ✅ 분리 완료 (2026-11-18) | 내 방 `room.js/css`, 마을 `village.js/css`, 공유방 `shared-room.js/css`. 공용 상태·모달은 `app.js`, 공용 스타일은 `common.css`, 3D는 `scene.js`. 수정 위치는 `frontend/EDITING.md` |
 | 스탠드 타이머 | ✅ 프로토타입 | 서버 시각 기준 계산, 확인 알림(브라우저 알림), 깜빡함 처리, 직접 기록 |
 | 알림 | ✅ 프로토타입 | 60분 확인, 3시간 초과, 공유방 개방 알림. 페이지를 열어 둔 동안만 옴. 창을 닫은 뒤에는 서버 푸시 필요 (설계만) |
 | 바탕화면 띄우기 | ✅ 프로토타입 | Document Picture-in-Picture, 스탠드를 눌러 끄기 |
@@ -61,7 +65,7 @@
 | 공유방 개설 | ✅ 프로토타입 | 마을에서 모닥불 피우기, 같은 책 / 각자 읽기, 초대 링크 (결정 #32, #33). 서버가 없어 이 브라우저에서만 열림 |
 | 공유방 대화 | ✅ 프로토타입 | 입장 보관 동의 고지, 대화·스포 안내(안 읽은 책), 참여자·방 정보 탭, 종료 후 읽기 전용과 7일 삭제 연출, 새 글 별 (결정 #38·#43, RC-01~20). 참여자 글은 시연용 |
 | 마을 구역 분리 + 광장 대화 | ✅ 프로토타입 | 돌바닥 광장(한 줄 말풍선, 하루 뒤 삭제)과 흙바닥 모닥불 구역(공유방)을 분리 (결정 #34). 광장 안에서는 반투명 채팅창이 자동으로 뜬다(PC 왼쪽 세로, 폰 하단, 결정 #40). 이웃은 가짜 시연 |
-| 툰 셰이딩 스타일 | ✅ 프로토타입 | 방·유령·마을 모두 3단 음영 + 외곽선 (결정 #37). 예전 모습은 주소 끝 `?toon=0`. 비교 화면: `prototype/toon-compare.html`. 실제 폰 성능은 미확인 |
+| 툰 셰이딩 스타일 | ✅ 프로토타입 | 방·유령·마을 모두 3단 음영 + 외곽선 (결정 #37). 예전 모습은 주소 끝 `?toon=0`. 비교 화면: `frontend/toon-compare.html`. 실제 폰 성능은 미확인 |
 | 마을 미니맵·접속 표시 | ✅ 프로토타입 | 보기 전용 정사각형 미니맵, 하단 `접속 (06/100)` (결정 #35) |
 | 나중에 읽을 책 · 최근 28권 | ✅ 프로토타입 | 공유방 가져오기에서 내 책에 없으면 "나중에 읽을 책"에 담김, 책장에는 최근 28권(모바일 24권), 쪽수 상한 9999 확정 (결정 #36) |
 | 책장 보강 | ✅ 프로토타입 | 완독·포기한 책의 읽은 시간, 나중에 읽을 책의 [소파에 올리기], 데모 초기화 2단계 확인 (Codex QA 빈틈) |
@@ -71,7 +75,7 @@
 | 모닥불 시간제 | ✅ 프로토타입 (2026-11-18) | 진행 시간 1~7시간, 시간이 다 되면 자동 종료 후 광장으로 이동, 장면에 머문 시간은 오늘 읽은 시간에 포함, 하루 3번·동시 2개 개설, 종료된 방은 게시판에만 7일, 보낸 글 삭제·수정 불가 (결정 #53) |
 | 이웃집 책 추천 | ✅ 프로토타입 (2026-11-18) | 체크무늬 벽지 배경의 책장·캐릭터 방문 화면→책장→책 꽂기. 읽는 중·완독만, 집마다 미확인 한 권, 하단 추가 모션, 확인 후 재추천. 실제 전달 API는 아직 |
 | 마을 추가 기능 | 💡 아이디어 | 이웃 쪽지, 실제 불 켜진 창문 등 (아래 "마을 확장 후보") |
-| 백엔드 | ✅ 내 방 API 구현(공유방·마을 제외) | `backend/`. 책·메모·스탠드(시작·끄기·확인·직접 기록)·완독/포기·거울·달력/월 목표·푸시 구독과 알림 대상 선정. 테스트 77개(`cd backend && ./gradlew test`). 임시 로그인(`X-User-Id`), 실제 푸시 전송·공유방·광장·카카오 로그인·책 검색은 아직. 설계와 다른 점은 `DATA_API.md` "구현 상태와 차이" |
+| 백엔드 | ✅ 내 방 API + 마을 게시판 읽기·광장 채팅 구현 (공유방 개설·대화 제외) | `backend/`. 책·메모·스탠드(시작·끄기·확인·직접 기록)·완독/포기·거울·달력/월 목표·푸시 구독과 알림 대상 선정. 마을 게시판(`GET /rooms`)과 광장 채팅(`/plaza/messages`, `village` 패키지). 테스트 96개(`cd backend && ./gradlew test`). 임시 로그인(`X-User-Id`), 실제 푸시 전송·공유방 개설·대화·구글 로그인은 아직. 설계와 다른 점은 `docs/DATA_API.md` "구현 상태와 차이" |
 | 모바일 방 구도 | ✅ 프로토타입 | 폭 760px 이하에서 7×6.5칸 방 + 세운 카메라 (결정 #22) |
 
 ## 다음 할 일 (후보)
@@ -97,7 +101,7 @@
 
 - 저장소: https://github.com/hello-pebble/reading-room (`main`). `.claude/`는 `.gitignore`로 제외.
 - API 키는 코드에 없다 (`BOOK_API_KEY`는 빈 값). 키를 넣어 테스트하면 커밋 전에 비운다.
-- `prototype/vendor/three.min.js`는 three.js r149 (MIT).
+- `frontend/vendor/three.min.js`는 three.js r149 (MIT).
 
 ## 마을 확장 후보 (미확정)
 
@@ -113,7 +117,7 @@
 
 ## 프로토타입 테스트
 
-- `prototype/index.html`을 크롬이나 엣지로 직접 연다. (claude.ai 링크에서는 바탕화면 띄우기가 막힐 수 있음)
+- `frontend/index.html`을 크롬이나 엣지로 직접 연다. (claude.ai 링크에서는 바탕화면 띄우기가 막힐 수 있음)
 - 모바일 구도는 창 폭을 760px 이하로 줄이거나 폰에서 열면 나온다.
 - 데이터는 브라우저 localStorage(`myroom-proto-v1`)에 저장되고, 오른쪽 위 **데모 초기화**로 되돌린다.
 - 첫 방문 안내(소파를 눌러 책을 올려보세요)는 평소에 뜨지 않고, **데모 초기화**를 눌렀을 때만 시작된다.
@@ -122,7 +126,7 @@
 ### 자동 검사 (`npm run verify`)
 
 - `npm install`(처음 한 번) 뒤 `npm run verify`로 **문법 검사 + 시나리오 테스트 23개**(약 2초)를 돌린다. 코드를 바꿀 때마다 돌리고, 통과해야 커밋한다.
-- `tests/check-syntax.js`는 `prototype/*.js`와 `prototype/*.html`의 인라인 스크립트 문법을, `tests/scenarios.test.js`는 페이지를 가상 브라우저(jsdom)에 올려 타이머·기록·쪽수·완독일·광장 대화·공유방 가져오기·거울·키보드 같은 규칙을 실제로 조작해 확인한다. 로더는 `index.html`에 적힌 순서대로 분리된 스크립트를 읽는다. 지금까지 겪은 결함이 되돌아오지 않게 막는 용도다.
+- `tests/check-syntax.js`는 `frontend/js/*.js`와 `frontend/*.html`의 인라인 스크립트 문법을, `tests/scenarios.test.js`는 페이지를 가상 브라우저(jsdom)에 올려 타이머·기록·쪽수·완독일·광장 대화·공유방 가져오기·거울·키보드 같은 규칙을 실제로 조작해 확인한다. 로더는 `index.html`에 적힌 순서대로 분리된 스크립트를 읽는다. 지금까지 겪은 결함이 되돌아오지 않게 막는 용도다.
 - 테스트는 3D를 올리지 않아서 **3D 그림, 터치, 알림 팝업, 화면 겹침**은 못 본다. 이런 것은 브라우저로 직접 확인한다.
 - 서버는 `cd backend && ./gradlew test`로 따로 검사한다 (내 방 API 시나리오 77개, 실제 PostgreSQL 사용). 코드를 바꾸면 이 검사와 `npm run verify`를 둘 다 통과시킨다.
 - **실제 브라우저 테스트**: `npx playwright install chromium`(처음 한 번) 뒤 `npm run e2e`로 Playwright가 Chromium을 띄워 데스크톱·폰 두 화면에서 3D 그림, 화면 넘침·겹침, 실제 클릭·키보드 흐름을 본다(테스트 6개 × 2화면, 약 2분). jsdom이 못 보는 부분을 맡는다. 실패하면 `test-results/`에 스크린샷과 trace가 남는다.

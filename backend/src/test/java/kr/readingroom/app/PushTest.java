@@ -114,7 +114,7 @@ class PushTest extends ApiTestBase {
         clock.advance(Duration.ofHours(3).plusSeconds(1));
         assertThat(notifications.dispatchDue()).isEmpty();   // 아직 RUNNING (60분 확인은 3시간 넘은 세션을 제외)
         assertThat(dsl.fetchOne("select count(*) from reading_session where status = 'RUNNING'").get(0, Integer.class)).isEqualTo(1);
-        new kr.readingroom.app.session.SessionExpirer(dsl, clock).expireOverdue();   // 10분 배치 대신 직접
+        new kr.readingroom.app.session.SessionExpirer(new kr.readingroom.app.session.SessionRepository(dsl), clock).expireOverdue();   // 10분 배치 대신 직접
         var sent = notifications.dispatchDue();
         assertThat(sent).hasSize(1);
         assertThat(sent.get(0).type()).isEqualTo("CONFIRM");

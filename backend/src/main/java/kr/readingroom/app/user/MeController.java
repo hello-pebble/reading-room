@@ -1,8 +1,7 @@
 package kr.readingroom.app.user;
 
-import java.util.Map;
+import kr.readingroom.app.user.dto.*;
 import kr.readingroom.app.common.UserIdFilter;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,13 +17,13 @@ public class MeController {
     }
 
     @GetMapping("/me")
-    public Map<String, Object> me(@RequestAttribute(UserIdFilter.ATTR) long userId) {
+    public UserResponse me(@RequestAttribute(UserIdFilter.ATTR) long userId) {
         return users.get(userId);
     }
 
     /** 거울: 아바타 저장. 응답은 /me와 같은 모양이다. */
     @PutMapping("/me/avatar")
-    public Map<String, Object> avatar(@RequestAttribute(UserIdFilter.ATTR) long userId, @RequestBody JsonNode body) {
+    public UserResponse avatar(@RequestAttribute(UserIdFilter.ATTR) long userId, @RequestBody AvatarRequest body) {
         return users.saveAvatar(userId, body);
     }
 }

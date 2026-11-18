@@ -1,6 +1,6 @@
 package kr.readingroom.app.common;
 
-import java.util.Map;
+import kr.readingroom.app.common.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -18,6 +18,6 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class, MissingRequestHeaderException.class})
     ResponseEntity<Object> bad(Exception e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "BAD_REQUEST", "message", "요청 형식이 올바르지 않아요"));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("BAD_REQUEST", "요청 형식이 올바르지 않아요"));
     }
 }

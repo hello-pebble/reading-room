@@ -1,7 +1,6 @@
 package kr.readingroom.app.push;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import java.util.Map;
+import kr.readingroom.app.push.dto.*;
 import kr.readingroom.app.common.UserIdFilter;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +14,7 @@ public class SubscriptionController {
     }
 
     @PostMapping("/me/push-subscription")
-    public Map<String, Object> save(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestBody JsonNode body,
+    public SubscriptionResponse save(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestBody SubscriptionRequest body,
                                     @RequestHeader(value = "User-Agent", required = false) String ua) {
         return subs.save(uid, body, ua);
     }
@@ -24,8 +23,8 @@ public class SubscriptionController {
     @DeleteMapping("/me/push-subscription")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestParam(required = false) String endpoint,
-                       @RequestBody(required = false) JsonNode body) {
-        String e = endpoint != null ? endpoint : body != null && body.hasNonNull("endpoint") ? body.get("endpoint").asText() : null;
+                       @RequestBody(required = false) DeleteSubscriptionRequest body) {
+        String e = endpoint != null ? endpoint : body != null ? body.endpoint() : null;
         subs.delete(uid, e);
     }
 }

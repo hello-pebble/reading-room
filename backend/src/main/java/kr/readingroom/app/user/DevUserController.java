@@ -1,6 +1,6 @@
 package kr.readingroom.app.user;
 
-import java.util.Map;
+import kr.readingroom.app.user.dto.*;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,11 +18,10 @@ public class DevUserController {
         this.users = users;
     }
 
-    public record Create(String handle, String nickname) {}
 
     @PostMapping("/dev/users")
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, Object> create(@RequestBody Create body) {
+    public UserResponse create(@RequestBody CreateUserRequest body) {
         return users.create(body.handle(), body.nickname() == null ? body.handle() : body.nickname());
     }
 }

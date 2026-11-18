@@ -1,4 +1,4 @@
-// 시나리오 테스트: prototype/index.html을 가상 브라우저(jsdom)에 올려 실제 패널·버튼·로직을 돌린다.
+// 시나리오 테스트: frontend/index.html을 가상 브라우저(jsdom)에 올려 실제 패널·버튼·로직을 돌린다.
 // 3D(three.js)는 올리지 않는다. 화면 그림은 못 보지만 기록·규칙·패널 동작은 확인한다.
 // 실행: npm test   (npm install 뒤)
 const test = require('node:test');
@@ -517,6 +517,6 @@ test('키보드: 창을 열면 포커스가 창 제목으로 가고, 닫으면 �
 });
 
 test('동작 줄이기: prefers-reduced-motion 규칙이 애니메이션과 전환을 끈다', () => {
-  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'prototype', 'common.css'), 'utf8');
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'css', 'common.css'), 'utf8');
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none!important[^}]*transition:none!important/);
 });

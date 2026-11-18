@@ -1,6 +1,6 @@
 package kr.readingroom.app.calendar;
 
-import java.util.Map;
+import kr.readingroom.app.calendar.dto.*;
 import kr.readingroom.app.common.UserIdFilter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -16,7 +16,7 @@ public class CalendarController {
     }
 
     @GetMapping("/me/calendar")
-    public Map<String, Object> get(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestParam(required = false) String month) {
+    public CalendarResponse get(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestParam(required = false) String month) {
         return calendar.get(uid, month);
     }
 }

@@ -1,18 +1,18 @@
 package kr.readingroom.app.calendar;
 
+import kr.readingroom.app.calendar.dto.*;
+import kr.readingroom.app.user.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import kr.readingroom.app.common.RequestJson;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.ClockConfig;
-import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,12 +22,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class GoalService {
     public static final int DEFAULT_GOAL = 1;
-    private final DSLContext dsl;
+    private final GoalRepository goalRepository;
+    private final UserRepository userRepository;
     private final Clock clock;
     private final ObjectMapper json;
 
-    public GoalService(DSLContext dsl, Clock clock, ObjectMapper json) {
-        this.dsl = dsl;
+    public GoalService(GoalRepository goalRepository, UserRepository userRepository, Clock clock, ObjectMapper json) {
+        this.goalRepository = goalRepository;
+        this.userRepository = userRepository;
         this.clock = clock;
         this.json = json;
     }
@@ -43,9 +45,9 @@ public class GoalService {
      * 이어받기는 앞으로만 가므로 지난 달 값은 이번 달 변경에 영향받지 않는다.
      */
     public Goal lookup(long userId, YearMonth ym) {
-        Record own = dsl.fetchOne("select goal, changes::text as changes from monthly_goal where user_id = ? and year_month = ?", userId, ym.toString());
+        Record own = goalRepository.find(userId, ym.toString());
         if (own != null) return new Goal(own.get("goal", Integer.class), parse(own.get("changes", String.class)), false);
-        Record prev = dsl.fetchOne("select goal from monthly_goal where user_id = ? and year_month < ? order by year_month desc limit 1", userId, ym.toString());
+        Record prev = goalRepository.findPrevious(userId, ym.toString());
         if (prev != null) return new Goal(prev.get("goal", Integer.class), json.createArrayNode(), true);
         return new Goal(null, json.createArrayNode(), false);
     }
@@ -54,18 +56,17 @@ public class GoalService {
     @Transactional
     public void ensureFirstRow(long userId) {
         lockUser(userId);
-        if (dsl.fetchOne("select count(*) from monthly_goal where user_id = ?", userId).get(0, Integer.class) > 0) return;
-        dsl.execute("insert into monthly_goal(user_id, year_month, goal, updated_at) values (?, ?, ?, ?::timestamptz)",
-                userId, thisMonth().toString(), DEFAULT_GOAL, clock.instant().toString());
+        if (goalRepository.count(userId).get(0, Integer.class) > 0) return;
+        goalRepository.insertDefault(userId, thisMonth().toString(), DEFAULT_GOAL, clock.instant().toString());
     }
 
     /** 이번 달 목표만 바꾼다. 같은 값이면 그대로(멱등), 같은 한국 날짜의 여러 번 변경은 한 번으로 합치고 처음 값으로 돌아오면 지운다. */
     @Transactional
-    public Map<String, Object> set(long userId, JsonNode body) {
-        if (body == null || !body.hasNonNull("monthlyGoal") || !body.get("monthlyGoal").isIntegralNumber()
-                || body.get("monthlyGoal").asLong() < 1 || body.get("monthlyGoal").asLong() > 99)
+    public GoalResponse set(long userId, GoalRequest body) {
+        if (body == null || !RequestJson.present(body.monthlyGoal()) || !body.monthlyGoal().isIntegralNumber()
+                || body.monthlyGoal().asLong() < 1 || body.monthlyGoal().asLong() > 99)
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_GOAL", "월 목표는 1~99권이에요");
-        int want = body.get("monthlyGoal").asInt();
+        int want = body.monthlyGoal().asInt();
         ensureFirstRow(userId);
         lockUser(userId);
         YearMonth ym = thisMonth();
@@ -81,32 +82,24 @@ public class GoalService {
             } else {
                 changes.addObject().put("at", today).put("from", base).put("to", want);
             }
-            dsl.execute("""
-                    insert into monthly_goal(user_id, year_month, goal, changes, updated_at) values (?, ?, ?, ?::jsonb, ?::timestamptz)
-                    on conflict (user_id, year_month) do update set goal = excluded.goal, changes = excluded.changes, updated_at = excluded.updated_at""",
-                    userId, ym.toString(), want, write(changes), clock.instant().toString());
+            goalRepository.upsert(userId, ym.toString(), want, write(changes), clock.instant().toString());
         }
         return view(ym, lookup(userId, ym));
     }
 
     @Transactional
-    public Map<String, Object> current(long userId) {
+    public GoalResponse current(long userId) {
         ensureFirstRow(userId);
         YearMonth ym = thisMonth();
         return view(ym, lookup(userId, ym));
     }
 
-    private Map<String, Object> view(YearMonth ym, Goal g) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("month", ym.toString());
-        m.put("goal", g.goal());
-        m.put("goalChanges", g.changes());
-        m.put("goalInherited", g.inherited());
-        return m;
+    private GoalResponse view(YearMonth ym, Goal g) {
+        return new GoalResponse(ym.toString(), g.goal(), GoalChange.list(g.changes()), g.inherited());
     }
 
     private void lockUser(long userId) {
-        if (dsl.fetchOne("select id from app_user where id = ? for update", userId) == null)
+        if (userRepository.lock(userId) == null)
             throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "사용자를 찾을 수 없어요");
     }
 

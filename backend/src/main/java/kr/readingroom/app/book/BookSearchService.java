@@ -1,7 +1,7 @@
 package kr.readingroom.app.book;
 
+import kr.readingroom.app.book.dto.*;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import kr.readingroom.app.common.ApiException;
@@ -20,7 +20,7 @@ public class BookSearchService {
         this.source = source;
     }
 
-    public List<Map<String, Object>> search(String q) {
+    public List<BookSearchResponse> search(String q) {
         q = q == null ? "" : q.trim();
         if (q.isEmpty()) throw bad("검색어를 적어 주세요");
         if (URL.matcher(q).find()) {
@@ -29,14 +29,19 @@ public class BookSearchService {
             return byIsbn(m.group());
         }
         if (ISBN_LIKE.matcher(q).matches()) return byIsbn(q);
-        List<Map<String, Object>> r = source.search("title", q);
-        return r.isEmpty() ? source.search("author", q) : r;
+        List<BookSearchResponse> r = lookup("title", q);
+        return r.isEmpty() ? lookup("author", q) : r;
     }
 
-    private List<Map<String, Object>> byIsbn(String raw) {
+    private List<BookSearchResponse> byIsbn(String raw) {
         String isbn = toIsbn13(raw);
         if (isbn.isEmpty()) throw bad("ISBN이 올바르지 않아요. 숫자 10자리 또는 13자리를 확인해 주세요");
-        return source.search("isbn", isbn);
+        return lookup("isbn", isbn);
+    }
+
+    private List<BookSearchResponse> lookup(String field, String value) {
+        return source.search(field, value).stream().map(b -> new BookSearchResponse((String) b.get("title"), (String) b.get("author"),
+                (Integer) b.get("totalPages"), (String) b.get("isbn"), (String) b.get("coverUrl"))).toList();
     }
 
     /** ISBN-10이면 13자리로 바꾼다. 검사 숫자가 틀리면 빈 문자열. */

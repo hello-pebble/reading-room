@@ -8,6 +8,28 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class BookTest extends ApiTestBase {
+    @Test
+    void patchDistinguishesMissingAndNullAndRejectsStringPage() throws Exception {
+        long u = newUser("alice");
+        long id = put(u, Map.of("title", "책", "totalPages", 200));
+        mvc.perform(PATCH(u, "/books/" + id, Map.of("currentPage", 20)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalPages").value(200));
+        mvc.perform(PATCH(u, "/books/" + id, java.util.Collections.singletonMap("totalPages", null)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalPages").doesNotExist());
+        mvc.perform(PATCH(u, "/books/" + id, Map.of("currentPage", "30")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("BAD_PAGE"));
+        mvc.perform(GET(u, "/books/" + id)).andExpect(jsonPath("$.currentPage").value(20));
+    }
+
+    @Test
+    void sqlLookingTitleIsStoredLiterally() throws Exception {
+        long u = newUser("alice");
+        String title = "책'); drop table book; --";
+        long id = put(u, Map.of("title", title));
+        mvc.perform(GET(u, "/books/" + id)).andExpect(status().isOk()).andExpect(jsonPath("$.title").value(title));
+        assertThat(dsl.fetchCount(dsl.selectFrom("book"))).isEqualTo(1);
+    }
+
     long put(long uid, Map<String, Object> b) throws Exception {
         return body(mvc.perform(POST(uid, "/books", b)).andExpect(status().isCreated()).andReturn()).get("id").asLong();
     }

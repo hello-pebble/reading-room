@@ -3,7 +3,7 @@
 | 항목 | 내용 |
 |---|---|
 | 기준일 | 2026-11-17 |
-| 기준 구현 | `prototype/index.html` (3D 유령 + 원목 방) |
+| 기준 구현 | `frontend/index.html` (3D 유령 + 원목 방) |
 | 관련 문서 | `SPEC.md` 명세, `DECISIONS.md` 결정 기록, `DATA_API.md` 서버 설계, `FEATURE_GUIDE.md` 사용 설명서 |
 | 상태 표기 | ✅ 프로토타입에서 동작 · 📝 설계만 있음 · ⚠️ 일부만 구현 |
 
@@ -320,8 +320,8 @@
 | 지원 | 데스크톱·모바일 웹. 방 구도는 폭 760px 기준으로 전환 |
 | 오프라인 | 기록(스탠드, 직접 기록, 메모, 쪽수)은 브라우저에 저장돼 인터넷 없이도 된다. 3D 방도 `vendor/three.min.js`를 함께 두어 인터넷 없이 보인다 (결정 #29). `vendor` 폴더가 `index.html` 옆에 있어야 한다. 글꼴(Google Fonts)은 인터넷이 없으면 기기 기본 글꼴로 대신한다. 책 검색과 공유방 소식은 인터넷이 필요해서 오프라인에서는 직접 입력으로 대신한다 |
 | 알림 | 브라우저 알림(Notification)은 이 페이지를 열어 둔 동안만 온다. 창을 닫은 뒤에도 받으려면 서버 푸시(웹 푸시, iOS는 홈 화면에 추가한 경우만)가 필요하다 |
-| 외부 의존 | three.js는 `prototype/vendor/three.min.js`를 먼저 읽고, 없을 때만 인터넷 주소(CDN)를 쓴다. 둘 다 안 되면 3D 방 대신 안내 문구만 보인다 (타이머·모달은 동작). Google Fonts는 인터넷이 있을 때만 |
-| 로컬에서 열기 | 크롬·엣지에서 `index.html` 파일을 바로 열면 된다(`common.css`·`room.css`·`village.css`·`shared-room.css`·`neighbor.css`, `room.js`·`village.js`·`shared-room.js`·`neighbor.js`·`scene.js`·`app.js`와 `vendor/`를 함께 둔다). 알림 권한이 안 뜨면 `prototype` 폴더에서 `python -m http.server 8765`로 연 뒤 `http://localhost:8765`로 접속한다 |
+| 외부 의존 | three.js는 `frontend/vendor/three.min.js`를 먼저 읽고, 없을 때만 인터넷 주소(CDN)를 쓴다. 둘 다 안 되면 3D 방 대신 안내 문구만 보인다 (타이머·모달은 동작). Google Fonts는 인터넷이 있을 때만 |
+| 로컬에서 열기 | 크롬·엣지에서 `index.html` 파일을 바로 열면 된다(`common.css`·`room.css`·`village.css`·`shared-room.css`·`neighbor.css`, `room.js`·`village.js`·`shared-room.js`·`neighbor.js`·`scene.js`·`app.js`와 `vendor/`를 함께 둔다). 알림 권한이 안 뜨면 `frontend` 폴더에서 `python -m http.server 8765`로 연 뒤 `http://localhost:8765`로 접속한다 |
 | 바탕화면 띄우기 | 데스크톱 크롬·엣지 116+, 파이어폭스 151+ |
 | 책장 용량 | 28권(데스크톱) / 24권(모바일) |
 | 달력 | 이번 달만, 월 이동 없음 (완독 날짜는 연도까지 저장하므로 올해 이번 달만 센다) |

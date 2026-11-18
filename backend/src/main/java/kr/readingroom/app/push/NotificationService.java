@@ -5,7 +5,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import kr.readingroom.app.common.ClockConfig;
-import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,12 +21,14 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     public static final int CHECK_MINUTES = 60;
 
-    private final DSLContext dsl;
+    private final NotificationRepository notificationRepository;
+    private final SubscriptionRepository subscriptionRepository;
     private final Clock clock;
     private final PushSender sender;
 
-    public NotificationService(DSLContext dsl, Clock clock, PushSender sender) {
-        this.dsl = dsl;
+    public NotificationService(NotificationRepository notificationRepository, SubscriptionRepository subscriptionRepository, Clock clock, PushSender sender) {
+        this.notificationRepository = notificationRepository;
+        this.subscriptionRepository = subscriptionRepository;
         this.clock = clock;
         this.sender = sender;
     }
@@ -42,26 +43,13 @@ public class NotificationService {
     @Transactional
     public List<Target> claimCheckTargets() {
         var now = clock.instant();
-        return targets(dsl.fetch("""
-                update reading_session s set check_notified_for = s.last_check_at
-                from book b
-                where b.id = s.book_id and s.status = 'RUNNING'
-                  and s.last_check_at < ?::timestamptz
-                  and s.started_at >= ?::timestamptz
-                  and s.check_notified_for is distinct from s.last_check_at
-                returning s.id, s.user_id, s.started_at, b.title""",
-                now.minus(java.time.Duration.ofMinutes(CHECK_MINUTES)).toString(),
-                now.minus(kr.readingroom.app.session.SessionService.CAP).toString()), "CHECK");
+        return targets(notificationRepository.claimCheck(now.minus(java.time.Duration.ofMinutes(CHECK_MINUTES)).toString(), now.minus(kr.readingroom.app.session.SessionService.CAP).toString()), "CHECK");
     }
 
     /** 확인 필요: NEEDS_CONFIRM으로 바뀐 세션을 한 번만. */
     @Transactional
     public List<Target> claimConfirmTargets() {
-        return targets(dsl.fetch("""
-                update reading_session s set confirm_notified_at = ?::timestamptz
-                from book b
-                where b.id = s.book_id and s.status = 'NEEDS_CONFIRM' and s.needs_confirm_at is not null and s.confirm_notified_at is null
-                returning s.id, s.user_id, s.started_at, b.title""", clock.instant().toString()), "CONFIRM");
+        return targets(notificationRepository.claimConfirm(clock.instant().toString()), "CONFIRM");
     }
 
     private List<Target> targets(org.jooq.Result<Record> rows, String type) {
@@ -83,10 +71,10 @@ public class NotificationService {
         PushSender.Message msg = "CHECK".equals(p.type())
                 ? new PushSender.Message("CHECK", "아직 읽고 있어요?", "『" + p.title() + "』을 읽은 지 60분이 지났어요. 계속 읽고 있나요?", "LAMP", p.sessionId())
                 : new PushSender.Message("CONFIRM", "확인이 필요해요", clockText(p.startedAt()) + "에 켠 스탠드가 아직 켜져 있어요", "LAMP", p.sessionId());
-        for (Record sub : dsl.fetch("select id, user_id, endpoint, p256dh, auth from push_subscription where user_id = ? order by id", p.userId())) {
+        for (Record sub : subscriptionRepository.findByUser(p.userId())) {
             try {
                 var to = new PushSender.Subscription(sub.get("id", Long.class), p.userId(), sub.get("endpoint", String.class), sub.get("p256dh", String.class), sub.get("auth", String.class));
-                if (sender.send(to, msg) == PushSender.Result.GONE) dsl.execute("delete from push_subscription where id = ?", to.id());   // 404·410이면 구독 삭제
+                if (sender.send(to, msg) == PushSender.Result.GONE) subscriptionRepository.deleteById(to.id());   // 404·410이면 구독 삭제
             } catch (RuntimeException e) {
                 log.warn("푸시 전송 실패 (user={}, session={}): {}", p.userId(), p.sessionId(), e.toString());
             }

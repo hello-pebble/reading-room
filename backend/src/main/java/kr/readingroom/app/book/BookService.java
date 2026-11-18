@@ -1,15 +1,13 @@
 package kr.readingroom.app.book;
 
+import kr.readingroom.app.book.dto.*;
 import com.fasterxml.jackson.databind.JsonNode;
+import kr.readingroom.app.common.RequestJson;
 import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.Db;
-import org.jooq.DSLContext;
 import org.jooq.Record;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -18,11 +16,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class BookService {
     public static final int MAX_PAGES = 9999;
-    private final DSLContext dsl;
+    private final BookRepository bookRepository;
     private final Clock clock;
 
-    public BookService(DSLContext dsl, Clock clock) {
-        this.dsl = dsl;
+    public BookService(BookRepository bookRepository, Clock clock) {
+        this.bookRepository = bookRepository;
         this.clock = clock;
     }
 
@@ -37,34 +35,31 @@ public class BookService {
         return Math.min(100, Math.max(0, (int) Math.round(current * 100.0 / total)));
     }
 
-    public Map<String, Object> create(long userId, JsonNode b) {
-        String title = text(b, "title");
+    public BookResponse create(long userId, CreateBookRequest b) {
+        String title = b.title();
         if (title == null || title.isBlank() || title.length() > 200)
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_TITLE", "제목은 1~200자로 적어 주세요");
-        Integer total = normTotal(b.get("totalPages"));
-        int cur = b.hasNonNull("currentPage") && b.get("currentPage").isNumber() ? (int) Math.max(0, Math.min(MAX_PAGES, b.get("currentPage").asLong())) : 0;
+        Integer total = normTotal(b.totalPages());
+        int cur = RequestJson.present(b.currentPage()) && b.currentPage().isNumber() ? (int) Math.max(0, Math.min(MAX_PAGES, b.currentPage().asLong())) : 0;
         try {
-            Record r = dsl.fetchOne("""
-                    insert into book(user_id, isbn, title, author, cover_url, total_pages, current_page, status, started_at)
-                    values (?, ?, ?, ?, ?, ?, ?, 'READING', ?::timestamptz) returning *""",
-                    userId, text(b, "isbn"), title.trim(), text(b, "author"), text(b, "coverUrl"), total, cur, clock.instant().toString());
+            Record r = bookRepository.insert(userId, b.isbn(), title.trim(), b.author(), b.coverUrl(), total, cur, clock.instant().toString());
             return view(r);
         } catch (DuplicateKeyException e) {
             throw new ApiException(HttpStatus.CONFLICT, "ALREADY_READING", "소파에 이미 읽는 책이 있어요. 먼저 완독하거나 포기해 주세요");
         }
     }
 
-    public Map<String, Object> patch(long userId, long id, JsonNode b) {
+    public BookResponse patch(long userId, long id, PatchBookRequest b) {
         Record cur = owned(userId, id);
         Integer total = cur.get("total_pages", Integer.class);
-        if (b.has("totalPages")) total = normTotal(b.get("totalPages"));
+        if ((b.totalPages() != null)) total = normTotal(b.totalPages());
         int page = cur.get("current_page", Integer.class);
-        if (b.hasNonNull("currentPage")) {
-            if (!b.get("currentPage").isNumber()) throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_PAGE", "쪽수는 숫자예요");
-            long want = Math.min(MAX_PAGES, b.get("currentPage").asLong());
+        if (RequestJson.present(b.currentPage())) {
+            if (!b.currentPage().isNumber()) throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_PAGE", "쪽수는 숫자예요");
+            long want = Math.min(MAX_PAGES, b.currentPage().asLong());
             page = (int) Math.max(page, want); // 현재 쪽은 줄지 않는다
         }
-        Record r = dsl.fetchOne("update book set total_pages = ?, current_page = ? where id = ? returning *", total, page, id);
+        Record r = bookRepository.updateProgress(total, page, id);
         return view(r);
     }
 
@@ -73,53 +68,38 @@ public class BookService {
      * (메모·스탠드 끄기·직접 기록·완독이 같은 규칙을 쓴다)
      */
     public void raisePage(long bookId, int page) {
-        dsl.execute("update book set current_page = greatest(current_page, least(?, coalesce(total_pages, ?))) where id = ?",
-                Math.max(0, Math.min(MAX_PAGES, page)), MAX_PAGES, bookId);
+        bookRepository.raisePage(Math.max(0, Math.min(MAX_PAGES, page)), MAX_PAGES, bookId);
     }
 
-    public List<Map<String, Object>> list(long userId, String status) {
+    public List<BookResponse> list(long userId, String status) {
         if (status != null && !List.of("READING", "DONE", "DROPPED", "LATER").contains(status))
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_STATUS", "status는 READING/DONE/DROPPED/LATER 중 하나예요");
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<BookResponse> out = new ArrayList<>();
         var rs = status == null
-                ? dsl.fetch("select * from book where user_id = ? order by id desc", userId)
-                : dsl.fetch("select * from book where user_id = ? and status = ? order by coalesce(finished_at, started_at, created_at) desc, id desc", userId, status);
+                ? bookRepository.findAll(userId)
+                : bookRepository.findByStatus(userId, status);
         rs.forEach(r -> out.add(view(r)));
         return out;
     }
 
-    public Map<String, Object> get(long userId, long id) {
+    public BookResponse get(long userId, long id) {
         return view(owned(userId, id));
     }
 
     /** 남의 책이나 없는 책은 404. */
     public Record owned(long userId, long id) {
-        Record r = dsl.fetchOne("select * from book where id = ? and user_id = ?", id, userId);
+        Record r = bookRepository.findOwned(id, userId);
         if (r == null) throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "책을 찾을 수 없어요");
         return r;
     }
 
-    public Map<String, Object> view(Record r) {
-        Map<String, Object> m = new LinkedHashMap<>();
+    public BookResponse view(Record r) {
         Integer total = r.get("total_pages", Integer.class);
-        int cur = r.get("current_page", Integer.class);
-        m.put("id", r.get("id", Long.class));
-        m.put("isbn", r.get("isbn", String.class));
-        m.put("title", r.get("title", String.class));
-        m.put("author", r.get("author", String.class));
-        m.put("coverUrl", r.get("cover_url", String.class));
-        m.put("totalPages", total);
-        m.put("currentPage", cur);
-        m.put("percent", total == null ? null : percent(cur, total));
-        m.put("status", r.get("status", String.class));
-        m.put("rating", r.get("rating", Short.class));
-        m.put("oneLineReview", r.get("one_line_review", String.class));
-        m.put("startedAt", Db.instant(r, "started_at"));
-        m.put("finishedAt", Db.instant(r, "finished_at"));
-        return m;
+        int page = r.get("current_page", Integer.class);
+        return new BookResponse(r.get("id", Long.class), r.get("isbn", String.class), r.get("title", String.class),
+                r.get("author", String.class), r.get("cover_url", String.class), total, page, total == null ? null : percent(page, total),
+                r.get("status", String.class), r.get("rating", Short.class), r.get("one_line_review", String.class),
+                Db.instant(r, "started_at"), Db.instant(r, "finished_at"));
     }
 
-    private static String text(JsonNode b, String k) {
-        return b.hasNonNull(k) && b.get(k).isTextual() ? b.get(k).asText().trim() : null;
-    }
 }

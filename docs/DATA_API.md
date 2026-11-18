@@ -9,9 +9,13 @@
 - 이미 차 있는 집은 덮어쓰지 않으며, 집 주인이 확인하면 해당 키를 삭제한다. 원본 책 목록과 추천받은 사람의 독서 목록은 변경하지 않는다.
 - 실제 사용자 간 API는 아직 없다. 서버 연결 때는 발신자의 책 소유·현재 상태, 받는 집의 빈 칸을 서버에서 검사하고 집별 미확인 한 권 제약을 원자적으로 보장해야 한다. 확인 처리는 수신자 본인만 허용한다. 프로토타입의 집 주인 시점 테스트 도구는 실제 인증 기능이 아니다.
 
+## 백엔드 역할 분리 (2026-11-18)
+
+`Controller`는 HTTP 입출력, `Service`는 검증·기능 규칙·트랜잭션, `Repository`는 jOOQ SQL 실행을 담당한다. 요청·응답은 각 기능의 `dto/` record로 선언한다. SQL은 Java에 직접 작성하고 값은 `?`로 바인딩한다. DB 스키마와 아래 API 계약은 유지한다. PATCH의 필드 생략/null과 숫자 타입 검사를 보존하기 위해 일부 요청 필드는 `JsonNode`를 사용한다. 수정 예시는 `backend/README.md`를 참고한다.
+
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방·마을 광장·구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설·입장·대화·가져오기, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
@@ -28,7 +32,7 @@
 | 달력 | `streak`는 **이번 달 조회에서만 숫자**이고 지난 달은 `null`. 이번 달보다 뒤의 `month`는 400. `days`는 그 달 날짜만, `streak`는 전체 기록으로 계산. 확인용 **`GET /me/goal`**을 더했다(첫 조회 때 기본 1권 행 생성). `PUT /me/goal`이 같은 값이면 변경 기록을 늘리지 않는다. `changes`의 `at`은 한국 날짜(`YYYY-MM-DD`), 새 사용자의 첫 변경은 기본 1권에서 시작한다(`1→N`). `app_user.monthly_goal` 컬럼은 서버에 없었으므로 이관은 필요 없다 |
 | 푸시 구독 | `POST` 본문은 브라우저 `PushSubscription` 그대로(`{endpoint, keys:{p256dh, auth}}`, 평평한 모양도 허용), endpoint는 `https://`. 다른 사용자가 같은 endpoint를 저장하면 그 기기의 주인이 바뀐다. `DELETE`는 `?endpoint=` 또는 본문 `{endpoint}`로 내 구독만 지우고 없어도 204 |
 | 알림 선정 | 1분 배치(`NotificationBatch`)가 대상을 DB에서 먼저 "보냈음"으로 표시한 뒤 보낸다(`PushSender` 인터페이스, 구현은 로그만 남기는 `LogPushSender`). 60분 확인은 `last_check_at + 60분`을 **지났을 때**(정확히 60분은 아직)이고 `last_check_at` 값마다 한 번, 3시간을 넘긴 `RUNNING`은 제외. 확인 필요는 `NEEDS_CONFIRM` 전환 뒤 한 번. 보낼 기기가 없어도 선정(표시)은 되어 나중에 구독해도 지난 알림은 오지 않고, 표시 후 전송이 실패하면 다시 보내지 않는다(중복보다 누락). 전송이 `GONE`이면 구독 삭제. VAPID 키는 환경변수 `VAPID_PUBLIC_KEY`·`VAPID_PRIVATE_KEY`·`VAPID_SUBJECT` |
-| 배치 | 구현: 10분(`SessionBatch`, 3시간 초과 → `NEEDS_CONFIRM`), 1분(`NotificationBatch`, 60분 확인·확인 필요 푸시). `app.scheduling.enabled=false`로 끌 수 있다. 나머지 배치(공유방·광장·D-1 알림)는 없음 |
+| 배치 | 구현: 10분(`SessionBatch`, 3시간 초과 → `NEEDS_CONFIRM`), 1분(`NotificationBatch`, 60분 확인·확인 필요 푸시). `app.scheduling.enabled=false`로 끌 수 있다. 1시간(`PlazaBatch`, 24시간이 지난 광장 글 삭제). 나머지 배치(공유방 개방·종료·D-1 알림)는 없음 |
 | 테스트 | `backend/`의 `./gradlew test` (실제 PostgreSQL: Docker 없으면 zonky embedded-postgres, 루트 사용자는 `TEST_DATABASE_URL`로 외부 DB 지정). 시간대가 달라도 같은 결과임을 `-Dtest.tz=America/Los_Angeles`로도 확인 |
 
 ## 테이블
@@ -177,16 +181,16 @@
 | POST | `/rooms/{id}/messages` | 글 보내기. body `{content, page?}` (1~300자). 사용자당 5초에 1건(넘으면 429). `OPEN` 방과 내가 참여 중인 방만 |
 | ~~DELETE~~ | ~~`/rooms/{id}/messages/{mid}`~~ | 폐지 (#53). 보낸 글은 삭제·수정하지 않는다 |
 | POST | `/rooms/{id}/read` | 마지막으로 읽은 시각(`last_read_at`) 저장. 새 글 별(✦) 계산에 쓴다 |
-| GET | `/rooms?status=` | 마을 게시판, 창문 소식. 내가 참여했거나 초대받은 방만 내려준다(베타는 공개 방이 없다, #41) |
+| GET | `/rooms?status=` | 마을 게시판, 창문 소식. 내가 만들었거나 참여 중(나가지 않은)인 방만 내려준다(베타는 공개 방이 없다, #41). 응답 `[{id, kind, title, isbn, status, openAt, closeAt, closedAt, deleteAt, participants, maxParticipants, mine, joined, agreed, ownerNickname, inviteCode(개설자에게만)}]`. **`status`는 저장값이 아니라 시각으로 계산**한다(`closedAt`이 있거나 `closeAt`이 지났으면 `CLOSED`, `openAt` 전이면 `SCHEDULED`, 아니면 `OPEN`). 종료 방은 종료 시각(일찍 끝냈으면 `closedAt`)부터 7일 동안만 내려가고 `deleteAt`이 그 시각이다. 순서: 열린 방(최근에 연 것) → 예정 방(곧 열릴 것) → 지난 방(최근에 끝난 것). `status`가 `SCHEDULED·OPEN·CLOSED`가 아니면 400 |
 | POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 삭제된 글만 빼고 `page`와 함께 저장하며(`room_type`도 스냅샷에 담는다), 책의 공유방 탭은 모든 글을 그대로 내려준다. 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
 
 ### 마을 광장
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| GET | `/plaza/messages?since=` | 최근 24시간 대화 (최대 30개). 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
+| GET | `/plaza/messages?since=` | 최근 24시간 대화. `since`(ISO 시각, 예 `2026-11-18T03:00:00Z`)가 없으면 가장 최근 30개, 있으면 그 이후 글을 오래된 순으로 최대 30개(24시간보다 오래된 `since`는 24시간 전으로 본다). 응답 `[{id, userId, handle, nickname, avatar, content, createdAt}]`, 잘못된 `since`는 400. 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
 | GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/100)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 100명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
-| POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거). 사용자당 5초에 1건 제한, 넘으면 429 |
+| POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거, 글자는 코드 포인트 기준). 사용자당 5초에 1건 제한(같은 사람의 동시 전송은 DB 잠금으로 한 줄로 세운다), 넘으면 429 `TOO_FAST`. 성공하면 201과 만든 글 |
 
 ## 배치 작업 (`@Scheduled`)
 

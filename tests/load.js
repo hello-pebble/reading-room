@@ -1,8 +1,8 @@
-// 테스트용 로더: prototype/index.html을 jsdom(가상 브라우저)에 올린다.
+// 테스트용 로더: frontend/index.html을 jsdom(가상 브라우저)에 올린다.
 // 3D 라이브러리(three.js)는 올리지 않는다 → 페이지 안에서 G3가 null이 되고, 3D 없이 로직과 패널만 돈다.
 const fs = require('fs'), path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const FILE = process.env.RR_HTML || path.join(__dirname, '..', 'prototype', 'index.html'); // RR_HTML: 테스트가 정말 결함을 잡는지 확인할 때 다른 파일을 가리킨다
+const FILE = process.env.RR_HTML || path.join(__dirname, '..', 'frontend', 'index.html'); // RR_HTML: 테스트가 정말 결함을 잡는지 확인할 때 다른 파일을 가리킨다
 const KEY = 'myroom-proto-v1';
 
 // 캔버스 2D 컨텍스트 대용: 무엇을 호출해도 조용히 넘어간다

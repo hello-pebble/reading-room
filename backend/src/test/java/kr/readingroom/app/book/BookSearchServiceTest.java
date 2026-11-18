@@ -38,8 +38,8 @@ class BookSearchServiceTest {
 
     @Test
     void titleSearchFallsBackToAuthor() {
-        assertThat(service.search("소년").get(0)).containsEntry("title", "소년이 온다");
-        assertThat(service.search("없는책").get(0)).containsEntry("author", "한강");
+        assertThat(service.search("소년").get(0).title()).isEqualTo("소년이 온다");
+        assertThat(service.search("없는책").get(0).author()).isEqualTo("한강");
         assertThat(calls).containsExactly("title=소년", "title=없는책", "author=없는책");
     }
 

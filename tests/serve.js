@@ -1,6 +1,6 @@
-// Playwright용 정적 서버: prototype/ 폴더를 http://localhost:4173 으로 보여 준다. (의존성 없음)
+// Playwright용 정적 서버: frontend/ 폴더를 http://localhost:4173 으로 보여 준다. (의존성 없음)
 const http = require('http'), fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..', 'prototype');
+const ROOT = path.join(__dirname, '..', 'frontend');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json' };
 http.createServer((req, res) => {
   const p = decodeURIComponent(req.url.split('?')[0]);

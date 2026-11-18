@@ -1,7 +1,6 @@
 package kr.readingroom.app.session;
 
 import java.time.Clock;
-import org.jooq.DSLContext;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,21 +12,18 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class SessionExpirer {
-    private final DSLContext dsl;
+    private final SessionRepository sessionRepository;
     private final Clock clock;
 
-    public SessionExpirer(DSLContext dsl, Clock clock) {
-        this.dsl = dsl;
+    public SessionExpirer(SessionRepository sessionRepository, Clock clock) {
+        this.sessionRepository = sessionRepository;
         this.clock = clock;
     }
 
     /** started_at + 3시간 < now 인 RUNNING 세션 하나를 전환한다. 전환했으면 true. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean expire(long sessionId) {
-        return dsl.execute("""
-                update reading_session set status = 'NEEDS_CONFIRM', needs_confirm_at = ?::timestamptz
-                where id = ? and status = 'RUNNING' and started_at < ?::timestamptz""",
-                clock.instant().toString(), sessionId, clock.instant().minus(SessionService.CAP).toString()) > 0;
+        return sessionRepository.expire(clock.instant().toString(), sessionId, clock.instant().minus(SessionService.CAP).toString()) > 0;
     }
 
     /**
@@ -37,10 +33,7 @@ public class SessionExpirer {
      */
     @Transactional
     public java.util.List<Long> expireOverdue() {
-        return dsl.fetch("""
-                update reading_session set status = 'NEEDS_CONFIRM', needs_confirm_at = ?::timestamptz
-                where status = 'RUNNING' and started_at < ?::timestamptz returning id""",
-                clock.instant().toString(), clock.instant().minus(SessionService.CAP).toString())
+        return sessionRepository.expireOverdue(clock.instant().toString(), clock.instant().minus(SessionService.CAP).toString())
                 .getValues(0, Long.class);
     }
 }

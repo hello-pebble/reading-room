@@ -1216,9 +1216,9 @@ function rcBand(n){
  return `<div class="rband${left<=1?' hot':''}"><span style="font-size:${Math.round(14+16*k)}px">🔥</span><div class="grow"><b>종료됐어요 · 가져오기 마감 D-${left}</b><div class="muted">${left<=1?'내일 사라져요':'불이 꺼지면 기록이 사라져요'}</div></div>${act}</div>`}
 function rcFoot(n){
  if(n.kind!=='OPEN')return '';let chip='';
- if(n.rtype!=='OWN'){const pg=rcPage(n);
+ if(n.rtype!=='OWN'&&!(rcSpoil(n)&&rcPage(n)==null)){const pg=rcPage(n);   // 안 읽은 책이라 내 쪽수가 없으면 쪽수 칸을 두지 않는다
   chip=panelView.chipEdit?`<div class="row" style="margin-bottom:6px"><input id="rcPg" type="number" min="1" max="9999" value="${pg??''}" placeholder="쪽수" style="width:90px"><button data-act="rcChipOk">적용</button><button data-act="rcChipNone">쪽수 빼기</button></div>`
-   :`<div style="margin-bottom:6px"><button class="rchip" data-act="rcChip">📖 ${pg!=null?pg+'쪽':'쪽수 없음'}</button>${pg==null?' <span class="muted">소파에서 쪽수를 적으면 글에 붙어요</span>':''}</div>`}
+   :`<div style="margin-bottom:6px"><button class="rchip" data-act="rcChip">📖 ${pg!=null?pg+'쪽':'쪽수 없음'}</button>${pg==null?' <span class="muted rhint">소파에서 쪽수를 적으면 글에 붙어요</span>':''}</div>`}
  return `<div class="foot">${chip}<div class="row"><textarea id="rc" rows="2" maxlength="${MAXMSG}" placeholder="이야기를 남겨요" style="flex:1;resize:none">${esc(panelView.draft||'')}</textarea><button class="primary" data-act="rcSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="rcE" style="margin-top:4px"></div></div>`}
 function rcSend(n){
  const ta=document.getElementById('rc'),e=document.getElementById('rcE'),t=ta.value.trim().slice(0,MAXMSG);if(!t)return;

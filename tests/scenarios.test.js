@@ -218,6 +218,16 @@ test('공유방 스포 안내: 안 읽은 책이면 대화는 전부 보이고 �
   fin(a);
 });
 
+test('공유방 입력줄: 안 읽은 책이고 내 쪽수가 없으면 쪽수 칸이 없고, 소파에서 읽는 중이면 쪽수 칸이 있다', () => {
+  const a = load();
+  a.ev(`S.news=[{id:'o1',kind:'OPEN',title:'『미지의책』 같이 읽기',book:'미지의책',author:'저자',rtype:'SAME',agreed:true,people:2,max:8,members:['@가'],owner:'@가',messages:[],period:'11.01 ~ 11.08'}];S.news.forEach(rcNorm);panelOpen='room:o1';panelView={};renderPanel()`);
+  assert.equal(a.ev(`!!document.querySelector('#panel [data-act=rcChip]')`), false, '안 읽은 책이고 쪽수가 없으면 쪽수 칸이 없어야 해요');
+  assert.ok(a.ev(`!!document.querySelector('#panel #rc')`), '입력칸은 그대로 있어요');
+  a.ev(`S.reading={id:1,title:'미지의책',author:'저자',cover:'',isbn:'',totalPages:300,page:50,progress:17,notes:[],startedAt:'2026.11.01'};renderPanel()`);
+  assert.ok(a.ev(`document.querySelector('#panel [data-act=rcChip]')?.textContent.includes('50쪽')`), '소파에서 읽는 중이면 내 쪽수가 칸에 보여요');
+  fin(a);
+});
+
 test('나중에 읽을 책: 소파에 올리면 목록에서 빠지고 공유방 기록이 따라와 완독 후 책장에 남는다', () => {
   const a = load();
   a.ev(`S.news=[${room('c1', '미지의책', '저자', '안녕')}];openF('window')`);

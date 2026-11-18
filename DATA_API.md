@@ -11,11 +11,11 @@
 
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방·마을 광장·카카오 로그인·책 검색·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방·마을 광장·구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
-| 인증 | 로그인이 없어 **`X-User-Id` 헤더**로 사용자를 식별하는 임시 필터(`UserIdFilter`, 없으면 401). 카카오 로그인이 생기면 교체. `POST /dev/users`는 `dev` 프로파일에서만 열린다 |
+| 인증 | 로그인이 없어 **`X-User-Id` 헤더**로 사용자를 식별하는 임시 필터(`UserIdFilter`, 없으면 401). 구글 로그인(결정 #55)이 생기면 교체. `POST /dev/users`는 `dev` 프로파일에서만 열린다 |
 | 시각 | 서버 `Clock`으로 `now()`를 정하고, 응답의 시각은 모두 UTC(`...Z`) ISO 문자열. 날짜 자르기(달력·월 목표·직접 기록)는 `Asia/Seoul` |
 | 멱등키 | `Idempotency-Key` 헤더. `idempotency_key(user_id, key, path, status, body)`에 **성공 응답만** 저장하고 재전송이면 그대로 돌려준다. 같은 키를 다른 경로에 쓰면 422. 적용: `POST /books`, `/books/{id}/notes`, `/books/{id}/finish`, `/drop`, `/sessions/start`, `/{id}/stop`, `/{id}/check`, `/{id}/confirm`, `/sessions/manual`. (`PUT`·`PATCH`·구독 저장은 원래 멱등) |
 | 아바타 | 표에 없던 **`PUT /me/avatar`**를 만들었다. 모르는 키는 버리고, 모르는 값·빠진 키는 기본값으로 채우며, **400은 해금 조건 미충족일 때만**(glasses는 책 1건 이상, beanie는 `DONE` 10권 이상). `GET /me`에 `avatar`가 들어 있다 |
@@ -121,7 +121,7 @@
 |---|---|---|
 | POST | `/books` | 소파에 올리기 (`READING`) |
 | PATCH | `/books/{id}` | 현재 쪽(`currentPage`), 전체 쪽(`totalPages`). 퍼센트는 서버·클라이언트가 계산 |
-| GET | `/books/search?q=` | 제목·저자·ISBN·책 링크로 검색 → `[{title, author, totalPages, isbn, coverUrl}]`. 서버가 알라딘(표지·쪽수)과 카카오 책 검색을 호출한다. 링크는 서버가 ISBN이나 서점 상품 번호를 해석해서 같은 책을 찾는다. API 키는 서버에만 둔다 |
+| GET | `/books/search?q=` | 제목·저자·ISBN(10·13자리)·ISBN이 든 링크로 검색 → `[{title, author, totalPages, isbn, coverUrl}]` (최대 10개, 중복 ISBN 제거). 서버가 국립중앙도서관 ISBN 서지정보 API(`SearchApi.do`, 제목 → 없으면 저자 순, ISBN은 정확히)를 호출한다. 쪽수는 1~9999만 쓰고 없으면 `null`. 검색어가 비면·ISBN이 틀리면 400, 키가 없으면 503 `SEARCH_UNAVAILABLE`, 외부 실패면 502 `SEARCH_FAILED`. 인증키는 서버 환경변수 `NL_CERT_KEY`에만 둔다 (결정 #56). 지금은 `X-User-Id` 없이 열려 있다(구글 로그인 때 로그인 필요 + 호출 제한). 화면 주소는 `CORS_ORIGINS`로 허용한다 |
 | GET | `/books?status=` · `/books/{id}` | 내 책 목록(상태별)·한 권. 남의 책은 404 |
 | POST | `/books/{id}/notes` | 메모·인용구 (쪽을 적으면 현재 쪽이 더 클 때만 올라간다). `GET`으로 목록 |
 | POST | `/books/{id}/finish` | 별점, 한줄평 → `DONE` (실행 중인 세션 자동 종료. 세션이 `NEEDS_CONFIRM`이면 409로 거절하고 확인을 먼저 요구한다. 확인 없이 닫는 경로는 `last_check_at`까지만 기록한다) |

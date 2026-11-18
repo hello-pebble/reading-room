@@ -51,3 +51,5 @@
 .home-f{display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:6px 0;padding:9px 10px}
 .home-f i{font-style:normal;width:22px;text-align:center}
 .furn.dim{opacity:.35}
+/* 책 찾기: 검색창과 돋보기 버튼 높이를 같게 */
+.bsearch input{height:42px;box-sizing:border-box}

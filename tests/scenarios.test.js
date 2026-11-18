@@ -213,6 +213,31 @@ test('모닥불 시간: 장면에 머문 시간이 오늘 읽은 시간에 더�
   fin(a);
 });
 
+test('공유방 입력: 폰(터치)에서는 Enter가 줄바꿈이라 보내지 않는다', () => {
+  const a = load({ touch: true });
+  a.ev(`S.news=[{id:'t1',kind:'OPEN',title:'방',book:'책',author:'저자',rtype:'OWN',agreed:true,people:1,max:8,mine:true,members:[],messages:[]}];VIEW='village';openV('room:t1')`);
+  const rc = a.doc.getElementById('rc');
+  rc.value = '첫 줄';
+  rc.dispatchEvent(new a.w.Event('input', { bubbles: true }));
+  const ev = new a.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+  rc.dispatchEvent(ev);
+  assert.equal(ev.defaultPrevented, false);
+  assert.equal(a.state().news[0].messages.length, 0);
+  fin(a);
+});
+
+test('책 검색: ISBN-10은 13자리로 바꾸고 틀린 ISBN은 걸러 낸다', async () => {
+  const a = load();
+  assert.equal(a.ev(`toIsbn13('8936434128')`), '9788936434120');
+  assert.equal(a.ev(`toIsbn13('978-89-364-3412-0')`), '9788936434120');
+  assert.equal(a.ev(`toIsbn13('9788936434121')`), '');
+  assert.equal(a.ev(`toIsbn13('123')`), '');
+  assert.equal(a.ev(`toIsbn13('1234567890')`), '', 'ISBN-10 검사 숫자가 틀리면 거른다');
+  const r = await a.ev(`searchBooks('9788936434121')`);
+  assert.match(r.err, /ISBN이 올바르지 않아요/);
+  fin(a);
+});
+
 test('모닥불 인원: 최대 10명까지만 정할 수 있다', () => {
   const a = load();
   const input = (id, value) => { const el = a.doc.getElementById(id); el.value = value; el.dispatchEvent(new a.w.Event('input', { bubbles: true })); };

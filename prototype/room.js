@@ -72,11 +72,23 @@ function updProgress(r){r.progress=r.totalPages&&r.page!=null?Math.min(100,Math.
 function pgHint(r){if(!r.totalPages)return '전체 쪽수를 적으면 퍼센트가 자동으로 계산돼요';if(r.page!=null&&r.page>r.totalPages)return '전체 쪽수보다 커요. 100%로 계산해요';return r.page!=null?r.page+'쪽까지 읽었어요 · 메모에 쪽수를 적어도 자동으로 올라가요':'현재 쪽을 적으면 퍼센트가 자동으로 계산돼요'}
 function bthumb(b){return `<div class="bthumb" style="background:${bookColor(b.title||'')}">${b.cover?`<img src="${esc(b.cover)}" alt="" onerror="this.remove()">`:''}</div>`}
 // 책 검색: 제목·저자·ISBN, 또는 ISBN이 들어 있는 책 링크. 인터넷이 없으면 직접 입력한다.
+// ISBN-10이면 13자리로 바꾼다 (978 + 앞 9자리 + 검사 숫자). 올바른 ISBN이 아니면 빈 문자열
+function toIsbn13(s){
+ s=String(s).replace(/[-\s]/g,'').toUpperCase();
+ if(/^97[89]\d{10}$/.test(s)){let t=0;for(let i=0;i<12;i++)t+=+s[i]*(i%2?3:1);return (10-t%10)%10===+s[12]?s:''}
+ if(/^\d{9}[\dX]$/.test(s)&&[...s].reduce((t,c,i)=>t+(c==='X'?10:+c)*(10-i),0)%11===0){const b='978'+s.slice(0,9);let t=0;for(let i=0;i<12;i++)t+=+b[i]*(i%2?3:1);return b+(10-t%10)%10}
+ return '';
+}
 async function searchBooks(q){
  q=q.trim();if(!q)return {err:'검색어를 적어 주세요'};
- let query=q;
- if(/^https?:\/\//i.test(q)){const m=q.match(/97[89]\d{10}|(?<!\d)\d{9}[\dXx](?!\d)/);if(!m)return {err:'이 링크에서 책을 찾지 못했어요. 제목으로 찾아 보세요'};query='isbn:'+m[0]}
- else if(/^[\d\s-]{10,17}$/.test(q))query='isbn:'+q.replace(/[-\s]/g,'');
+
+ let query=q,isbn='';
+ if(/^https?:\/\//i.test(q)){const m=q.match(/97[89]\d{10}|(?<!\d)\d{9}[\dXx](?!\d)/);if(!m)return {err:'이 링크에서 책을 찾지 못했어요. 제목으로 찾아 보세요'};isbn=toIsbn13(m[0]);query='isbn:'+(isbn||m[0])}
+ else if(/^[\dXx\s-]{10,17}$/.test(q)){isbn=toIsbn13(q);if(!isbn)return {err:'ISBN이 올바르지 않아요. 숫자 10자리 또는 13자리를 확인해 주세요'};query='isbn:'+isbn}
+ // 서버 검색 주소를 넣으면 한국 책은 국립중앙도서관(백엔드 GET /books/search)에서 먼저 찾고, 실패하면 아래 구글 북스·Open Library로 넘어간다
+ if(BOOK_SEARCH_URL){try{const res=await fetch(BOOK_SEARCH_URL+'?q='+encodeURIComponent(q));
+  if(res.status===400)return {err:(await res.json()).message};
+  if(res.ok)return {items:(await res.json()).map(x=>({title:x.title,author:x.author||'',pages:x.totalPages||0,isbn:x.isbn||'',cover:x.coverUrl||''}))}}catch(e){}}
  const get=async url=>{const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),7000);try{const res=await fetch(url,{signal:ctl.signal});if(!res.ok)throw new Error('http '+res.status);return await res.json()}finally{clearTimeout(tm)}};
  // 1순위: 구글 북스 (키 없이 쓰면 공용 한도가 금방 차서 자주 실패한다. BOOK_API_KEY에 키를 넣으면 안정적)
  const viaGoogle=async()=>{const j=await get('https://www.googleapis.com/books/v1/volumes?maxResults=6&printType=books&q='+encodeURIComponent(query)+(BOOK_API_KEY?'&key='+BOOK_API_KEY:''));
@@ -85,12 +97,18 @@ async function searchBooks(q){
  // 2순위: Open Library (키 없음. ISBN으로는 잘 찾고, 한국어 제목 검색은 약하다)
  const viaOpenLibrary=async()=>{const j=await get('https://openlibrary.org/search.json?limit=6&fields=title,author_name,number_of_pages_median,isbn,cover_i&q='+encodeURIComponent(query));
   return (j.docs||[]).map(d=>({title:d.title||'',author:(d.author_name||[]).join(', '),pages:d.number_of_pages_median||0,isbn:(d.isbn||[]).find(x=>x.length===13)||(d.isbn||[])[0]||'',cover:d.cover_i?'https://covers.openlibrary.org/b/id/'+d.cover_i+'-M.jpg':''})).filter(x=>x.title)};
+ // ISBN으로 찾을 때는 Open Library의 정확한 ISBN 조회를 쓴다(검색 API는 다른 판을 섞어 준다)
+ const viaOpenLibraryIsbn=async()=>{const j=await get('https://openlibrary.org/api/books?format=json&jscmd=data&bibkeys=ISBN:'+isbn),d=j['ISBN:'+isbn];
+  return d&&d.title?[{title:d.title,author:(d.authors||[]).map(a=>a.name).join(', '),pages:d.number_of_pages||0,isbn,cover:(d.cover||{}).medium||''}]:[]};
  let items=[],failed=0;
- for(const f of [viaGoogle,viaOpenLibrary]){try{items=await f();if(items.length)break}catch(e){failed++}}
+ const sources=isbn?[async()=>(await viaGoogle()).map(x=>({...x,isbn})),viaOpenLibraryIsbn]:[viaGoogle,viaOpenLibrary];
+ for(const f of sources){try{items=await f();if(items.length)break}catch(e){failed++}}
  if(items.length)return {items};
- if(failed===2)return {err:navigator.onLine?'책 정보를 가져오지 못했어요. 아래에 직접 적어 주세요':'인터넷에 연결되어 있지 않아요. 아래에 직접 적어 주세요'};
+ if(failed>=2)return {err:navigator.onLine?'책 정보를 가져오지 못했어요. 아래에 직접 적어 주세요':'인터넷에 연결되어 있지 않아요. 아래에 직접 적어 주세요'};
  return {items:[]};
 }
+// 백엔드 책 검색 주소. 주소 끝에 ?searchApi=http://localhost:8080/books/search 를 붙여 한 번 열면 저장된다(지우려면 ?searchApi=). 비어 있으면 서버 없이 구글 북스·Open Library만 쓴다
+const BOOK_SEARCH_URL=(()=>{try{const q=new URLSearchParams(location.search);if(q.has('searchApi')){const v=q.get('searchApi');v?localStorage.setItem('rr-search-url',v):localStorage.removeItem('rr-search-url')}return localStorage.getItem('rr-search-url')||''}catch(e){return ''}})();
 const BOOK_API_KEY=''; // 구글 북스 API 키 (선택)
 async function runSearch(){
  panelView.msg='찾는 중…';panelView.res=null;renderPanel();
@@ -104,7 +122,7 @@ function sofaPanel(){
  if(!r){const pv=panelView,picked=pv.cover||pv.isbn;
   return head('소파 · 읽을 책 올리기')+`<p class="muted">지금 읽는 책 한 권만 올릴 수 있어요.</p>
   <label for="bq">책 찾기</label>
-  <div class="row"><input id="bq" placeholder="제목, 저자, ISBN, 책 링크" value="${esc(pv.q||'')}"><button data-act="bsearch">찾기</button></div>
+  <div class="row bsearch"><input id="bq" placeholder="책 제목이나 저자를 적어 주세요" value="${esc(pv.q||'')}"><button class="ibtn" data-act="bsearch" aria-label="책 찾기" title="찾기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></button></div>
   <div class="muted" id="bmsg" style="margin-top:4px">${esc(pv.msg||'')}</div>
   ${pv.res&&pv.res.length?pv.res.map((it,i)=>`<button class="book" data-act="bpick" data-i="${i}">${bthumb(it)}<div class="grow"><div>『${esc(it.title)}』</div><div class="muted">${esc(it.author||'저자 정보 없음')}${it.pages?' · '+it.pages+'쪽':''}</div></div></button>`).join(''):''}
   ${picked?`<div class="card row">${bthumb({title:pv.t||'',cover:pv.cover})}<div class="grow"><b>『${esc(pv.t||'')}』</b><div class="muted">${esc(pv.a||'')}${pv.tp?' · '+pv.tp+'쪽':''}</div></div><button class="ghost" data-act="bclear">다시 찾기</button></div>`:''}

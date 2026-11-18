@@ -12,7 +12,7 @@ const noopCtx = () => new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => ({ w
 const opened = [];
 const closeAll = () => { for (const w of opened.splice(0)) { try { w.close(); } catch (e) {} } };
 
-function load({ state } = {}) {
+function load({ state, touch } = {}) {
   const html = fs.readFileSync(FILE, 'utf8')
     .replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
       if (src.startsWith('vendor/') || /^https?:/.test(src)) return ''; // 3D 라이브러리 제외
@@ -27,7 +27,7 @@ function load({ state } = {}) {
     url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       if (state) w.localStorage.setItem(KEY, JSON.stringify(state));
-      w.matchMedia = q => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} });
+      w.matchMedia = q => ({ matches: /hover: hover/.test(q) && !touch, media: q, addEventListener() {}, removeEventListener() {} });
       w.ResizeObserver = class { observe() {} disconnect() {} };
       w.HTMLCanvasElement.prototype.getContext = () => noopCtx();
     },

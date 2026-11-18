@@ -371,7 +371,8 @@ panel.addEventListener('input',e=>{
 
 });
 panel.addEventListener('keydown',e=>{
- if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='rc'&&!e.isComposing){e.preventDefault();const n=S.news.find(x=>'room:'+x.id===panelOpen);if(n)rcSend(n)}});
+ if(e.key==='Enter'&&!e.shiftKey&&canHover&&e.target.id==='rc'&&!e.isComposing)   // 마우스 기기만 Enter로 보낸다. 폰(터치)은 Enter가 줄바꿈이고 [보내기]로 보낸다
+  {e.preventDefault();const n=S.news.find(x=>'room:'+x.id===panelOpen);if(n)rcSend(n)}});
 
 
 document.getElementById('campModalPanel').addEventListener('click',onPanelClick);

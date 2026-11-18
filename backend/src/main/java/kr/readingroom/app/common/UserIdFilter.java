@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * TODO: 카카오 로그인이 생기면 이 임시 필터를 세션/토큰 인증으로 교체한다.
+ * TODO: 구글 로그인이 생기면 이 임시 필터를 세션/토큰 인증으로 교체한다.
  * 지금은 X-User-Id 헤더의 숫자를 사용자 id로 믿는다. 없거나 숫자가 아니면 401.
  */
 @Component
@@ -19,7 +19,9 @@ public class UserIdFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
         String p = req.getRequestURI();
-        return p.equals("/health") || p.startsWith("/dev/") || p.startsWith("/error");
+        // 브라우저가 먼저 보내는 CORS 확인(OPTIONS)과 책 검색(공개 서지 데이터)은 사용자 헤더 없이 통과시킨다.
+        // TODO: 구글 로그인이 생기면 책 검색도 로그인 필요 + 호출 횟수 제한으로 바꾼다(국립중앙도서관 호출 한도 보호).
+        return req.getMethod().equals("OPTIONS") || p.equals("/health") || p.equals("/books/search") || p.startsWith("/dev/") || p.startsWith("/error");
     }
 
     @Override

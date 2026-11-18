@@ -22,9 +22,11 @@ public class BoardRepository {
                 + "(me.user_id is not null and me.left_at is null) as joined, "
                 + "(me.agreed_at is not null) as agreed, "
                 + "(me.user_id is not null and me.left_at is null and exists (select 1 from room_message m where m.room_id = r.id and m.user_id <> me.user_id "
-                + "and (me.last_read_at is null or m.created_at > me.last_read_at))) as unread "
+                + "and (me.last_read_at is null or m.created_at > me.last_read_at))) as unread, "
+                + "(al.user_id is not null) as alarm "
                 + "from shared_room r join app_user u on u.id = r.created_by "
                 + "left join room_participant me on me.room_id = r.id and me.user_id = ? "
+                + "left join room_alarm al on al.room_id = r.id and al.user_id = me.user_id "
                 + "where r.created_by = ? or (me.user_id is not null and me.left_at is null) "
                 + "order by r.open_at desc, r.id desc", userId, userId);
     }

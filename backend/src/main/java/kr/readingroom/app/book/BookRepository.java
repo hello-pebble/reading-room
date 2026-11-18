@@ -45,6 +45,17 @@ public class BookRepository {
         return dsl.fetchOne("update book set total_pages = ?, current_page = ? where id = ? returning *", totalPages, currentPage, id);
     }
 
+    /** 같은 ISBN의 나중에 읽을 책(공유방 가져오기로 만든 것). 없으면 null */
+    public Record findLaterByIsbn(long userId, String isbn) {
+        return dsl.fetchOne("select id from book where user_id = ? and isbn = ? and status = 'LATER' order by id limit 1", userId, isbn);
+    }
+
+    /** 나중에 읽을 책을 소파에 올린다: 읽는 중으로 바꾸고 시작 시각을 기록한다. 쪽수는 새로 받은 값이 있으면 덮는다. 가져온 공유방 기록은 book_id로 그대로 따라온다 */
+    public Record promoteLater(long id, Integer totalPages, int currentPage, String startedAt) {
+        return dsl.fetchOne("update book set status = 'READING', started_at = ?::timestamptz, total_pages = coalesce(?, total_pages), current_page = ? where id = ? returning *",
+                startedAt, totalPages, currentPage, id);
+    }
+
     public Record insert(long userId, String isbn, String title, String author, String coverUrl, Integer totalPages, int currentPage, String startedAt) {
         return dsl.fetchOne("""
                     insert into book(user_id, isbn, title, author, cover_url, total_pages, current_page, status, started_at)

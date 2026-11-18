@@ -24,7 +24,7 @@
 | `push` | 푸시 구독, 알림 대상 선정 |
 | `user` | 계정·아바타 (임시 로그인 `X-User-Id`) |
 | `village` | 마을 게시판 읽기(`GET /rooms`), 광장 채팅(`/plaza/messages`, 24시간 삭제 배치). 방 한 줄 응답(`RoomResponse`)과 시각 상태 계산(`BoardService.state`)은 `room`도 쓴다 |
-| `room` | 공유방(모닥불) 개설 `POST /rooms`, 초대 미리보기 `GET /rooms/invite/{code}`, 닫기 `POST /rooms/{id}/close`, 입장 `POST /rooms/join`, 나가기 `DELETE /rooms/{id}/participants/me`, 보관 동의 `POST /rooms/{id}/agree` (V9: 초대 코드·방 이름 제약, 개설 기록 `room_open_log`), 대화 `GET·POST /rooms/{id}/messages`·읽음 `POST /rooms/{id}/read` (V10: `room_message`, `RoomMessage*`). 가져오기·개방/종료 배치는 다음 단계(`docs/DATA_API.md` 끝 메모) |
+| `room` | 공유방(모닥불) 개설 `POST /rooms`, 초대 미리보기 `GET /rooms/invite/{code}`, 닫기 `POST /rooms/{id}/close`, 입장 `POST /rooms/join`, 나가기 `DELETE /rooms/{id}/participants/me`, 보관 동의 `POST /rooms/{id}/agree` (V9: 초대 코드·방 이름 제약, 개설 기록 `room_open_log`), 대화 `GET·POST /rooms/{id}/messages`·읽음 `POST /rooms/{id}/read` (V10: `room_message`, `RoomMessage*`). 알림 켜기·끄기 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·책의 공유방 탭 `GET /books/{id}/rooms` (V12: `room_alarm`, `book_room_archive`, `RoomArchive*`). 개방/종료·삭제 배치는 다음 단계(`docs/DATA_API.md` 끝 메모) |
 | `neighbor` | 이웃집 책 추천: 방문 `GET /neighbors/{handle}`, 꽂기 `POST /neighbors/{handle}/recommendation`, 내 집 추천 `GET /me/recommendation`, 확인 `POST /me/recommendation/confirm` (V11: `neighbor_recommendation`, 집마다 확인 전 한 권은 부분 유니크 인덱스) |
 | `common` | 오류·CORS·멱등키·공통 설정 |
 

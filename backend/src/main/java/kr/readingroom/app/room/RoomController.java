@@ -2,6 +2,7 @@ package kr.readingroom.app.room;
 
 import kr.readingroom.app.common.UserIdFilter;
 import kr.readingroom.app.room.dto.AgreeResponse;
+import kr.readingroom.app.room.dto.AlarmResponse;
 import kr.readingroom.app.room.dto.CloseRoomResponse;
 import kr.readingroom.app.room.dto.CreateRoomRequest;
 import kr.readingroom.app.room.dto.InvitePreviewResponse;
@@ -43,6 +44,19 @@ public class RoomController {
     public ResponseEntity<RoomResponse> join(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestBody JoinRoomRequest body) {
         RoomService.Joined j = rooms.join(uid, body);
         return ResponseEntity.status(j.created() ? HttpStatus.CREATED : HttpStatus.OK).body(j.room());
+    }
+
+    /** 개방 알림 켜기: 새로 켜면 201, 이미 켜져 있으면 200 */
+    @PutMapping("/{id}/alarm")
+    public ResponseEntity<AlarmResponse> alarmOn(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long id) {
+        boolean created = rooms.alarmOn(uid, id);
+        return ResponseEntity.status(created ? HttpStatus.CREATED : HttpStatus.OK).body(new AlarmResponse(id, true));
+    }
+
+    @DeleteMapping("/{id}/alarm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void alarmOff(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long id) {
+        rooms.alarmOff(uid, id);
     }
 
     @DeleteMapping("/{id}/participants/me")

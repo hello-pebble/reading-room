@@ -15,9 +15,11 @@ public class RoomRepository {
             + "(me.user_id is not null and me.left_at is null) as joined, "
             + "(me.agreed_at is not null) as agreed, "
             + "(me.user_id is not null and me.left_at is null and exists (select 1 from room_message m where m.room_id = r.id and m.user_id <> me.user_id "
-            + "and (me.last_read_at is null or m.created_at > me.last_read_at))) as unread "
+            + "and (me.last_read_at is null or m.created_at > me.last_read_at))) as unread, "
+            + "(al.user_id is not null) as alarm "
             + "from shared_room r join app_user u on u.id = r.created_by "
-            + "left join room_participant me on me.room_id = r.id and me.user_id = ? ";
+            + "left join room_participant me on me.room_id = r.id and me.user_id = ? "
+            + "left join room_alarm al on al.room_id = r.id and al.user_id = me.user_id ";
     private final DSLContext dsl;
 
     public RoomRepository(DSLContext dsl) {
@@ -98,6 +100,16 @@ public class RoomRepository {
         Record r = dsl.fetchOne("select b.title from room_participant p join book b on b.id = p.book_id "
                 + "join shared_room s on s.id = p.room_id where p.room_id = ? and p.user_id = s.created_by", roomId);
         return r == null ? null : r.get("title", String.class);
+    }
+
+    /** 개방 알림 켜기. 새로 켰으면 true, 이미 켜져 있었으면 false */
+    public boolean insertAlarm(long userId, long roomId, Instant now) {
+        return dsl.execute("insert into room_alarm(user_id, room_id, created_at) values (?, ?, ?::timestamptz) on conflict (user_id, room_id) do nothing",
+                userId, roomId, now.toString()) > 0;
+    }
+
+    public int deleteAlarm(long userId, long roomId) {
+        return dsl.execute("delete from room_alarm where user_id = ? and room_id = ?", userId, roomId);
     }
 
     /** 초대 코드로 방 행을 잠그고 읽는다 */

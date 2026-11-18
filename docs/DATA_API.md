@@ -15,7 +15,7 @@
 
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했다. 입장·나가기·보관 동의, 공유방 대화·읽음·가져오기, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의도 같은 패키지에 있다. 공유방 대화·읽음·가져오기, 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
@@ -174,10 +174,10 @@
 |---|---|---|
 | POST | `/rooms` | 모닥불 피우기(개설). body `{kind, isbn?, title?, visibility(베타는 `INVITE`만, #41), maxParticipants(2~10), openAt (생략하면 지금), hours(1~7), bookId?}`. 개설자는 자동으로 참여자가 된다. 한 사용자가 동시에 열 수 있는 방(`SCHEDULED`·`OPEN`, 시각으로 계산)은 2개(`ROOM_LIMIT_LIVE`), 하루(한국 시간)에 개설할 수 있는 방은 3개(`ROOM_LIMIT_DAILY`, 취소해도 센다: `room_open_log`), 넘으면 409. **구현(`RoomController.create`)**: 201과 마을 게시판과 같은 방 한 줄(`inviteCode` 포함). `kind`는 `SAME`/`OWN`, `maxParticipants`·`hours`는 정수만(아니면 400), `visibility`는 생략 또는 `INVITE`(`PUBLIC`은 400), `OWN`이면 `isbn`은 무시하고 비운다. `bookId`는 내 책이어야 하고(없으면 404) `SAME`이면 그 책의 ISBN이 방의 `isbn`과 같아야 한다(400). 방 이름은 최대 100자이고 비우면 자동(`『책』 같이 읽기`는 `bookId` 책의 제목을 쓰고 없으면 `같이 읽기`, 각자 읽기는 `닉네임의 모닥불`). 초대 코드는 서버가 8자리(`I O 0 1` 제외)로 만든다 시간이 다 되면 서버가 방을 `CLOSED`로 바꾼다. `SAME`인데 `isbn`이 없으면 400. `openAt`이 지금보다 앞서면 400 |
 | GET | `/rooms/invite/{code}` | 초대 링크 미리보기 (방 이름, 종류, 책, 개설자 닉네임, 현재/최대 인원, 기간). 로그인 전에도 보여 준다. **구현**: `X-User-Id` 없이 열리고(`UserIdFilter` 예외, GET만) 코드는 대소문자를 가리지 않는다. 응답 `{title, kind, isbn, bookTitle, status, ownerNickname, participants, maxParticipants, openAt, closeAt, closedAt}`(방 id·초대 코드·참여자 목록은 없다). 종료된 방은 `status`가 `CLOSED`로 보이고, 없거나(취소 포함) 보관 7일이 지난 방은 404 |
-| POST | `/rooms/join` | body `{code, bookId?}`. 정원이 차면 409, 이미 참여 중이면 200 (멱등), 종료된 방이면 410 |
+| POST | `/rooms/join` | body `{code, bookId?}`. 정원이 차면 409, 이미 참여 중이면 200 (멱등), 종료된 방이면 410. **구현**: 새로 들어오면 201, 응답은 방 한 줄(게시판과 같은 모양, `inviteCode`는 개설자에게만). 코드는 대소문자·앞뒤 공백을 가리지 않고, 없는(취소 포함) 코드는 404, 비어 있으면 400. 예정(`SCHEDULED`) 방도 들어올 수 있다. 정원 검사는 방 행을 잠가 동시에 와도 넘지 않는다(`ROOM_FULL`). 종료(일찍 끝냄·시간 지남)는 `ROOM_CLOSED` 410. `bookId`는 내 책이어야 하고(404) 같은 책 방이면 방의 `isbn`과 같아야 한다(400, 책은 없어도 된다). 나갔다 다시 들어오면 같은 행을 되살리고 `left_at`·`agreed_at`을 비운다(동의를 다시 받는다). 정원이 찼으면 다시 들어올 수 없다 |
 | POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관. **구현**: 응답 `{id, result(CANCELED/CLOSED), closedAt}`. 개설자가 아니면 403(`NOT_OWNER`), 없으면 404, 이미 끝난 방(일찍 끝냄·시간 지남)은 409(`ROOM_ALREADY_CLOSED`). 취소해도 `room_open_log`는 남는다 |
-| DELETE | `/rooms/{id}/participants/me` | 방 나가기. 내 글은 남고 익명("나간 참여자")으로 내려간다. 개설자는 나갈 수 없다(409) |
-| POST | `/rooms/{id}/agree` | 보관 동의 기록(`agreed_at`). 동의 전에는 글 목록을 내려주지 않는다 (403) |
+| DELETE | `/rooms/{id}/participants/me` | 방 나가기. 내 글은 남고 익명("나간 참여자")으로 내려간다. 개설자는 나갈 수 없다(409). **구현**: 204, 개설자 `OWNER_CANNOT_LEAVE` 409, 방이 없거나 참여 중이 아니면(이미 나간 경우 포함) 404. 행은 지우지 않고 `left_at`만 기록한다 |
+| POST | `/rooms/{id}/agree` | 보관 동의 기록(`agreed_at`). 동의 전에는 글 목록을 내려주지 않는다 (403). **구현**: 응답 `{roomId, agreedAt}`. 참여 중인 사람만(아니면 403, 나간 사람 포함), 방이 없으면 404, 다시 눌러도 처음 동의한 시각을 그대로 돌려준다 |
 | GET | `/rooms/{id}/messages?after=` | 글 목록. 삭제하지 않은 글은 모두 내려준다(쪽수 잠금은 #43으로 없어졌다). 다른 사람의 진행 퍼센트는 내려주지 않는다 |
 | POST | `/rooms/{id}/messages` | 글 보내기. body `{content, page?}` (1~300자). 사용자당 5초에 1건(넘으면 429). `OPEN` 방과 내가 참여 중인 방만 |
 | ~~DELETE~~ | ~~`/rooms/{id}/messages/{mid}`~~ | 폐지 (#53). 보낸 글은 삭제·수정하지 않는다 |
@@ -223,3 +223,15 @@ document.addEventListener('visibilitychange', () => document.visibilityState ===
 window.addEventListener('pageshow', sync);
 sync();
 ```
+
+## 공유방 다음 단계 메모 (대화·읽음, 2026-11-18)
+
+1단계(개설·미리보기·닫기)와 2단계(입장·나가기·보관 동의)는 `room` 패키지에 구현됐다. 아래는 3단계(대화)를 만들 때 이어 쓸 점이다. 아직 코드는 없다.
+
+- **테이블 `room_message`가 아직 없다.** `V10__room_message.sql`로 만든다: `id bigserial, room_id → shared_room(id) ON DELETE CASCADE, user_id → app_user(id), content varchar(300) NOT NULL(비어 있지 않게 CHECK), page integer CHECK 1~9999 NULL 허용, created_at timestamptz`. 인덱스 `(room_id, id)`. 보낸 글은 삭제·수정하지 않으므로(#53) 수정·삭제 API와 `updated_at`은 두지 않는다. 나간 사람의 글도 남기므로(#38) `user_id`는 지우지 않고, 나간 사람은 응답에서 익명("나간 참여자")으로 내려간다(`room_participant.left_at`으로 판단). `app_user` 삭제 때의 처리(글을 지울지 익명으로 둘지)는 정해 두지 않았다.
+- **글 목록 `GET /rooms/{id}/messages?after=`**: 동의(`room_participant.agreed_at`)가 없으면 403, 참여 중이 아니면 403, 방이 없으면 404. 종료된 방도 보관 7일(`BoardService.view`가 null을 주는 시점) 동안은 읽기 전용으로 내려간다. 다른 사람의 진행 퍼센트는 내려주지 않는다. `after`는 마지막으로 본 글 id(오래된 순)로 하자고 제안한다(광장은 시각 `since`를 쓰지만 방 글은 id가 순서를 보장한다).
+- **글 보내기 `POST /rooms/{id}/messages`**: 1~300자(코드포인트 기준, 광장과 같다), 사용자당 5초에 1건(429, `PlazaService.send`의 `lockSender`·`COOLDOWN` 방식을 따른다. 광장과 따로 센다), `OPEN` 방(시각으로 계산)과 참여 중인 사람만. 아직 열리지 않은 방(`SCHEDULED`)과 종료된 방은 보낼 수 없다(상태 코드는 409 또는 410을 정해야 한다 — 입장은 종료를 410으로 했다). 동의 전에도 보낼 수 없다(403). `page`는 같은 책 방에서만 의미가 있고, 각자 읽기에서는 무시할지 400으로 할지 정해야 한다.
+- **읽음 `POST /rooms/{id}/read`**: `room_participant.last_read_at`에 서버 시각을 저장한다(테이블 컬럼은 V8에 이미 있다). 새 글 별(✦)은 "내 글이 아닌 글 중 `created_at > last_read_at`"으로 계산한다. 게시판 응답 `RoomResponse`에 `unread`(불리언)를 더할지는 3단계에서 정한다(`GET /rooms` 계약 변경이라 이 문서와 결정 번호를 같이 고쳐야 한다).
+- **재입장과 동의**: 나갔다 다시 들어오면 `agreed_at`이 비워진다(2단계 결정). 대화 API는 매번 `agreed_at`을 보고 403을 주므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다.
+- **모닥불 시간(`reading_session`, `source=CAMP`, `room_id`)**은 대화 단계가 아니라 별도 작업이다. 개방·종료 배치(`SCHEDULED`→`OPEN` 푸시, `close_at` 지난 방의 `status` 갱신, `closed_at + 7일` 하드 삭제)와 가져오기 `POST /rooms/{id}/import`도 이번 범위 밖이다. 하드 삭제 배치는 삭제 순서를 `room_message` → `room_participant` → `shared_room`로 둔다(`ON DELETE CASCADE`가 이미 걸려 있다). `room_open_log`는 방을 지워도 남겨야 하므로 이 배치가 지우지 않는다.
+- **테스트 요령**: `ApiTestBase`가 `TestClock`(기준 `2026-11-17T03:00:00Z`)과 `truncate app_user ... cascade`를 쓰므로 새 테이블도 `app_user`에서 외래키로 이어지면 자동으로 비워진다. 방은 `RoomOpenTest`·`RoomJoinTest`의 `open(...)`처럼 API로 열면 규칙이 그대로 지켜진다.

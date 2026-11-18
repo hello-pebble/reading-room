@@ -92,4 +92,35 @@ public class RoomRepository {
                 + "join shared_room s on s.id = p.room_id where p.room_id = ? and p.user_id = s.created_by", roomId);
         return r == null ? null : r.get("title", String.class);
     }
+
+    /** 초대 코드로 방 행을 잠그고 읽는다 */
+    public Record lockByCode(String code) {
+        return dsl.fetchOne("select * from shared_room where invite_code = ? for update", code);
+    }
+
+    /** 나간 참여도 행이 남아 있다(left_at). 없으면 null */
+    public Record participant(long roomId, long userId) {
+        return dsl.fetchOne("select * from room_participant where room_id = ? and user_id = ?", roomId, userId);
+    }
+
+    public int countParticipants(long roomId) {
+        return dsl.fetchOne("select count(*) as n from room_participant where room_id = ? and left_at is null", roomId).get("n", Integer.class);
+    }
+
+    /** 나갔다 다시 들어온다: 새 참여처럼 동의는 다시 받는다(agreed_at 비움). 읽은 시각은 남긴다. */
+    public void rejoin(long roomId, long userId, Long bookId, Instant now) {
+        dsl.execute("update room_participant set left_at = null, agreed_at = null, book_id = ?, joined_at = ?::timestamptz where room_id = ? and user_id = ?",
+                bookId, now.toString(), roomId, userId);
+    }
+
+    public int leave(long roomId, long userId, Instant now) {
+        return dsl.execute("update room_participant set left_at = ?::timestamptz where room_id = ? and user_id = ? and left_at is null", now.toString(), roomId, userId);
+    }
+
+    /** 처음 동의한 시각을 지키고 돌려준다. 나간 참여자는 건드리지 않아 null */
+    public Instant agree(long roomId, long userId, Instant now) {
+        Record r = dsl.fetchOne("update room_participant set agreed_at = coalesce(agreed_at, ?::timestamptz) "
+                + "where room_id = ? and user_id = ? and left_at is null returning agreed_at", now.toString(), roomId, userId);
+        return r == null ? null : kr.readingroom.app.common.Db.instant(r, "agreed_at");
+    }
 }

@@ -12,9 +12,11 @@ import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.ClockConfig;
 import kr.readingroom.app.common.Db;
 import kr.readingroom.app.common.RequestJson;
+import kr.readingroom.app.room.dto.AgreeResponse;
 import kr.readingroom.app.room.dto.CloseRoomResponse;
 import kr.readingroom.app.room.dto.CreateRoomRequest;
 import kr.readingroom.app.room.dto.InvitePreviewResponse;
+import kr.readingroom.app.room.dto.JoinRoomRequest;
 import kr.readingroom.app.village.BoardService;
 import kr.readingroom.app.village.dto.RoomResponse;
 import org.jooq.Record;
@@ -23,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 공유방(모닥불) 개설·초대 미리보기·닫기. 상태는 저장값이 아니라 시각으로 계산한다(BoardService.state).
+ * 공유방(모닥불) 개설·초대 미리보기·닫기·입장·나가기·보관 동의. 상태는 저장값이 아니라 시각으로 계산한다(BoardService.state).
  * 규칙: 진행 1~7시간, 최대 2~10명, 초대 코드로만 입장, 동시 2개·하루 3번 (결정 #32·#41·#53·#54).
  */
 @Service
@@ -113,6 +115,59 @@ public class RoomService {
         }
         rooms.close(roomId, now);
         return new CloseRoomResponse(roomId, "CLOSED", now);
+    }
+
+    /** 입장 결과: created가 false면 이미 참여 중이라 아무것도 바꾸지 않았다(멱등, 200) */
+    public record Joined(RoomResponse room, boolean created) {}
+
+    /** 초대 코드로 입장. 정원 409, 이미 참여 중 200(멱등), 종료된 방 410, 나갔다 다시 들어오는 것은 허용한다. */
+    @Transactional
+    public Joined join(long userId, JoinRoomRequest body) {
+        String code = normalize(body.code());
+        if (code.isEmpty()) throw bad("CODE_REQUIRED", "초대 코드가 필요해요");
+        Record room = rooms.lockByCode(code);                       // 같은 방의 동시 입장을 한 줄로 세운다(정원 검사)
+        if (room == null) throw notFound();
+        long roomId = room.get("id", Long.class);
+        Instant now = clock.instant();
+        Instant closeAt = Db.instant(room, "close_at"), closedAt = Db.instant(room, "closed_at");
+        if (BoardService.state(Db.instant(room, "open_at"), closeAt, closedAt, now).equals("CLOSED"))
+            throw new ApiException(HttpStatus.GONE, "ROOM_CLOSED", "이미 끝난 모닥불이에요");
+        Record me = rooms.participant(roomId, userId);
+        boolean rejoin = me != null;
+        if (rejoin && me.get("left_at") == null) return new Joined(BoardService.view(rooms.view(roomId, userId), userId, now), false);
+
+        Long bookId = RequestJson.present(body.bookId()) ? idField(body.bookId()) : null;
+        if (bookId != null) {
+            Record book = rooms.findOwnedBook(bookId, userId);
+            if (book == null) throw new ApiException(HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND", "내 책을 찾을 수 없어요");
+            String isbn = room.get("isbn", String.class);
+            if (room.get("kind", String.class).equals("SAME") && !isbn.equals(book.get("isbn", String.class)))
+                throw bad("BOOK_MISMATCH", "고른 책이 방의 책과 달라요");
+        }
+        if (rooms.countParticipants(roomId) >= room.get("max_participants", Integer.class))
+            throw new ApiException(HttpStatus.CONFLICT, "ROOM_FULL", "정원이 찼어요");
+        if (rejoin) rooms.rejoin(roomId, userId, bookId, now);
+        else rooms.insertParticipant(roomId, userId, bookId, now);
+        return new Joined(BoardService.view(rooms.view(roomId, userId), userId, now), true);
+    }
+
+    /** 방 나가기. 개설자는 나갈 수 없다(닫기를 쓴다). 내 글은 남는다(결정 #38). */
+    @Transactional
+    public void leave(long userId, long roomId) {
+        Record room = rooms.lock(roomId);
+        if (room == null) throw notFound();
+        if (room.get("created_by", Long.class) == userId)
+            throw new ApiException(HttpStatus.CONFLICT, "OWNER_CANNOT_LEAVE", "방을 연 사람은 나갈 수 없어요. 모닥불을 닫아 주세요");
+        if (rooms.leave(roomId, userId, clock.instant()) == 0) throw new ApiException(HttpStatus.NOT_FOUND, "NOT_PARTICIPANT", "참여 중인 모닥불이 아니에요");
+    }
+
+    /** 보관 동의 기록. 참여 중인 사람만(403). 이미 동의했으면 처음 시각을 그대로 돌려준다. */
+    @Transactional
+    public AgreeResponse agree(long userId, long roomId) {
+        if (rooms.lock(roomId) == null) throw notFound();
+        Instant at = rooms.agree(roomId, userId, clock.instant());
+        if (at == null) throw new ApiException(HttpStatus.FORBIDDEN, "NOT_PARTICIPANT", "참여 중인 사람만 동의할 수 있어요");
+        return new AgreeResponse(roomId, at);
     }
 
     static String normalize(String code) {

@@ -203,6 +203,21 @@ test('공유방 가져오기: 내 책에 없으면 "나중에 읽을 책"에 담
   fin(a);
 });
 
+test('공유방 스포 안내: 안 읽은 책이면 대화는 전부 보이고 띠에서 "나중에 읽을 책"에 담을 수 있다 (#43)', () => {
+  const a = load();
+  const mk = (id, book) => `{id:'${id}',kind:'OPEN',title:'방${id}',book:'${book}',author:'저자',rtype:'SAME',agreed:true,people:2,max:8,members:['@가'],owner:'@가',messages:[{id:'m${id}',who:'@가',text:'결말이 놀라워요',page:300,ts:Date.now()}],period:'11.01 ~ 11.08'}`;
+  a.ev(`S.news=[${mk('o1', '미지의책')},${mk('o2', '아몬드')}];S.news.forEach(rcNorm)`);
+  assert.equal(a.ev(`rcSpoil(S.news[0])`), true, '안 읽은 책은 스포 안내');
+  assert.equal(a.ev(`rcSpoil(S.news[1])`), false, '다 읽은 책은 안내가 없어요');
+  a.ev(`panelOpen='room:o1';panelView={};renderPanel()`);
+  assert.ok(a.ev(`document.querySelector('#panel .rspoil.bar')`), '대화 위에 스포 띠');
+  assert.ok(a.ev(`document.getElementById('rcLog').textContent.includes('결말이 놀라워요')`), '쪽수가 앞서도 글은 가려지지 않아요');
+  a.click('#panel [data-act=rcLater]');
+  assert.deepEqual(a.state().later.map(b => b.title), ['미지의책']);
+  assert.ok(a.ev(`document.querySelector('#panel .rspoil.bar').textContent.includes('담았어요')`));
+  fin(a);
+});
+
 test('나중에 읽을 책: 소파에 올리면 목록에서 빠지고 공유방 기록이 따라와 완독 후 책장에 남는다', () => {
   const a = load();
   a.ev(`S.news=[${room('c1', '미지의책', '저자', '안녕')}];openF('window')`);

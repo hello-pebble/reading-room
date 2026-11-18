@@ -422,12 +422,17 @@ function createScene(){
   campFire.add(mesh(new THREE.ConeGeometry(.27,.87,12),new THREE.MeshBasicMaterial({color:'#ffd675'}),[0,.47,0]));
   const glow=new THREE.PointLight(0xffa94c,2.4,8);glow.position.set(0,1.25,0);campG.add(glow);
   const spots=Array.from({length:6},(_,i)=>{const a=(i/6+.08)*Math.PI*2;return [Math.cos(a)*2.55,Math.sin(a)*2.55]});
+  // 의자 6개(하나는 내 자리) + 뒤쪽 빈터에 서 있는 자리 4개 = 최대 10명. 먼저 의자를 채우고 넘치면 서서 듣는다
+  const stand=[160,195,230,265].map(d=>[Math.cos(d*Math.PI/180)*4.2,Math.sin(d*Math.PI/180)*4.2]);
+  const seats=[];
   spots.forEach(([x,z],i)=>{
-   const seat=mesh(new THREE.CylinderGeometry(.62,.68,.38,12),mat(i%2?'#8c6547':'#9a734f',.9),[x,.14,z]);campG.add(seat);
-   if(i===3)return;
-   const j=i>3?i-1:i,name=n.members[j]||NPCS[j%NPCS.length].name;
-   const av=NPCS[j%NPCS.length].av,g=build(av);g.root.scale.setScalar(.8);campG.add(g.root);
-   campGuests.push({M:g,x,z,rot:Math.atan2(-x,-z),ph:i*.7});addLabel(esc(name.startsWith('@')?name:'@'+name)+esc(rcBookTag(n,name.replace(/^@/,''))),x,2.45,z);
+   campG.add(mesh(new THREE.CylinderGeometry(.62,.68,.38,12),mat(i%2?'#8c6547':'#9a734f',.9),[x,.14,z]));
+   if(i!==3)seats.push([x,z,1]);
+  });
+  const others=Math.min(9,Math.max(0,(n.people||1)-1));
+  [...seats,...stand.map(([x,z])=>[x,z,0])].slice(0,others).forEach(([x,z,sit],k)=>{
+   const name=n.members[k]||NPCS[k%NPCS.length].name,av=NPCS[k%NPCS.length].av,g=build(av);g.root.scale.setScalar(.8);campG.add(g.root);
+   campGuests.push({M:g,x,z,rot:Math.atan2(-x,-z),ph:k*.7,sit});addLabel(esc(name.startsWith('@')?name:'@'+name)+esc(rcBookTag(n,name.replace(/^@/,''))),x,sit?2.45:2.3,z);
   });
   for(let i=0;i<9;i++){const a=i/9*Math.PI*2,rad=5.3+(i%3)*.6,x=Math.cos(a)*rad,z=Math.sin(a)*rad;
    if(x+z>1)continue;
@@ -525,7 +530,7 @@ function createScene(){
    vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:vilNpcs[b.i]&&vilNpcs[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+3.3,p.z);return true});
   }else if(view==='shared'){
    const t=now/1000;if(campFire)campFire.scale.set(1+.05*Math.sin(t*8),1+.1*Math.sin(t*9),1+.05*Math.cos(t*7));
-   campGuests.forEach(g=>applyPose(g.M,{x:g.x,y:.18,z:g.z,rot:g.rot,t:t+g.ph,mv:0,sit:1}));
+   campGuests.forEach(g=>applyPose(g.M,{x:g.x,y:g.sit?.18:0,z:g.z,rot:g.rot,t:t+g.ph,mv:0,sit:g.sit}));
    vilLabels.forEach(l=>place(l.el,l.x,l.y,l.z));
    vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:campGuests[b.i]&&campGuests[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+(b.i<0?2.5:2.45),p.z,b.i<0?-22:-25);return true});   // 모닥불 장면의 말풍선: 이름표와 같은 기준점에서 위로 띄운다(내 이름표는 낮아서 22px, 참여자는 25px). 이름표 위 간격이 화면 크기와 상관없이 약 6px로 일정. 월드 높이로 띄우면 큰 화면(PC)에서 캐릭터와 멀어진다 (i=-1 나, 0~ 앉은 참여자)
   }

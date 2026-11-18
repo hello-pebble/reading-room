@@ -1,21 +1,35 @@
 // 공유방: 모닥불 장면·개설·초대·대화·참여자·가져오기.
 // 대화 버튼은 rcAct(), 나머지는 sharedRoomAction(), 초기 연결은 bindSharedRoomEvents().
 
-const RMAX=20;  // 공유방 최대 인원 (결정 #41)
+const RMAX=10;  // 공유방 최대 인원: 의자 6 + 서 있는 자리 4 (결정 #54, #41의 20명을 대체)
 
 const PUBLIC_ROOMS=false; // 베타는 초대만 (결정 #41, 열린 결정 M ②). 켜면 개설 창에 "마을에 공개" 선택지가 다시 나온다
 
 const shortTitle=n=>String(n.title||n.book||'').replace(/[『』]/g,'').replace(/\s*(같이 읽기|이야기방)\s*$/,'').trim();
+const HOUR=36e5,sameDay=(a,b)=>mmdd(a)===mmdd(b);
+const clockEnd=t=>(sameDay(t,Date.now())?'':mmdd(t)+' ')+fmtClock(t);   // 오늘 끝나면 시각만, 다른 날이면 날짜도
+const timeRange=(a,b)=>mmdd(a)+' '+fmtClock(a)+' ~ '+(sameDay(a,b)?'':mmdd(b)+' ')+fmtClock(b);
 const roomLeft=n=>n.deleteAt?Math.max(0,Math.ceil((n.deleteAt-Date.now())/DAY)):0;
 const roomSub=n=>{
  if(n.kind==='CLOSED'&&n.deleteAt)return (n.done?'가져옴 · ':'')+'가져오기 마감 D-'+roomLeft(n);
- if(n.mine&&n.kind==='SOON')return mmdd(n.opensAt)+' 개방 · '+n.people+'/'+n.max+'명';
- if(n.mine&&n.kind==='OPEN')return mmdd(n.closesAt)+' 종료 · '+n.people+'/'+n.max+'명 참여 중';
+ if(n.mine&&n.kind==='SOON')return mmdd(n.opensAt)+' '+fmtClock(n.opensAt)+' 개방 · '+n.people+'/'+n.max+'명';
+ if(n.mine&&n.kind==='OPEN')return clockEnd(n.closesAt)+' 종료 · '+n.people+'/'+n.max+'명 참여 중';
  return n.sub};
 
+let campSince=0;
+// 모닥불 장면에 머문 시간은 오늘 읽은 시간에 더한다. 스탠드 기록과 겹치는 구간은 한 번만 센다
+function recordCampTime(n,end){
+ const a=campSince;campSince=0;if(!a)return 0;
+ end=Math.min(end,n&&n.closesAt?n.closesAt:end);
+ let ms=Math.max(0,end-a);
+ const ov=(s,e)=>Math.max(0,Math.min(e,end)-Math.max(s,a));
+ S.sessions.forEach(x=>{ms-=ov(x.startedAt,x.endedAt||x.startedAt)});if(S.session)ms-=ov(S.session.startedAt,end);
+ const min=Math.floor(Math.max(0,ms)/60000);if(min<1)return 0;
+ S.sessions.push({id:end,bookId:S.reading?S.reading.id:null,startedAt:end-min*60000,endedAt:end,minutes:min,source:'CAMP',roomId:n?n.id:null});save();return min;
+}
 function enterCamp(n){
  if(!n||n.kind!=='OPEN'||!n.agreed||VIEW!=='village')return;
- CAMP_ID=n.id;VIEW='shared';const i=Math.max(0,vilOrder().findIndex(x=>x.id===n.id)),[x,z]=VSLOTS[Math.min(i,VSLOTS.length-1)];
+ CAMP_ID=n.id;campSince=Date.now();VIEW='shared';const i=Math.max(0,vilOrder().findIndex(x=>x.id===n.id)),[x,z]=VSLOTS[Math.min(i,VSLOTS.length-1)];
  Object.assign(sim,{x:-2.24,z:-1.28,y:.18,rot:Math.atan2(2.24,1.28),mode:'sit',sit:1,mv:0,after:null});
  const w=document.getElementById('stageWrap');w.classList.add('camp');w.appendChild(backdrop);backdrop.classList.add('camp');panel.setAttribute('aria-modal','false');
  
@@ -23,8 +37,17 @@ document.getElementById('campChatToggle').textContent='💬 대화 열기';
  if(G3)G3.setView('shared',n);buildSr();render();
  if(panelOpen)renderPanel();   // 장면이 바뀐 뒤 다시 그려야 대화창이 모닥불 장면용(대화만, 탭 없음)으로 나온다
 }
+// 시간이 다 돼서 모닥불이 꺼지면 장면에 있던 사람을 광장으로 보낸다
+function endCampToPlaza(min){
+ closePanel();CAMP_ID=null;VIEW='village';
+ Object.assign(sim,{x:PLAZA.cx,z:PLAZA.cz+2.3,y:0,mode:'idle',sit:0,mv:0,rot:Math.PI/4,after:null});
+ document.getElementById('stageWrap').classList.remove('camp','min');backdrop.classList.remove('camp','min');document.body.appendChild(backdrop);panel.setAttribute('aria-modal','true');
+ if(G3)G3.setView('village');buildSr();render();
+ toast('모닥불이 꺼졌어요. 광장으로 돌아왔어요'+(min?' · '+min+'분을 읽은 시간에 더했어요':''));
+}
 function leaveCamp(){
  if(VIEW!=='shared')return;
+ recordCampTime(S.news.find(x=>x.id===CAMP_ID),Date.now());
  const i=Math.max(0,vilOrder().findIndex(x=>x.id===CAMP_ID)),[x,z]=VSLOTS[Math.min(i,VSLOTS.length-1)];
  CAMP_ID=null;VIEW='village';Object.assign(sim,{x:x+.9,z:z+.9,y:0,mode:'idle',sit:0,mv:0,rot:Math.PI/4,after:null});
  document.getElementById('stageWrap').classList.remove('camp','min');backdrop.classList.remove('camp','min');document.body.appendChild(backdrop);panel.setAttribute('aria-modal','true');
@@ -58,7 +81,7 @@ function roomCard(n,noAct,hideTitle){
 }
 
 // ===== 모닥불 피우기 (공유방 개설) =====
-const RDEF=()=>({kind:'SAME',bookSel:S.reading?'sofa':'',bookTitle:'',name:'',start:'now',when:'',days:7,vis:'invite',max:8});
+const RDEF=()=>({kind:'SAME',bookSel:S.reading?'sofa':'',bookTitle:'',name:'',start:'now',when:'',hours:3,vis:'invite',max:8});
 const nfBook=nf=>{
  if(nf.bookSel==='sofa'&&S.reading){const r=S.reading;return {title:r.title,author:r.author,cover:r.cover||'',isbn:r.isbn||''}}
  if(nf.bookSel&&nf.bookSel.startsWith('shelf:')){const b=S.finished[+nf.bookSel.slice(6)];return b?{title:b.title,author:b.author,cover:b.cover||'',isbn:b.isbn||''}:null}
@@ -102,7 +125,7 @@ const rcMembersOf=(n,c)=>{const o=rcHash(n.id)%NAMEPOOL.length;return Array.from
 function rcNorm(n){
  if(!n.rtype)n.rtype='SAME';
  if(!n.book)n.book=shortTitle(n);
- if(!n.max||n.max>RMAX)n.max=RMAX;   // 방 최대 인원은 20명까지 (예전에 더 크게 만든 방도 맞춘다)
+ if(!n.max||n.max>RMAX)n.max=RMAX;   // 방 최대 인원은 10명까지 (예전에 더 크게 만든 방도 맞춘다)
  if(!n.people){const m=/(\d+)명/.exec(n.sub||'');n.people=m?+m[1]:n.mine?1:n.kind==='CLOSED'?3:12}
  if(!n.inviteCode)n.inviteCode=genCode();
  if(!n.members)n.members=n.mine?[]:rcMembersOf(n,n.people-1);
@@ -117,7 +140,8 @@ function rcNorm(n){
 // 모닥불 장면에 있을 때 글을 보내거나 받으면 그 사람 머리 위에 말풍선을 띄운다.
 function campBubble(n,m){
  if(VIEW!=='shared'||CAMP_ID!==n.id||!G3||m.del)return;
- const i=rcMine(m)?-1:Math.max(0,n.members.indexOf(m.who))%5,t=m.text.length>40?m.text.slice(0,40)+'…':m.text;
+ const i=rcMine(m)?-1:n.members.indexOf(m.who);if(i>8||(i<0&&!rcMine(m)))return;   // 화면에는 나를 뺀 최대 9명만 있다
+ const t=m.text.length>40?m.text.slice(0,40)+'…':m.text;
  G3.say(i,t)}
 function rcFakeMsg(n){
  if(!n.members.length)return;const who=n.members[Math.floor(Math.random()*n.members.length)],p=myPos(n).page;let page=null;
@@ -140,10 +164,9 @@ function rcLogHtml(n){
   if(!div&&newN&&!m.del&&!rcMine(m)&&m.ts>panelView.readAt){out+=`<div class="rnew" id="rcNew">새 글 ${newN}개</div>`;div=true}
   if(m.del){out+=`<div class="rm del">삭제된 글</div>`;return}
   const mine=rcMine(m);
-  const ask=panelView.delAsk===m.id;
-  out+=`<div class="rm${mine?' me':''}"><div class="rm-h"><i style="background:${rcColor(m.left?'나간':m.who)}"></i><b>${esc(rcName(m))}</b>${m.who===n.owner&&!m.left?CROWN:''}${m.page!=null?`<span class="pg">${m.page}쪽</span>`:''}<time>${hhmm(m.ts)}</time>${mine&&n.kind==='OPEN'&&!ask?`<button class="rm-x" data-act="rcDelAsk" data-id="${m.id}" aria-label="내 글 메뉴">⋯</button>`:''}</div>`
+  out+=`<div class="rm${mine?' me':''}"><div class="rm-h"><i style="background:${rcColor(m.left?'나간':m.who)}"></i><b>${esc(rcName(m))}</b>${m.who===n.owner&&!m.left?CROWN:''}${m.page!=null?`<span class="pg">${m.page}쪽</span>`:''}<time>${hhmm(m.ts)}</time></div>`
    +`<div class="rm-t">${esc(m.text)}</div>`
-   +(ask?`<div class="row" style="margin-top:6px"><span class="muted grow">이 글을 삭제할까요?</span><button data-act="rcDelNo">취소</button><button data-act="rcDelYes" data-id="${m.id}" style="color:var(--danger)">삭제</button></div>`:'')+`</div>`});
+   +`</div>`});
  return out}
 function rcRefresh(n,force){const lg=document.getElementById('rcLog');if(!lg)return;
  const atBottom=lg.scrollHeight-lg.scrollTop-lg.clientHeight<40;lg.innerHTML=rcLogHtml(n);
@@ -194,7 +217,7 @@ function roomPanel(id){
   return head(t)+roomCard(n,true,true)+`<div class="card"><b>들어가기 전에</b><p style="margin:6px 0 0">이 방의 글은 종료 후 7일 뒤에 사라져요. 내 서재로 가져가면 다른 사람 이름은 '참여자 A'처럼 바뀌어요.</p>${rcSpoil(n)?'<p class="rspoil">📖 아직 읽지 않은 책이에요. 대화에 줄거리나 결말이 나올 수 있어요. 들어가서 내용을 보고 "나중에 읽을 책"에 담을 수도 있어요.</p>':''}</div><div class="foot"><div class="row"><button class="grow" data-act="rcNo">취소</button><button class="primary grow" data-act="rcAgree" data-id="${n.id}">동의하고 들어가기</button></div></div>`}   // RC-03
  if(panelView.exitAsk)return head(t,true)+`<div class="card"><b>모닥불에서 나갈까요?</b><p style="margin:6px 0 0">마을로 돌아가요. 방에서 나가는 건 아니고, 대화는 그대로 남아요.</p></div><div class="foot"><div class="row"><button class="grow" data-act="campStay">계속 있기</button><button class="primary grow" data-act="campLeave">마을로 나가기</button></div></div>`;
  const tab=VIEW==='shared'?'chat':(panelView.tab||'chat');   // 모닥불 장면의 대화창은 항상 대화만 (참여자·방 정보는 별도 모달)
- const state=n.kind==='CLOSED'?'종료 · D-'+roomLeft(n):(n.closesAt?mmdd(n.closesAt)+' 종료':'진행 중');
+ const state=n.kind==='CLOSED'?'종료 · D-'+roomLeft(n):(n.closesAt?clockEnd(n.closesAt)+' 종료':'진행 중');
  const tabs=`<div class="seg rtabs">${[['chat','대화'],['members','참여자'],['info','방 정보']].map(([v,l])=>`<button data-act="rctab" data-v="${v}" class="${tab===v?'on':''}">${l}</button>`).join('')}</div>`;
  let body='';
  if(tab==='chat')body=rcBand(n)+rcSpoilBar(n)+`<div class="rlog" id="rcLog">${rcLogHtml(n)}</div><div style="text-align:center"><button class="rchip" id="rcDown" data-act="rcDown" style="display:none">↓ 맨 아래로</button></div>`+rcFoot(n);
@@ -216,15 +239,12 @@ function rcAct(act,b){
  if(act==='rcNo'){closePanel();return true}
  if(act==='rcAgree'){if(!n)return true;if(n.left&&n.people>=n.max){toast('정원이 가득 찼어요 ('+n.people+'/'+n.max+'명)');return true}
   if(n.left){n.people++;n.left=false}n.agreed=true;n.agreedAt=Date.now();save();panelView.readAt=n.lastRead||0;renderPanel();enterCamp(n);render();return true}
- if(act==='rctab'){panelView.tab=b.dataset.v;panelView.leaveAsk=false;panelView.delAsk=null;renderPanel();return true}
+ if(act==='rctab'){panelView.tab=b.dataset.v;panelView.leaveAsk=false;renderPanel();return true}
  if(act==='rcChip'){panelView.chipEdit=true;renderPanel();const i=document.getElementById('rcPg');if(i)i.focus();return true}
  if(act==='rcChipOk'){const v=Math.round(+document.getElementById('rcPg').value);panelView.pg=v>=1&&v<=9999?v:null;panelView.chipEdit=false;renderPanel();return true}
  if(act==='rcChipNone'){panelView.pg=null;panelView.chipEdit=false;renderPanel();return true}
  if(act==='rcSend'){if(n)rcSend(n);return true}
  if(act==='rcDown'){const lg=document.getElementById('rcLog');if(lg)lg.scrollTop=lg.scrollHeight;b.style.display='none';return true}
- if(act==='rcDelAsk'){panelView.delAsk=b.dataset.id;if(n)rcRefresh(n);return true}
- if(act==='rcDelNo'){panelView.delAsk=null;if(n)rcRefresh(n);return true}
- if(act==='rcDelYes'){if(!n)return true;const m=n.messages.find(x=>x.id===b.dataset.id);if(m&&rcMine(m)){m.del=true;m.text='';}panelView.delAsk=null;save();rcRefresh(n);return true}
  if(act==='rcLeaveAsk'){panelView.leaveAsk=true;renderPanel();return true}
  if(act==='rcLeaveNo'){panelView.leaveAsk=false;renderPanel();return true}
  if(act==='rcLeave'){if(!n)return true;n.messages.forEach(m=>{if(m.who==='나')m.left=true});n.agreed=false;n.left=true;n.people=Math.max(1,n.people-1);save();render();closePanel();toast('방에서 나왔어요. 내 글은 "나간 참여자"로 남아요');return true}
@@ -248,24 +268,28 @@ function createPanel(){
   <label for="rname">방 이름 (비우면 자동)</label><input id="rname" placeholder="${nf.kind==='SAME'?'책 이름으로 정해져요':esc(defaultRoomName(nf))}" value="${esc(nf.name)}">
   <label>시작</label>${seg('rstart',[['now','지금 바로'],['later','예약']],nf.start)}
   ${nf.start==='later'?`<input id="rwhen" type="datetime-local" value="${esc(nf.when)}" style="margin-top:6px">`:''}
-  <label>기간</label>${seg('rdays',[[3,'3일'],[7,'7일'],[14,'14일']],nf.days)}
+  <label>진행 시간</label>${seg('rhours',[1,2,3,4,5,6,7].map(h=>[h,h+'시간']),nf.hours)}<p class="muted" style="margin:6px 0 0">시간이 지나면 모닥불이 저절로 꺼지고 모두 광장으로 돌아가요. 방에서 이야기하며 읽는 시간은 오늘 읽은 시간에 더해져요.</p>
   ${PUBLIC_ROOMS?`<label>공개 범위</label>${seg('rvis',[['invite','초대 링크로만'],['public','마을에 공개']],nf.vis)}`:'<p class="muted" style="margin:10px 0 0">초대 링크로 부른 친구만 들어올 수 있어요.</p>'}
+  <p class="muted" style="margin:10px 0 0">오늘 개설 ${roomsMadeToday()}/3 · 동시에 2개까지</p>
   <label for="rmax">최대 인원</label><input id="rmax" type="number" min="2" max="${RMAX}" value="${nf.max}" style="width:100px">
   
   <div class="err" id="rerr"></div>
   <div class="foot" style="margin-top:14px"><button class="primary" data-act="rcreate" style="width:100%">모닥불 피우기</button></div>`;
 }
+const kstDay=t=>new Date(t).toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'});
+const roomsMadeToday=()=>S.roomLog.filter(t=>kstDay(t)===kstDay(Date.now())).length;   // 취소해도 세지 않고 쓴 횟수로 센다
 function createRoom(){
  const nf=panelView.nf,err=m=>{document.getElementById('rerr').textContent=m};
  const b=nfBook(nf),max=Math.round(+nf.max);
+ if(roomsMadeToday()>=3)return err('모닥불은 하루에 3번까지 피울 수 있어요. 내일 다시 피워 주세요');
  if(S.news.filter(n=>n.mine&&n.kind!=='CLOSED').length>=2)return err('동시에 열 수 있는 모닥불은 2개예요. 하나를 끝낸 뒤에 다시 피워 주세요');
  if(nf.kind==='SAME'&&!b)return err('함께 읽을 책을 골라 주세요');
  if(!(max>=2&&max<=RMAX))return err('최대 인원은 2~'+RMAX+'명이에요');
  const now=Date.now();let opens=now;
  if(nf.start==='later'){opens=new Date(nf.when).getTime();if(!(opens>now+60000))return err('시작 시각은 지금보다 뒤로 정해 주세요')}
- const name=(nf.name||'').trim()||defaultRoomName(nf),closes=opens+nf.days*DAY;
- const room={id:'r'+now,kind:opens<=now?'OPEN':'SOON',title:name,sub:'',book:b?b.title:'',author:b?b.author:'',cover:b?b.cover:'',isbn:b?b.isbn:'',rtype:nf.kind,mine:true,people:1,max,vis:nf.vis,inviteCode:genCode(),opensAt:opens,closesAt:closes,alarm:true,done:false,messages:[],period:mmdd(opens)+' ~ '+mmdd(closes)};
- rcNorm(room);S.news.push(room);save();panelView.created=room.id;render();renderPanel();buildSr();toast('모닥불을 피웠어요');
+ const name=(nf.name||'').trim()||defaultRoomName(nf),closes=opens+nf.hours*HOUR;
+ const room={id:'r'+now,kind:opens<=now?'OPEN':'SOON',title:name,sub:'',book:b?b.title:'',author:b?b.author:'',cover:b?b.cover:'',isbn:b?b.isbn:'',rtype:nf.kind,mine:true,people:1,max,vis:nf.vis,inviteCode:genCode(),opensAt:opens,closesAt:closes,alarm:true,done:false,messages:[],period:timeRange(opens,closes)};
+ rcNorm(room);S.news.push(room);S.roomLog.push(now);save();panelView.created=room.id;render();renderPanel();buildSr();toast('모닥불을 피웠어요');
 }
 async function copyLink(n){const link=inviteLink(n);try{await navigator.clipboard.writeText(link);toast('링크를 복사했어요')}catch(e){const i=document.getElementById('invLink');if(i){i.select();try{document.execCommand('copy');toast('링크를 복사했어요')}catch(_){toast('링크를 길게 눌러 복사해 주세요')}}}}
 function findByCode(c){c=String(c||'').trim();const m=/join=([A-Za-z0-9]+)/i.exec(c);if(m)c=m[1];c=c.toUpperCase();return S.news.find(n=>n.inviteCode===c)}
@@ -287,14 +311,14 @@ function sharedRoomAction(act,b){
  if(act==='joinLink'){joinByCode(document.getElementById('jl').value);return true}
  if(act==='rkind'){panelView.nf.kind=b.dataset.v;renderPanel();return true}
  if(act==='rstart'){panelView.nf.start=b.dataset.v;renderPanel();return true}
- if(act==='rdays'){panelView.nf.days=+b.dataset.v;renderPanel();return true}
+ if(act==='rhours'){panelView.nf.hours=+b.dataset.v;renderPanel();return true}
  if(act==='rvis'){panelView.nf.vis=b.dataset.v;renderPanel();return true}
  if(act==='rcreate'){createRoom();return true}
  if(act==='copyLink'){const n=S.news.find(x=>x.id===b.dataset.id);if(n){copyLink(n);b.classList.add('done');b.innerHTML=ICON_CHECK;setTimeout(()=>{b.classList.remove('done');b.innerHTML=ICON_COPY},1500)}return true}
  if(act==='shareLink'){const n=S.news.find(x=>x.id===b.dataset.id);if(n)navigator.share({title:'모닥불에 초대해요',text:n.title,url:inviteLink(n)}).catch(()=>{});return true}
  if(act==='friendIn'){const n=S.news.find(x=>x.id===b.dataset.id);if(!n)return true;if(n.people>=n.max){toast('정원이 가득 찼어요 ('+n.people+'/'+n.max+'명)');return true}n.people++;n.members.push(NAMEPOOL.find(x=>!n.members.includes(x))||'@친구');save();if(VIEW==='shared'&&G3)G3.setView('shared',n);render();renderPanel();toast('친구가 들어왔어요 ('+n.people+'/'+n.max+'명)');return true}
  if(act==='closeRoom'){const n=S.news.find(x=>x.id===b.dataset.id);if(!n)return true;
-  if(n.kind==='SOON'){S.news=S.news.filter(x=>x!==n);toast('모닥불을 취소했어요')}else{n.kind='CLOSED';n.closesAt=Date.now();n.deleteAt=Date.now()+7*DAY;toast('모닥불을 일찍 껐어요. 7일 뒤에 사라져요')}
+  if(n.kind==='SOON'){S.news=S.news.filter(x=>x!==n);toast('모닥불을 취소했어요')}else{n.kind='CLOSED';n.closesAt=Date.now();n.deleteAt=Date.now()+7*DAY;toast('모닥불을 일찍 껐어요. 마을 게시판에 7일 동안 남아요');if(VIEW==='shared'&&CAMP_ID===n.id){const m=recordCampTime(n,Date.now());endCampToPlaza(m)}}
   save();render();buildSr();closePanel();return true}
  if(act==='openNow'){const n=S.news.find(x=>x.id===b.dataset.id);n.opensAt=Date.now();fireDue();return true}
  if(act==='import'){const n=S.news.find(x=>x.id===b.dataset.id);if(rcEmpty(n)){toast('가져올 대화가 없어요');return true}if(!n.book){toast('이 방에는 내 책이 정해지지 않아서 가져올 곳이 없어요');return true}const rec={title:n.title,period:n.period,rtype:n.rtype,messages:rcSnapshot(n)};   // 다른 참여자는 익명, 삭제된 글은 뺀다
@@ -309,7 +333,9 @@ function sharedRoomAction(act,b){
 function fireSharedRoomsDue(){
  // 종료 후 7일이 지난 공유방은 사라진다 (가져온 기록은 내 서재에 남는다)
  // 내가 만든 모닥불은 기간이 끝나면 종료되고, 그때부터 7일 보관된다
- S.news.forEach(n=>{if(n.mine&&n.kind==='OPEN'&&n.closesAt&&Date.now()>=n.closesAt){n.kind='CLOSED';n.deleteAt=Date.now()+7*DAY;save();render();if(panelOpen&&panelOpen!=='plaza')renderPanel()}});
+ S.news.forEach(n=>{if(n.kind==='OPEN'&&n.closesAt&&Date.now()>=n.closesAt){n.kind='CLOSED';n.deleteAt=Date.now()+7*DAY;
+  if(VIEW==='shared'&&CAMP_ID===n.id){const m=recordCampTime(n,n.closesAt);campSince=0;endCampToPlaza(m)}
+  save();buildSr();render();if(panelOpen&&panelOpen!=='plaza')renderPanel()}});
  const nb=S.news.length;S.news=S.news.filter(n=>!(n.kind==='CLOSED'&&n.deleteAt&&Date.now()>=n.deleteAt));
  if(S.news.length!==nb){save();render();buildSr();if(panelOpen&&panelOpen!=='plaza')renderPanel()}
  S.news.forEach(n=>{if(n.kind==='SOON'&&n.opensAt&&Date.now()>=n.opensAt){
@@ -329,7 +355,7 @@ document.getElementById('campChatToggle').addEventListener('click',toggleCampCha
 
 // 배경의 ☁ 참여자 · 🌙 방 정보 버튼: 대화창은 그대로 두고 별도 모달로 연다 (모달의 ✕는 그 창만 닫는다). 같은 버튼을 다시 누르면 닫힌다
 document.getElementById('campSide').addEventListener('click',e=>{const b=e.target.closest('[data-camp]');if(!b||VIEW!=='shared')return;
- panelView.sheet=panelView.sheet===b.dataset.camp?null:b.dataset.camp;panelView.leaveAsk=false;panelView.delAsk=null;panelView.exitAsk=false;renderPanel()});
+ panelView.sheet=panelView.sheet===b.dataset.camp?null:b.dataset.camp;panelView.leaveAsk=false;panelView.exitAsk=false;renderPanel()});
 document.getElementById('campModal').addEventListener('click',e=>{if(e.target.id==='campModal'){panelView.sheet=null;renderPanel()}});
 
 panel.addEventListener('change',e=>{

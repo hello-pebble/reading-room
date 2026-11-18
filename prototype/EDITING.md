@@ -21,8 +21,9 @@
 | 마을로·참여자·방 정보 버튼, 대화창 | `shared-room.css` | `.camp-exit`, `.camp-side`, `.backdrop.camp`, `.rlog` |
 | 마을 광장 채팅·미니맵 | `village.css` | `#plazaChat`, `#minimap` |
 | 마을 이동·구역·이웃·게시판·광장 대화 | `village.js` | `VIL`, `PLAZA`, `NPCS`, `boardPanel`, `plazaSend` |
-| 공유방 개설·초대·대화·참여자·정보창 | `shared-room.js` | `createPanel`, `createRoom`, `joinByCode`, `roomPanel`, `rcMembersHtml`, `rcInfoHtml` |
+| 공유방 개설(시간·하루 3번)·초대·대화·참여자·정보창 | `shared-room.js` | `createPanel`, `createRoom`, `joinByCode`, `roomPanel`, `rcMembersHtml`, `rcInfoHtml` |
 | 공유방 버튼 동작·기록 가져오기 | `shared-room.js` | `rcAct`, `sharedRoomAction`, `rcSnapshot` |
+| 모닥불 진행 시간·하루 개설 횟수·자동 종료·장면 읽은 시간 | `shared-room.js` | `rhours`, `roomsMadeToday`, `fireSharedRoomsDue`, `recordCampTime`, `endCampToPlaza` |
 | 마을·모닥불 이름표와 말풍선 | `common.css` | `.vlab`, `.vbub` |
 | 이웃집 방문·추천 조건·확인 | `neighbor.js` | `NEIGHBORS`, `neighborShelfPanel`, `putRecommendation`, `neighborAction` |
 | 추천 책 카드·선택 목록 | `neighbor.css` | `.neighbor-choice`, `.neighbor-gift` |

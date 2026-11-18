@@ -15,7 +15,7 @@ const NPC_REPLY=['저도요!','오, 좋은데요','어떤 책이에요?','화이
 const VIL={X:36,Y:27,minX:1.2,minZ:3.4,start:[4.0,4.0],home:[4.0,3.8]}; // 걸어 다니는 큰 마을. 카메라가 유령을 따라간다
 
 // 모닥불 자리는 8개뿐이라 열린 방 → 곧 열릴 방 → 종료된 방 순으로 자리를 준다 (종료된 방은 게시판에는 계속 보인다)
-const vilOrder=()=>{const r={OPEN:0,SOON:1,CLOSED:2};return [...S.news].sort((a,b)=>r[a.kind]-r[b.kind])};
+const vilOrder=()=>[...S.news].filter(n=>n.kind!=='CLOSED').sort((a,b)=>(a.kind==='OPEN'?0:1)-(b.kind==='OPEN'?0:1));   // 종료된 방은 마을에 모닥불이 없고 게시판(지난 방)에만 7일 남는다
 const vilList=()=>vilOrder().map(n=>({unread:rcUnread(n),id:n.id,kind:n.kind,short:shortTitle(n),done:!!n.done,alarm:!!n.alarm,left:roomLeft(n),opens:n.opensAt?mmdd(n.opensAt):''}));
 function enterVillage(){
  if(VIEW==='village')return;closePanel();
@@ -47,19 +47,20 @@ function drawMini(){
  mctx.font='bold 20px sans-serif';mctx.textAlign='center';mctx.textBaseline='middle';mctx.fillStyle='#6b5f4c';
  txt('광장',PLAZA.cx,PLAZA.z1-1.6);
  vilOrder().slice(0,VSLOTS.length).forEach((n,i)=>dot(VSLOTS[i][0],VSLOTS[i][1],n.kind==='OPEN'?'#e8764a':n.kind==='SOON'?'#f3f0e8':(n.done?'#7aa7e0':'#6d665e'),5));
- if(S.news.length<VSLOTS.length){const s=VSLOTS[S.news.length];dot(s[0],s[1],'#f3f0e8',4.5,true)}
+ if(vilOrder().length<VSLOTS.length){const s=VSLOTS[vilOrder().length];dot(s[0],s[1],'#f3f0e8',4.5,true)}
  G3.npcs().forEach(([x,z])=>dot(x,z,'#5f9a5a',3));
  dot(sim.x,sim.z,'#3b3226',7);dot(sim.x,sim.z,'#ffd23f',4.6);
 }
 
 // 마을의 게시판·모닥불·내 방
-function vTarget(f){if(f==='board')return [PLAZA.x0+7.3,PLAZA.z0+.7];if(f==='plaza')return [PLAZA.cx,PLAZA.cz+2.3];const i=f==='fire:new'?S.news.length:Math.max(0,vilOrder().findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
+function vTarget(f){if(f==='board')return [PLAZA.x0+7.3,PLAZA.z0+.7];if(f==='plaza')return [PLAZA.cx,PLAZA.cz+2.3];const i=f==='fire:new'?vilOrder().length:Math.max(0,vilOrder().findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
 function openV(f){
  if(f.startsWith('neighbor:')){visitNeighbor(f.slice(9));return}
  if(f==='home'){closePanel();walkTo(VIL.home[0],VIL.home[1],()=>leaveVillage());return}
  if(f==='plaza'){closePanel();walkTo(...vTarget(f),()=>{if(canHover){const i=document.getElementById('pz');if(i&&pzShown)i.focus()}});return}   // 광장 단상을 누르면 걸어가고, 도착하면 대화창이 저절로 뜬다 (창을 따로 열지 않는다)
  panelOpen=f;panelView={};renderPanel();backdrop.classList.add('open');panel.scrollTop=0;tip.style.display='none';focusPanel();
  if(f.startsWith('room:')){const n=S.news.find(x=>x.id===f.slice(5));if(n&&n.kind==='OPEN'&&n.agreed){enterCamp(n);return}}
+ if(f.startsWith('room:')){const n=S.news.find(x=>x.id===f.slice(5));if(n&&n.kind==='CLOSED')return}   // 종료된 방은 마을에 모닥불이 없어 걸어가지 않는다
  walkTo(...vTarget(f));
 }
 

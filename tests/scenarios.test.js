@@ -174,10 +174,64 @@ test('마을 구역: 모닥불 자리 8개는 모두 모닥불 구역 안이고 
   fin(a);
 });
 
-test('마을 모닥불 자리: 열린 방 → 곧 열릴 방 → 종료된 방 순서', () => {
+test('마을 모닥불 자리: 열린 방 → 곧 열릴 방 순서이고, 종료된 방은 마을에 모닥불이 없다', () => {
   const a = load();
   a.ev(`S.news=[${room('k1', 'a', 'x', '.')},{id:'s1',kind:'SOON',title:'s',opensAt:Date.now()+1e6},{id:'o1',kind:'OPEN',title:'o'},${room('k2', 'b', 'x', '.')}]`);
-  assert.equal(a.ev(`vilOrder().map(n=>n.kind).join(',')`), 'OPEN,SOON,CLOSED,CLOSED');
+  assert.equal(a.ev(`vilOrder().map(n=>n.kind).join(',')`), 'OPEN,SOON');
+  fin(a);
+});
+
+test('모닥불 시간: 1~7시간 진행 시간으로 만들고, 하루 3번까지만 피운다', () => {
+  const a = load();
+  const make = h => { a.ev("VIEW='village';openV('fire:new')"); a.click('#panel [data-act=rkind][data-v=OWN]'); a.click(`#panel [data-act=rhours][data-v="${h}"]`); a.click('#panel [data-act=rcreate]'); };
+  make(5);
+  const r = a.state().news.find(n => n.mine);
+  assert.equal(Math.round((r.closesAt - r.opensAt) / 36e5), 5);
+  a.ev("S.news.forEach(n=>{if(n.mine)n.kind='CLOSED'})");   // 동시 2개 제한에 걸리지 않게 종료로 돌린다
+  make(1); make(2);
+  assert.equal(a.state().roomLog.length, 3);
+  a.ev("S.news.forEach(n=>{if(n.mine)n.kind='CLOSED'})");
+  make(3);
+  assert.equal(a.state().roomLog.length, 3, '하루 3번이 넘으면 만들어지지 않는다');
+  assert.match(a.doc.getElementById('rerr').textContent, /하루에 3번/);
+  fin(a);
+});
+
+test('모닥불 시간: 장면에 머문 시간이 오늘 읽은 시간에 더해지고, 시간이 다 되면 광장으로 돌아온다', () => {
+  const a = load();
+  a.ev(`S.news=[{id:'c1',kind:'OPEN',title:'방',book:'책',author:'저자',rtype:'OWN',agreed:true,people:1,max:8,mine:true,opensAt:Date.now()-36e5,closesAt:Date.now()+36e5,members:[],messages:[]}];
+        VIEW='village';enterCamp(S.news[0]);campSince=Date.now()-30*60000;`);
+  assert.equal(a.ev('VIEW'), 'shared');
+  a.ev('leaveCamp()');
+  assert.equal(a.ev('todayMin()'), 30);
+  a.ev('S.sessions.forEach(x=>{x.startedAt-=4e6;x.endedAt-=4e6})');   // 처음 기록과 겹치지 않게 뒤로 민다
+  const base = a.ev('todayMin()');
+  a.ev(`enterCamp(S.news[0]);campSince=Date.now()-10*60000-1000;S.news[0].closesAt=Date.now()-1;fireSharedRoomsDue()`);
+  assert.equal(a.ev('VIEW'), 'village');
+  assert.equal(a.state().news[0].kind, 'CLOSED');
+  assert.equal(a.ev('todayMin()') - base, 10);
+  fin(a);
+});
+
+test('모닥불 인원: 최대 10명까지만 정할 수 있다', () => {
+  const a = load();
+  const input = (id, value) => { const el = a.doc.getElementById(id); el.value = value; el.dispatchEvent(new a.w.Event('input', { bubbles: true })); };
+  a.ev("VIEW='village';openV('fire:new')");
+  a.click('#panel [data-act=rkind][data-v=OWN]');
+  input('rmax', '11');
+  a.click('#panel [data-act=rcreate]');
+  assert.match(a.doc.getElementById('rerr').textContent, /2~10명/);
+  input('rmax', '10');
+  a.click('#panel [data-act=rcreate]');
+  assert.equal(a.state().news.filter(n => n.mine).length, 1);
+  fin(a);
+});
+
+test('공유방 글: 보낸 글은 삭제도 수정도 할 수 없다', () => {
+  const a = load();
+  a.ev(`S.news=[{id:'d1',kind:'OPEN',title:'방',book:'책',author:'저자',rtype:'OWN',agreed:true,people:1,max:8,mine:true,members:[],messages:[{id:'m1',who:'나',text:'안녕',ts:Date.now()}]}];VIEW='village';openV('room:d1')`);
+  assert.equal(a.doc.querySelector('[data-act=rcDelAsk]'), null);
+  assert.equal(a.doc.querySelector('.rm-x'), null);
   fin(a);
 });
 

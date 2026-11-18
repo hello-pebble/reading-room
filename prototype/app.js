@@ -53,7 +53,7 @@ let S;
 try{S=JSON.parse(localStorage.getItem('myroom-proto-v1'))}catch(e){}
 if(!S)S=defaultState();
 if(!S.recommendations)S.recommendations={}; // 이웃집별 미확인 추천 한 권. me는 내 집에 도착한 책
-if(!S.sessions)S.sessions=[];if(S.session===undefined)S.session=null;if(S.reading&&!S.reading.id)S.reading.id=Date.now();
+if(!S.roomLog)S.roomLog=[];if(!S.sessions)S.sessions=[];if(S.session===undefined)S.session=null;if(S.reading&&!S.reading.id)S.reading.id=Date.now();
 if(!S.avatar||!S.avatar.expr)S.avatar=defAvatar();
 if(!S.newsSeen)S.newsSeen={};
 // 월 목표 이력 (결정 #39): 예전의 한 값(S.goal)은 이번 달부터만 기록하고, 그 이전 달은 "목표 기록 없음"으로 둔다
@@ -177,7 +177,7 @@ function stateLabel(f){
 // sr buttons in tab order
 const ORDER=['sofa','lamp','shelf','calendar','mirror','window','door'];
 const srWrap=document.getElementById('srBtns');
-const curOrder=()=>VIEW==='neighbor'?['shelf','door']:VIEW==='shared'?[]:VIEW==='village'?['board','plaza',...NEIGHBORS.map(n=>'neighbor:'+n.id),...vilOrder().slice(0,VSLOTS.length).map(n=>'room:'+n.id),...(S.news.length<VSLOTS.length?['fire:new']:[]),'home']:ORDER;
+const curOrder=()=>VIEW==='neighbor'?['shelf','door']:VIEW==='shared'?[]:VIEW==='village'?['board','plaza',...NEIGHBORS.map(n=>'neighbor:'+n.id),...vilOrder().slice(0,VSLOTS.length).map(n=>'room:'+n.id),...(vilOrder().length<VSLOTS.length?['fire:new']:[]),'home']:ORDER;
 const labelOf=f=>f==='board'?'마을 게시판':f==='plaza'?'광장 이야기':f==='home'?'내 방으로':f==='fire:new'?'모닥불 피우기':f.startsWith('room:')?shortTitle(S.news.find(n=>n.id===f.slice(5))||{})+' 모닥불':LABEL[f];
 function buildSr(){srWrap.innerHTML='';curOrder().forEach(f=>{const b=document.createElement('button');b.dataset.f=f;b.textContent=labelOf(f);
  b.addEventListener('focus',()=>{b.setAttribute('aria-label',stateLabel(f));hl(f,true)});b.addEventListener('blur',()=>hl(f,false));

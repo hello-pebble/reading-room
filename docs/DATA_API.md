@@ -206,8 +206,8 @@
 | 메서드 | 경로 | 동작 |
 |---|---|---|
 | GET | `/neighbors/{handle}` | 이웃집 방문. 응답 `{handle, nickname, occupied, mine, book}`. `occupied`는 아래 칸에 확인 전 추천이 있는지, `book`은 그 추천을 **내가** 꽂았을 때(`mine`)만 내려가고 남이 꽂은 책은 알려 주지 않는다. 없는 핸들은 404(`HOUSE_NOT_FOUND`), 내 집은 400(`OWN_HOUSE`) |
-| POST | `/neighbors/{handle}/recommendation` | 내 책 한 권을 그 집에 꽂는다. body `{bookId}`(정수, 아니면 400 `BAD_BOOK_ID`). 201과 `{id, book:{isbn,title,author,coverUrl}, createdAt}`. 내 책이 아니거나 없으면 404(`BOOK_NOT_FOUND`), **읽는 중(`READING`)·완독(`DONE`)이 아니면 400(`BOOK_NOT_ELIGIBLE`)** — 꽂는 순간의 상태로 다시 검사한다. 그 집에 확인 전 추천이 있으면 409(`HOUSE_OCCUPIED`, 덮어쓰지 않는다). 동시에 여러 명이 꽂아도 한 명만 201이다. 내 책과 기록은 바꾸지 않는다 |
-| GET | `/me/recommendation` | 내 집에 도착한 확인 전 추천 `{id, book, createdAt}`. 없으면 204. **보낸 사람은 알려 주지 않는다**(몰래 꽂아 두기) |
+| POST | `/neighbors/{handle}/recommendation` | 내 책 한 권을 그 집에 꽂는다. body `{bookId}`(정수, 아니면 400 `BAD_BOOK_ID`). 201과 `{id, fromNickname(나), book:{isbn,title,author,coverUrl}, createdAt}`. 내 책이 아니거나 없으면 404(`BOOK_NOT_FOUND`), **읽는 중(`READING`)·완독(`DONE`)이 아니면 400(`BOOK_NOT_ELIGIBLE`)** — 꽂는 순간의 상태로 다시 검사한다. 그 집에 확인 전 추천이 있으면 409(`HOUSE_OCCUPIED`, 덮어쓰지 않는다). 동시에 여러 명이 꽂아도 한 명만 201이다. 내 책과 기록은 바꾸지 않는다 |
+| GET | `/me/recommendation` | 내 집에 도착한 확인 전 추천 `{id, fromNickname, book, createdAt}`. 없으면 204. **보낸 사람은 닉네임(`fromNickname`, 보여 줄 때의 현재 닉네임)으로 밝힌다.** 핸들·사용자 id는 내려주지 않는다 |
 | POST | `/me/recommendation/confirm` | 집 주인이 [확인했어요]. 204. 확인할 추천이 없으면 404(`NO_RECOMMENDATION`). 경로가 내 집이라 집 주인 본인만 확인할 수 있다. 확인만으로 내 책장에 책을 더하지 않고, 칸이 비어 다시 추천받을 수 있다 |
 
 ## 배치 작업 (`@Scheduled`)

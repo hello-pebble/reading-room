@@ -23,7 +23,7 @@ class NeighborTest extends ApiTestBase {
     String house(String handle) { return "/neighbors/" + handle + "/recommendation"; }
 
     @Test
-    void recommendCopiesOnlyBookInfoAndHidesTheSender() throws Exception {
+    void recommendCopiesOnlyBookInfoAndShowsTheSenderNickname() throws Exception {
         long a = newUser("alice"), b = newUser("bobby");
         long bk = book(a, "데미안", "DONE");
         mvc.perform(POST(a, house("bobby"), Map.of("bookId", bk))).andExpect(status().isCreated())
@@ -31,9 +31,10 @@ class NeighborTest extends ApiTestBase {
                 .andExpect(jsonPath("$.book.isbn").value("9788937460449")).andExpect(jsonPath("$.book.coverUrl").value("https://img/c.jpg"))
                 .andExpect(jsonPath("$.createdAt").value("2026-11-17T03:00:00Z"))
                 .andExpect(jsonPath("$.book.rating").doesNotExist()).andExpect(jsonPath("$.book.currentPage").doesNotExist())
-                .andExpect(jsonPath("$.book.oneLineReview").doesNotExist()).andExpect(jsonPath("$.from").doesNotExist());
+                .andExpect(jsonPath("$.book.oneLineReview").doesNotExist()).andExpect(jsonPath("$.fromNickname").value("alice"));
         mvc.perform(GET(b, "/me/recommendation")).andExpect(status().isOk()).andExpect(jsonPath("$.book.title").value("데미안"))
-                .andExpect(jsonPath("$.from").doesNotExist()).andExpect(jsonPath("$.fromUser").doesNotExist());
+                .andExpect(jsonPath("$.fromNickname").value("alice"))                     // 보낸 사람은 닉네임으로 밝힌다
+                .andExpect(jsonPath("$.from").doesNotExist()).andExpect(jsonPath("$.fromUser").doesNotExist()).andExpect(jsonPath("$.fromHandle").doesNotExist());   // 핸들·id는 내려주지 않는다
         // 원본 책은 그대로
         var r = dsl.fetchOne("select status, current_page, rating from book where id = ?", bk);
         assertThat(r.get("status", String.class)).isEqualTo("DONE");
@@ -91,9 +92,18 @@ class NeighborTest extends ApiTestBase {
         mvc.perform(POST(b, "/me/recommendation/confirm", Map.of())).andExpect(status().isNotFound());           // 이미 확인함
         assertThat(dsl.fetchOne("select count(*) as n from book where user_id = ?", b).get("n", Integer.class)).isZero();   // 확인만으로 책이 담기지 않는다
         mvc.perform(POST(c, house("bobby"), Map.of("bookId", bc))).andExpect(status().isCreated());               // 칸이 비어 다시 추천
-        mvc.perform(GET(b, "/me/recommendation")).andExpect(jsonPath("$.book.title").value("캐롤 책"));
+        mvc.perform(GET(b, "/me/recommendation")).andExpect(jsonPath("$.book.title").value("캐롤 책")).andExpect(jsonPath("$.fromNickname").value("carol"));   // 다시 꽂은 사람의 닉네임
         assertThat(dsl.fetchOne("select count(*) as n from neighbor_recommendation where to_user = ?", b).get("n", Integer.class)).isEqualTo(2);   // 확인한 행은 남는다
         assertThat(dsl.fetchOne("select confirmed_at from neighbor_recommendation where from_user = ?", a).get("confirmed_at")).isNotNull();
+    }
+
+    @Test
+    void nicknameShownIsTheSendersCurrentOne() throws Exception {
+        long a = newUser("alice"), b = newUser("bobby");
+        long bk = book(a, "데미안", "DONE");
+        mvc.perform(POST(a, house("bobby"), Map.of("bookId", bk))).andExpect(status().isCreated());
+        dsl.execute("update app_user set nickname = '앨리' where id = ?", a);
+        mvc.perform(GET(b, "/me/recommendation")).andExpect(jsonPath("$.fromNickname").value("앨리"));
     }
 
     @Test

@@ -276,7 +276,7 @@
 | NB-02 | 내 책 목록에서 [책 꽂기] | 현재 읽는 책·완독한 책만 가능. 포기·나중에 읽을 책과 자격이 사라진 책은 거절한다. 제목·저자·표지·ISBN만 복사하며 내 책은 그대로 둔다 |
 | NB-03 | 집마다 미확인 추천 한 권 | 이미 차 있으면 덮어쓰지 않는다. 다른 집은 별도 칸이다. 새로고침·재방문 시 유지한다 |
 | NB-04 | 아래 칸에 책 추가 모션 | 모달을 닫고 3D 책이 약 0.9초간 들어온다. 동작 줄이기 설정에서는 즉시 표시한다 |
-| NB-05 | 집 주인의 [확인했어요] | 칸을 비워 다시 추천할 수 있다. 내 책장에는 추천 카드와 노란 별을 표시한다. 방문자는 확인 처리할 수 없다. 체험판 테스트 도구에서만 집 주인 시점을 재현한다. 서버: `GET /neighbors/{handle}`, `POST /neighbors/{handle}/recommendation`, `GET /me/recommendation`, `POST /me/recommendation/confirm`(결정 #62, 화면 연결은 아직). 보낸 사람은 받는 사람에게 알리지 않는다 |
+| NB-05 | 집 주인의 [확인했어요] | 칸을 비워 다시 추천할 수 있다. 내 책장에는 추천 카드와 노란 별을 표시한다. 방문자는 확인 처리할 수 없다. 체험판 테스트 도구에서만 집 주인 시점을 재현한다. 서버: `GET /neighbors/{handle}`, `POST /neighbors/{handle}/recommendation`, `GET /me/recommendation`, `POST /me/recommendation/confirm`(결정 #62, 화면 연결은 아직). 추천 카드에는 보낸 사람의 닉네임이 함께 보인다 |
 
 ### 5.1 프로토타입 저장 상태 (`localStorage` · `myroom-proto-v1`)
 

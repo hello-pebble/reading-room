@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/** 이웃집 방문과 책 추천(내 책을 몰래 꽂기), 내 집에 도착한 추천 확인 */
+/** 이웃집 방문과 책 추천(내 책을 꽂기), 내 집에 도착한 추천 확인 */
 @RestController
 public class NeighborController {
     private final NeighborService neighbors;
@@ -28,7 +28,7 @@ public class NeighborController {
         return neighbors.recommend(uid, handle, body);
     }
 
-    /** 내 집에 도착한 확인 전 추천. 없으면 204 */
+    /** 내 집에 도착한 확인 전 추천(보낸 사람 닉네임 포함). 없으면 204 */
     @GetMapping("/me/recommendation")
     public ResponseEntity<RecommendationResponse> mine(@RequestAttribute(UserIdFilter.ATTR) long uid) {
         RecommendationResponse r = neighbors.mine(uid);

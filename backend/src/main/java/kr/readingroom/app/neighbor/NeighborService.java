@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 이웃집 책 추천 (결정 #49·#62): 읽는 중이거나 완독한 내 책 한 권을 이웃집 책장 아래 칸에 몰래 꽂아 둔다.
+ * 이웃집 책 추천 (결정 #49·#62): 읽는 중이거나 완독한 내 책 한 권을 이웃집 책장 아래 칸에 꽂아 둔다. 보낸 사람은 닉네임으로 밝힌다.
  * 집마다 확인 전 추천은 한 권(DB 부분 유니크 인덱스로 동시 요청에도 보장), 집 주인만 확인하며, 내 책과 기록은 바꾸지 않는다.
  */
 @Service
@@ -49,10 +49,10 @@ public class NeighborService {
         if (book == null) throw new ApiException(HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND", "내 책을 찾을 수 없어요");
         if (!ELIGIBLE.contains(book.get("status", String.class)))
             throw new ApiException(HttpStatus.BAD_REQUEST, "BOOK_NOT_ELIGIBLE", "읽는 중이거나 다 읽은 책만 추천할 수 있어요");
-        Record saved = neighbors.insert(house.get("id", Long.class), userId, book.get("isbn", String.class), book.get("title", String.class),
+        Long saved = neighbors.insert(house.get("id", Long.class), userId, book.get("isbn", String.class), book.get("title", String.class),
                 book.get("author", String.class), book.get("cover_url", String.class), clock.instant());
         if (saved == null) throw new ApiException(HttpStatus.CONFLICT, "HOUSE_OCCUPIED", "아직 집 주인이 책을 확인하지 않았어요");
-        return view(saved);
+        return view(neighbors.findOpen(house.get("id", Long.class)));
     }
 
     /** 내 집에 도착한 확인 전 추천. 없으면 null (컨트롤러가 204로 답한다) */
@@ -87,6 +87,6 @@ public class NeighborService {
 
     private static RecommendationResponse view(Record r) {
         Instant at = Db.instant(r, "created_at");
-        return new RecommendationResponse(r.get("id", Long.class), book(r), at);
+        return new RecommendationResponse(r.get("id", Long.class), r.get("from_nickname", String.class), book(r), at);
     }
 }

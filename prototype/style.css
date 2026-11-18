@@ -212,3 +212,4 @@ input[type=range]{accent-color:var(--accent)}
  .who small{font-size:11px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}  /* 별 점멸·모달·토스트 연출을 끈다. 걷기 같은 기능 이동은 JS라 그대로 */
+#stage{touch-action:none}   /* 길게 눌러 걸을 때 화면이 끌려가지 않게 */

@@ -107,6 +107,7 @@ const isSit=()=>sim.mode==='sit'||sim.mode==='sitting';
 const MQ=matchMedia('(max-width:760px)');
 setLayout(MQ.matches?'tall':'wide');
 function walkTo(tx,tz,done){
+ if(G3)G3.follow();   // 걸어가라고 하면 지도 끌기를 풀고 다시 캐릭터를 따라간다
  if(isSit()){sim.x=STAND[0];sim.z=STAND[1];sim.y=0;sim.mode='idle';sim.sit=0;render()}
  sim.tx=tx;sim.tz=tz;sim.after=done||null;sim.mode='walk'}
 function sitDown(){sim.mode='sitting';sim.k=0;sim.fx=sim.x;sim.fz=sim.z;render()}
@@ -550,7 +551,7 @@ const G3=(function(){
   }
  }
  function setView(v,n){
-  view=v;if(roomG)roomG.visible=v==='room';
+  view=v;camFree=false;panP=null;if(roomG)roomG.visible=v==='room';
   clearLabels();if(villageG){scene.remove(villageG);dispose(villageG);villageG=null;vilFiresG=null;vilPick=[]}
   if(campG){scene.remove(campG);dispose(campG);campG=null;campFire=null;campGuests=[]}
   if(v==='village'){buildVillage();const k=SKYC[windowScene().weather];wrap.classList.add('vil');wrap.style.background='linear-gradient(180deg,'+k[0]+' 0%,'+k[1]+' 100%)'}
@@ -561,7 +562,7 @@ const G3=(function(){
   const w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;
   R.setPixelRatio(Math.min(devicePixelRatio,2));R.setSize(w,h,false);
   const a=w/h;let vh;
-  if(view==='village'){vh=Math.max(10,14/a);T.set(sim.x,1.0,sim.z)}   // 마을: 화면에 가로 약 14칸이 보이고, 카메라는 유령을 따라간다
+  if(view==='village'){vh=Math.max(10,14/a);if(!camFree)T.set(sim.x,1.0,sim.z)}   // 마을: 화면에 가로 약 14칸이 보이고, 카메라는 유령을 따라간다
   else if(view==='shared'){vh=Math.max(8.8,12/a);T.set(1.7,2.0,0)}   // 뒤쪽 캐릭터 머리 위로 말풍선이 들어갈 여백
   else{const {X,Y}=L,Wn=(X+Y)*.7071+1.0,Hn=(X+Y)*.354+6.2;vh=Math.max(Hn,Wn/a);T.set(X/2,1.1,Y/2)}
   cam.left=-vh*a/2;cam.right=vh*a/2;cam.top=vh/2;cam.bottom=-vh/2;cam.updateProjectionMatrix();
@@ -597,6 +598,14 @@ const G3=(function(){
 
  /* 화면 위 글자·배지: 3D 좌표를 화면 좌표로 옮겨서 위치만 맞춤 */
  const V=new THREE.Vector3(),el=id=>document.getElementById(id);
+ // 지도 끌기(마을): 누른 땅 위의 점이 커서 아래에 계속 있도록 카메라를 옮긴다. 캐릭터는 그대로. 걸어가라고 하면(follow) 다시 캐릭터를 따라간다
+ let camFree=false,panP=null;const PL=new THREE.Plane(new THREE.Vector3(0,1,0),0),RV=new THREE.Vector3();
+ function groundAt(ev){const r=cv.getBoundingClientRect();nd.set((ev.clientX-r.left)/r.width*2-1,-((ev.clientY-r.top)/r.height*2-1));rc.setFromCamera(nd,cam);return rc.ray.intersectPlane(PL,RV)?RV.clone():null}
+ function panStart(ev){panP=view==='village'?groundAt(ev):null;return !!panP}
+ function panMove(ev){if(!panP||view!=='village')return;const q=groundAt(ev);if(!q)return;camFree=true;
+  T.x=Math.max(0,Math.min(VIL.X,T.x+panP.x-q.x));T.z=Math.max(0,Math.min(VIL.Y,T.z+panP.z-q.z));
+  cam.position.copy(T).addScaledVector(dirV,40);cam.lookAt(T);cam.updateMatrixWorld();sun.position.set(T.x+9,14,T.z+6);sun.target.position.set(T.x,0,T.z);panP=groundAt(ev)||panP}
+ const panEnd=()=>{panP=null},follow=()=>{camFree=false};
  function place(e,x,y,z){V.set(x,y,z).project(cam);e.style.left=((V.x*.5+.5)*cv.clientWidth)+'px';e.style.top=((-V.y*.5+.5)*cv.clientHeight)+'px'}
  let last=performance.now();
  function frame(now){
@@ -607,7 +616,7 @@ const G3=(function(){
   M.root.scale.setScalar(view==='shared'?.8:1);
   applyPose(M,sim);
   if(view==='village'){ // 따라가는 카메라: 유령 위치로 부드럽게 이동
-   const k=Math.min(1,dt*5);T.x+=(M.root.position.x-T.x)*k;T.z+=(M.root.position.z-T.z)*k;
+   if(!camFree){const k=Math.min(1,dt*5);T.x+=(M.root.position.x-T.x)*k;T.z+=(M.root.position.z-T.z)*k}
    cam.position.copy(T).addScaledVector(dirV,40);cam.lookAt(T);sun.position.set(T.x+9,14,T.z+6);sun.target.position.set(T.x,0,T.z);
   }
   for(const f in flashUntil){const left=flashUntil[f]-now;if(left>0){const k=.28*Math.abs(Math.sin(left/90));matsOf[f].forEach(m=>{if(m.emissive&&!m.userData.keepEmis)m.emissive.setRGB(k,k*.9,k*.5)})}else{delete flashUntil[f];emis(f,f===hoverF)}}
@@ -636,7 +645,7 @@ const G3=(function(){
  buildRoom();
  new ResizeObserver(fit).observe(wrap);fit();
  requestAnimationFrame(frame);
- return {sync,pick,setHover,flash,relayout,snap,fit,setView,say,houses:()=>vilHouses,npcs:()=>vilNpcs.map(n=>[n.x,n.z]),winImg:()=>winCv.toDataURL()};
+ return {sync,pick,setHover,flash,relayout,snap,fit,setView,say,panStart,panMove,panEnd,follow,houses:()=>vilHouses,npcs:()=>vilNpcs.map(n=>[n.x,n.z]),winImg:()=>winCv.toDataURL()};
 })();
 document.getElementById('fail').style.display=G3?'none':'flex';
 MQ.addEventListener('change',()=>{closePanel();if(VIEW!=='room'){VIEW='room';L=ROOM_L||L;if(G3)G3.setView('room')}setLayout(MQ.matches?'tall':'wide');if(G3)G3.relayout();buildSr();render()});
@@ -820,12 +829,20 @@ function renderCoach(){
 // tooltip + click
 const tip=document.getElementById('tip');
 const canHover=window.matchMedia('(hover: hover)').matches;
-canvas.addEventListener('pointermove',e=>{if(!G3)return;const p=G3.pick(e);const f=p&&p.f||null;
+canvas.addEventListener('pointermove',e=>{if(!G3||drag.on)return;const p=G3.pick(e);const f=p&&p.f||null;
  if(canHover)G3.setHover(f);canvas.style.cursor=(p&&(p.f||p.floor))?'pointer':'default';
  if(!canHover||!f){tip.style.display='none';return}
  tip.textContent=stateLabel(f);tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px'});
 canvas.addEventListener('pointerleave',()=>{tip.style.display='none';if(G3)G3.setHover(null)});
+// 지도 끌기(마을): 누르고 끌면 지도(카메라)가 움직인다. 캐릭터는 그대로이고, 걸어가라고 하면 다시 캐릭터를 따라간다. 6px 넘게 움직였을 때만 끌기로 보고, 짧은 클릭은 기존대로
+const drag={id:null,x:0,y:0,on:false};let suppressClick=false;
+canvas.addEventListener('pointerdown',e=>{if(!G3||VIEW!=='village'||e.button>0)return;if(!G3.panStart(e))return;drag.id=e.pointerId;drag.x=e.clientX;drag.y=e.clientY;drag.on=false});
+canvas.addEventListener('pointermove',e=>{if(e.pointerId!==drag.id)return;if(!drag.on){if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<6)return;drag.on=true;try{canvas.setPointerCapture(e.pointerId)}catch(_){}tip.style.display='none';canvas.style.cursor='grabbing'}G3.panMove(e)});
+const dragEnd=e=>{if(e.pointerId!==drag.id)return;drag.id=null;G3.panEnd();if(drag.on){drag.on=false;canvas.style.cursor='default';suppressClick=true;setTimeout(()=>{suppressClick=false},80)}};   // 끌었으면 뒤따르는 클릭은 무시한다
+canvas.addEventListener('pointerup',dragEnd);canvas.addEventListener('pointercancel',dragEnd);
+canvas.addEventListener('contextmenu',e=>{if(drag.on||drag.id!==null)e.preventDefault()});
 canvas.addEventListener('click',e=>{
+ if(suppressClick){suppressClick=false;return}
  if(!G3)return;const p=G3.pick(e);
  if(VIEW==='shared')return;
  if(p&&p.f){VIEW==='village'?openV(p.f):openF(p.f);return}

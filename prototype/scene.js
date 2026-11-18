@@ -451,7 +451,7 @@ function createScene(){
   if(view==='village'){vh=Math.max(10,14/a);if(!camFree)T.set(sim.x,1.0,sim.z)}   // 마을: 화면에 가로 약 14칸이 보이고, 카메라는 유령을 따라간다
   else if(view==='shared'){vh=Math.max(8.8,12/a);T.set(1.7,2.0,0)}   // 뒤쪽 캐릭터 머리 위로 말풍선이 들어갈 여백
   else if(view==='neighbor'){vh=Math.max(6.4,5.6/a);T.set(1.2,1.9,1.8)}   // 책장과 내 캐릭터만 가운데 크게, 방문 중에는 고정 구도
-  else{const {X,Y}=L,Wn=(X+Y)*.7071+1.0,Hn=(X+Y)*.354+6.2;vh=Math.max(Hn,Wn/a);T.set(X/2,1.1,Y/2)}
+  else{const {X,Y}=L,Wn=(X+Y)*.7071+1.0,Hn=(X+Y)*.354+6.2;vh=Math.max(Hn,Wn/a);T.set(X/2,2.1,Y/2)}
   cam.left=-vh*a/2;cam.right=vh*a/2;cam.top=vh/2;cam.bottom=-vh/2;cam.updateProjectionMatrix();
   cam.position.copy(T).addScaledVector(dirV,40);cam.lookAt(T);cam.updateMatrixWorld();
   sun.position.set(T.x+9,14,T.z+6);sun.target.position.set(T.x,0,T.z);

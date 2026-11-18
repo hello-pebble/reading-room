@@ -1,0 +1,31 @@
+package kr.readingroom.app.push;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Map;
+import kr.readingroom.app.common.UserIdFilter;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+public class SubscriptionController {
+    private final SubscriptionService subs;
+
+    public SubscriptionController(SubscriptionService subs) {
+        this.subs = subs;
+    }
+
+    @PostMapping("/me/push-subscription")
+    public Map<String, Object> save(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestBody JsonNode body,
+                                    @RequestHeader(value = "User-Agent", required = false) String ua) {
+        return subs.save(uid, body, ua);
+    }
+
+    /** endpoint는 쿼리(?endpoint=) 또는 본문({endpoint})으로 받는다. */
+    @DeleteMapping("/me/push-subscription")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@RequestAttribute(UserIdFilter.ATTR) long uid, @RequestParam(required = false) String endpoint,
+                       @RequestBody(required = false) JsonNode body) {
+        String e = endpoint != null ? endpoint : body != null && body.hasNonNull("endpoint") ? body.get("endpoint").asText() : null;
+        subs.delete(uid, e);
+    }
+}

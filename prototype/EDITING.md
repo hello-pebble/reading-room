@@ -26,6 +26,8 @@
 | 마을·모닥불 이름표와 말풍선 | `common.css` | `.vlab`, `.vbub` |
 | 이웃집 방문·추천 조건·확인 | `neighbor.js` | `NEIGHBORS`, `neighborShelfPanel`, `putRecommendation`, `neighborAction` |
 | 추천 책 카드·선택 목록 | `neighbor.css` | `.neighbor-choice`, `.neighbor-gift` |
+| 모닥불 장면 말풍선 간격(이름표 위) | `scene.js` | `frame` 안 `vilBub` 줄의 `place(b.el,…)` (내 캐릭터 -22, 참여자 -25) |
+| 내 방의 화면 위치(가운데 맞춤) | `scene.js` | `fit`의 `T.set(X/2,2.1,Y/2)` |
 | 방·가구·유령의 3D 모양 | `scene.js` | `buildRoom`, `build`, `buildVillage`, `buildCamp` |
 | 저장·공통 모달·기능 연결 | `app.js` | `save`, `renderPanel`, `onPanelClick` |
 

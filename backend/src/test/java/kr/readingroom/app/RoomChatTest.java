@@ -45,7 +45,7 @@ class RoomChatTest extends ApiTestBase {
         return mvc.perform(POST(uid, "/rooms/" + r.id() + "/messages", m("content", content)));
     }
 
-    /** 5초 제한을 피해 보낸다 */
+    /** 도배 제한(3초 3건·같은 글)에 걸리지 않게 시각을 옮겨 보낸다 */
     long sayOk(long uid, Room r, String content) throws Exception {
         clock.advance(Duration.ofSeconds(6));
         return body(say(uid, r, content).andExpect(status().isCreated()).andReturn()).get("id").asLong();
@@ -68,22 +68,69 @@ class RoomChatTest extends ApiTestBase {
     }
 
     @Test
-    void fiveSecondCooldownIsPerUserAcrossRooms() throws Exception {
+    void threeMessagesPerThreeSecondsPerUserAcrossRooms() throws Exception {
         long a = newUser("alice"), b = newUser("bob");
         Room r1 = roomWith(m("kind", "OWN"), a, b), r2 = roomWith(m("kind", "OWN"), a, b);
-        say(a, r1, "하나").andExpect(status().isCreated());
-        say(a, r1, "둘").andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.error").value("TOO_FAST"));
-        say(a, r2, "다른 방").andExpect(status().isTooManyRequests());                  // 방과 상관없이 사용자당
+        say(a, r1, "하나").andExpect(status().isCreated());                              // 03:00:00
+        clock.advance(Duration.ofSeconds(1));
+        say(a, r2, "둘").andExpect(status().isCreated());                                // 방이 달라도 사용자당 센다
+        clock.advance(Duration.ofSeconds(1));
+        say(a, r1, "셋").andExpect(status().isCreated());                                // 03:00:02 — 3초 안에 3건째
+        clock.advance(Duration.ofMillis(999));
+        say(a, r1, "넷").andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.error").value("TOO_FAST"));   // 03:00:02.999 — 아직 3건
         say(b, r1, "다른 사람").andExpect(status().isCreated());                         // 다른 사람은 따로 센다
-        clock.advance(Duration.ofMillis(4999));
-        say(a, r1, "아직").andExpect(status().isTooManyRequests());
         clock.advance(Duration.ofMillis(1));
-        say(a, r2, "5초 뒤").andExpect(status().isCreated());
-        assertThat(dsl.fetchOne("select count(*) as n from room_message").get("n", Integer.class)).isEqualTo(3);
+        say(a, r2, "다시").andExpect(status().isCreated());                               // 03:00:03 — 첫 글이 3초 밖으로 나가 한 자리가 난다
+        say(a, r2, "또").andExpect(status().isTooManyRequests());                         // 03:00:01·02·03 의 3건이 창 안
+        assertThat(dsl.fetchOne("select count(*) as n from room_message where user_id = ?", a).get("n", Integer.class)).isEqualTo(4);
     }
 
     @Test
-    void concurrentSendsFromOneUserLetOnlyOneThrough() throws Exception {
+    void quickShortTypistsAreNotBlocked() throws Exception {
+        long a = newUser("alice");
+        Room r = roomWith(m("kind", "OWN"), a);
+        for (int i = 0; i < 12; i++) {                                                  // 1.1초마다 한 줄씩 계속 — 어떤 3초 창에도 3건을 넘지 않는다
+            say(a, r, "짧은 글 " + i).andExpect(status().isCreated());
+            clock.advance(Duration.ofMillis(1100));
+        }
+    }
+
+    @Test
+    void sameTextInARowIsBlockedForThirtySeconds() throws Exception {
+        long a = newUser("alice"), b = newUser("bob");
+        Room r1 = roomWith(m("kind", "OWN"), a, b), r2 = roomWith(m("kind", "OWN"), a, b);
+        say(a, r1, "ㅋㅋ").andExpect(status().isCreated());
+        clock.advance(Duration.ofSeconds(4));
+        say(a, r1, "ㅋㅋ").andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("DUPLICATE_MESSAGE"));
+        say(a, r1, "  ㅋㅋ \n").andExpect(status().isConflict());                     // 앞뒤 공백은 무시하고 비교
+        say(a, r2, "ㅋㅋ").andExpect(status().isConflict());                             // 다른 방이어도 내 직전 글과 같으면 막는다
+        say(b, r1, "ㅋㅋ").andExpect(status().isCreated());                              // 다른 사람은 같은 말을 해도 된다
+        say(a, r1, "ㅋㅋㅋ").andExpect(status().isCreated());                            // 조금이라도 다르면 된다
+        clock.advance(Duration.ofSeconds(4));
+        say(a, r1, "ㅋㅋ").andExpect(status().isCreated());                              // 직전 글이 아니라 그 앞 글과 같은 것은 된다
+        clock.advance(Duration.ofSeconds(29));
+        say(a, r1, "ㅋㅋ").andExpect(status().isConflict());                             // 29초 뒤: 직전 글과 같음
+        clock.advance(Duration.ofSeconds(1));
+        say(a, r1, "ㅋㅋ").andExpect(status().isCreated());                              // 정확히 30초가 지나면 된다
+        assertThat(dsl.fetchOne("select count(*) as n from room_message where user_id = ?", a).get("n", Integer.class)).isEqualTo(4);   // 막힌 글은 저장하지 않는다
+    }
+
+    @Test
+    void blockedMessagesDoNotCountTowardTheRateLimit() throws Exception {
+        long a = newUser("alice");
+        Room r = roomWith(m("kind", "OWN"), a);
+        say(a, r, "하나").andExpect(status().isCreated());
+        for (int i = 0; i < 5; i++) say(a, r, "하나").andExpect(status().isConflict());   // 같은 글로 막히기만 한다
+        say(a, r, "둘").andExpect(status().isCreated());
+        say(a, r, "셋").andExpect(status().isCreated());
+        say(a, r, "넷").andExpect(status().isTooManyRequests());
+        for (int i = 0; i < 5; i++) say(a, r, "셋").andExpect(status().isTooManyRequests());
+        clock.advance(Duration.ofSeconds(3));
+        say(a, r, "넷").andExpect(status().isCreated());                                  // 막힌 요청이 시간을 늘리지 않는다
+    }
+
+    @Test
+    void concurrentSendsFromOneUserNeverExceedThreeInTheWindow() throws Exception {
         long a = newUser("alice");
         Room r = roomWith(m("kind", "OWN"), a);
         var pool = Executors.newFixedThreadPool(6);
@@ -95,8 +142,8 @@ class RoomChatTest extends ApiTestBase {
             if (st == 201) created++; else if (st == 429) tooFast++;
         }
         pool.shutdown();
-        assertThat(created).isEqualTo(1);
-        assertThat(tooFast).isEqualTo(5);
+        assertThat(created).isEqualTo(3);                                                // 3초에 3건까지
+        assertThat(tooFast).isEqualTo(3);
     }
 
     @Test
@@ -113,12 +160,11 @@ class RoomChatTest extends ApiTestBase {
         mvc.perform(POST(a, "/rooms/" + own.id() + "/messages", m("content", "쪽", "page", 3))).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("PAGE_NOT_ALLOWED"));
         mvc.perform(post("/rooms/" + same.id() + "/messages").header("X-User-Id", a).contentType("application/json").content("{")).andExpect(status().isBadRequest());
-        assertThat(dsl.fetchOne("select count(*) as n from room_message").get("n", Integer.class)).isZero();      // 실패한 글은 5초 제한도 쓰지 않는다
+        assertThat(dsl.fetchOne("select count(*) as n from room_message").get("n", Integer.class)).isZero();      // 실패한 글은 도배 제한 횟수에도 세지 않는다
         say(a, same, "가".repeat(300)).andExpect(status().isCreated());                                          // 경계: 300자
-        mvc.perform(POST(a, "/rooms/" + same.id() + "/messages", m("content", "쪽", "page", 9999))).andExpect(status().isTooManyRequests());
-        clock.advance(Duration.ofSeconds(6));
+        clock.advance(Duration.ofSeconds(4));
         mvc.perform(POST(a, "/rooms/" + same.id() + "/messages", m("content", "😀".repeat(300), "page", 9999))).andExpect(status().isCreated());   // 글자 수는 이모지도 한 글자
-        clock.advance(Duration.ofSeconds(6));
+        clock.advance(Duration.ofSeconds(4));
         mvc.perform(POST(a, "/rooms/" + same.id() + "/messages", m("content", "쪽", "page", 1))).andExpect(status().isCreated());
     }
 

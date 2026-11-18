@@ -3,10 +3,10 @@ package kr.readingroom.app.room;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import kr.readingroom.app.common.ApiException;
+import kr.readingroom.app.common.ChatRate;
 import kr.readingroom.app.common.Db;
 import kr.readingroom.app.common.RequestJson;
 import kr.readingroom.app.room.dto.ReadResponse;
@@ -19,13 +19,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 공유방 대화: 글 한 줄 1~300자, 사용자당 5초에 1건, 보낸 글은 삭제·수정하지 않는다(결정 #53).
+ * 공유방 대화: 글 한 줄 1~300자, 사용자당 3초에 3건·같은 글 30초 연속 금지(결정 #61, `ChatRate`), 보낸 글은 삭제·수정하지 않는다(결정 #53).
  * 참여 중이고 보관 동의를 한 사람만 읽고 쓸 수 있다. 쓰기는 열린(OPEN) 방에서만, 읽기는 종료 후 보관 7일 동안도 된다.
  */
 @Service
 public class RoomMessageService {
     static final int MAX_CHARS = 300, PAGE = 100;
-    static final Duration COOLDOWN = Duration.ofSeconds(5);
     static final String LEFT_NICKNAME = "나간 참여자";
     private final RoomRepository rooms;
     private final RoomMessageRepository messages;
@@ -66,8 +65,9 @@ public class RoomMessageService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_CONTENT", "글은 1~" + MAX_CHARS + "자로 적어 주세요");
         Integer page = page(body.page(), room.get("kind", String.class));
         messages.lockSender(userId);
-        Instant last = messages.lastSentAt(userId);
-        if (last != null && last.plus(COOLDOWN).isAfter(now)) throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_FAST", "조금 뒤에 보내 주세요");
+        Record last = messages.lastMessage(userId);
+        ChatRate.check(now, messages.countSince(userId, now.minus(ChatRate.WINDOW)), last == null ? null : last.get("content", String.class),
+                last == null ? null : Db.instant(last, "created_at"), content);
         return view(messages.insert(roomId, userId, content, page, now), userId);
     }
 

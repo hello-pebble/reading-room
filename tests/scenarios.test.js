@@ -411,6 +411,33 @@ test('광장 대화: 광장 안에서만 채팅창이 뜨고, 40자로 자르고
   fin(a);
 });
 
+test('채팅 도배 방지: 3초에 3건까지, 같은 글은 30초 안에 연속 금지, 광장과 공유방은 따로 센다 (결정 #61)', () => {
+  const a = load();
+  const gate = (k, t, at) => a.ev(`chatGate(${JSON.stringify(k)},${JSON.stringify(t)},${at})`);
+  const mark = (k, t, at) => a.ev(`chatMark(${JSON.stringify(k)},${JSON.stringify(t)},${at})`);
+  const T = 1_000_000;
+  for (const [i, t] of ['하나', '둘', '셋'].entries()) { assert.equal(gate('room', t, T + i * 1000), ''); mark('room', t, T + i * 1000); }
+  assert.equal(gate('room', '넷', T + 2999), '조금 뒤에 보내 주세요', '3초 안에 3건이 찼으면 4번째는 막는다');
+  assert.equal(gate('plaza', '넷', T + 2999), '', '광장은 따로 센다');
+  assert.equal(gate('room', '넷', T + 3000), '', '첫 글이 3초 밖으로 나가면 한 자리가 난다');
+  // 빠르고 짧게 치는 사람(1.1초마다 한 줄)은 막지 않는다
+  for (let i = 0; i < 12; i++) { const at = T + 100_000 + i * 1100; assert.equal(gate('plaza', '짧은 글 ' + i, at), ''); mark('plaza', '짧은 글 ' + i, at); }
+  // 같은 글: 직전 글과 같고 30초 안이면 막는다 (앞뒤 공백 무시), 직전 글이 아니면 된다
+  mark('room', 'ㅋㅋ', T + 200_000);
+  assert.equal(gate('room', ' ㅋㅋ ', T + 204_000), '같은 말을 연달아 보낼 수 없어요');
+  assert.equal(gate('room', 'ㅋㅋㅋ', T + 204_000), '');
+  assert.equal(gate('room', 'ㅋㅋ', T + 229_999), '같은 말을 연달아 보낼 수 없어요');
+  assert.equal(gate('room', 'ㅋㅋ', T + 230_000), '', '정확히 30초가 지나면 된다');
+  fin(a);
+});
+
+test('채팅 도배 방지: 시각을 안 주면 지금 시각으로 센다', () => {
+  const a = load();
+  a.ev(`chatMark('room','안녕',Date.now())`);
+  assert.equal(a.ev(`chatGate('room','안녕')`), '같은 말을 연달아 보낼 수 없어요');
+  fin(a);
+});
+
 test('공유방 가져오기: 내 책에 없으면 "나중에 읽을 책"에 담고 다 읽은 책으로 세지 않는다', () => {
   const a = load();
   a.ev(`S.news=[${room('c1', '미지의책', '저자', '안녕')},${room('c2', '미지의책', '저자', '또')},${room('c3', '아몬드', '손원평', '좋았어')}];openF('window')`);

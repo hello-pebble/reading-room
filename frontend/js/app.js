@@ -300,5 +300,14 @@ bindVillageEvents();
 bindRoomEvents();
 bindRoomTimer();
 bindNeighborEvents();
+// 채팅 도배 방지 (결정 #61, 서버와 같은 규칙): 3초에 3건까지, 내 직전 글과 같은 글은 30초 안에 다시 못 보낸다.
+// 광장과 공유방은 따로 센다. chatGate는 막을 이유(문구)를 돌려주고, 보낸 뒤에는 chatMark로 남긴다. 막힌 시도는 세지 않는다.
+const CHAT_WINDOW=3000,CHAT_MAX=3,CHAT_DUP=30000,chatLog={plaza:[],room:[]};
+function chatGate(kind,text,now=Date.now()){
+ const log=chatLog[kind];while(log.length&&now-log[0].t>=CHAT_DUP)log.shift();
+ if(log.filter(x=>now-x.t<CHAT_WINDOW).length>=CHAT_MAX)return '조금 뒤에 보내 주세요';
+ const last=log[log.length-1];if(last&&last.text===text.trim())return '같은 말을 연달아 보낼 수 없어요';
+ return ''}
+function chatMark(kind,text,now=Date.now()){chatLog[kind].push({t:now,text:text.trim()})}
 setInterval(fireDue,5000);
 render();renderPanel();entryFlash();checkSession(true);

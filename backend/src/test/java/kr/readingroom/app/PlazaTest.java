@@ -9,7 +9,7 @@ import kr.readingroom.app.village.PlazaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/** 마을 광장 채팅: 40자, 5초 제한, 24시간 보관 (기준 시각 2026-11-17T03:00:00Z) */
+/** 마을 광장 채팅: 40자, 3초 3건·같은 글 제한, 24시간 보관 (기준 시각 2026-11-17T03:00:00Z) */
 class PlazaTest extends ApiTestBase {
     @Autowired PlazaService plaza;
 
@@ -18,16 +18,47 @@ class PlazaTest extends ApiTestBase {
     }
 
     @Test
-    void sendReturnsMessageAndLimitsToOnePerFiveSeconds() throws Exception {
+    void sendReturnsMessageAndLimitsToThreePerThreeSeconds() throws Exception {
         long a = newUser("alice"), b = newUser("bob");
         mvc.perform(POST(a, "/plaza/messages", Map.of("content", "  안녕하세요  "))).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.content").value("안녕하세요")).andExpect(jsonPath("$.handle").value("alice"))
                 .andExpect(jsonPath("$.avatar.color").exists()).andExpect(jsonPath("$.createdAt").value("2026-11-17T03:00:00Z"));
-        clock.advance(Duration.ofSeconds(4));
-        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "또"))).andExpect(status().isTooManyRequests());
+        clock.advance(Duration.ofSeconds(1));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "둘"))).andExpect(status().isCreated());
+        clock.advance(Duration.ofSeconds(1));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "셋"))).andExpect(status().isCreated());
+        clock.advance(Duration.ofMillis(999));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "넷"))).andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.error").value("TOO_FAST"));
         mvc.perform(POST(b, "/plaza/messages", Map.of("content", "다른 사람은 바로"))).andExpect(status().isCreated());
-        clock.advance(Duration.ofSeconds(2));
-        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "6초 뒤"))).andExpect(status().isCreated());
+        clock.advance(Duration.ofMillis(1));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "3초 뒤"))).andExpect(status().isCreated());   // 첫 글이 창 밖으로 나갔다
+    }
+
+    @Test
+    void sameTextInARowIsBlockedForThirtySeconds() throws Exception {
+        long a = newUser("alice"), b = newUser("bob");
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "ㅎㅇ"))).andExpect(status().isCreated());
+        clock.advance(Duration.ofSeconds(4));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", " ㅎㅇ "))).andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("DUPLICATE_MESSAGE"));
+        mvc.perform(POST(b, "/plaza/messages", Map.of("content", "ㅎㅇ"))).andExpect(status().isCreated());
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "ㅎㅇㅎㅇ"))).andExpect(status().isCreated());
+        clock.advance(Duration.ofSeconds(4));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "ㅎㅇ"))).andExpect(status().isCreated());       // 직전 글이 아니면 된다
+        clock.advance(Duration.ofSeconds(29));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "ㅎㅇ"))).andExpect(status().isConflict());
+        clock.advance(Duration.ofSeconds(1));
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "ㅎㅇ"))).andExpect(status().isCreated());       // 30초가 지났다
+        assertThat(dsl.fetchOne("select count(*) as n from plaza_message where user_id = ?", a).get("n", Long.class)).isEqualTo(4L);
+    }
+
+    @Test
+    void plazaAndRoomChatsAreCountedSeparately() throws Exception {
+        long a = newUser("alice");
+        for (int i = 0; i < 3; i++) mvc.perform(POST(a, "/plaza/messages", Map.of("content", "광장 " + i))).andExpect(status().isCreated());
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "광장 4"))).andExpect(status().isTooManyRequests());
+        var room = body(mvc.perform(POST(a, "/rooms", Map.of("kind", "OWN"))).andReturn()).get("id").asLong();
+        mvc.perform(POST(a, "/rooms/" + room + "/agree", Map.of())).andExpect(status().isOk());
+        mvc.perform(POST(a, "/rooms/" + room + "/messages", Map.of("content", "방 글"))).andExpect(status().isCreated());   // 광장에서 막혀도 공유방은 따로
     }
 
     @Test

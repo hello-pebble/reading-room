@@ -5,7 +5,7 @@ import org.jooq.Record;
 import org.jooq.Result;
 import org.springframework.stereotype.Repository;
 
-/** SQL 실행만 담당한다. 글자 수·5초 제한·24시간 규칙은 서비스에서 한다. */
+/** SQL 실행만 담당한다. 글자 수·도배 제한·24시간 규칙은 서비스에서 한다. */
 @Repository
 public class PlazaRepository {
     private static final String COLS = "m.id, m.user_id, u.handle, u.nickname, u.avatar::text as avatar, m.content, m.created_at ";
@@ -16,13 +16,19 @@ public class PlazaRepository {
         this.dsl = dsl;
     }
 
-    /** 같은 사람이 동시에 두 번 보내도 5초 제한이 새지 않게, 이 트랜잭션 동안 그 사람의 전송을 한 줄로 세운다. */
+    /** 같은 사람이 동시에 두 번 보내도 도배 제한(3초 3건·같은 글)이 새지 않게, 이 트랜잭션 동안 그 사람의 전송을 한 줄로 세운다. */
     public void lockSender(long userId) {
         dsl.fetch("select pg_advisory_xact_lock(?)", 7_000_000_000L + userId);
     }
 
+    /** since 보다 뒤에 보낸 그 사람의 글 수 (3초 안 3건 제한) */
+    public int countSince(long userId, String since) {
+        return dsl.fetchOne("select count(*) as n from plaza_message where user_id = ? and created_at > ?::timestamptz", userId, since).get("n", Integer.class);
+    }
+
+    /** 그 사람의 직전 글(내용·시각). 없으면 null */
     public Record lastMessage(long userId) {
-        return dsl.fetchOne("select max(created_at) as at from plaza_message where user_id = ?", userId);
+        return dsl.fetchOne("select content, created_at from plaza_message where user_id = ? order by created_at desc, id desc limit 1", userId);
     }
 
     public Record insert(long userId, String content, String createdAt) {

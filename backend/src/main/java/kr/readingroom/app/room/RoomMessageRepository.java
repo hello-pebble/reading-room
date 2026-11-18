@@ -6,7 +6,7 @@ import org.jooq.Record;
 import org.jooq.Result;
 import org.springframework.stereotype.Repository;
 
-/** SQL 실행만 담당한다. 참여·동의·상태·글자 수·5초 제한은 RoomMessageService에서 한다. */
+/** SQL 실행만 담당한다. 참여·동의·상태·글자 수·도배 제한은 RoomMessageService에서 한다. */
 @Repository
 public class RoomMessageRepository {
     /** 글쓴이가 지금도 참여 중인지(left)는 참여 행으로 안다. 나간 뒤 다시 들어왔으면 left가 false라 글이 다시 이름으로 보인다. */
@@ -20,14 +20,19 @@ public class RoomMessageRepository {
         this.dsl = dsl;
     }
 
-    /** 같은 사람이 동시에 두 번 보내도 5초 제한이 새지 않게, 이 트랜잭션 동안 그 사람의 전송을 한 줄로 세운다(광장과는 다른 잠금). */
+    /** 같은 사람이 동시에 두 번 보내도 도배 제한(3초 3건·같은 글)이 새지 않게, 이 트랜잭션 동안 그 사람의 전송을 한 줄로 세운다(광장과는 다른 잠금). */
     public void lockSender(long userId) {
         dsl.fetch("select pg_advisory_xact_lock(?)", 8_000_000_000L + userId);
     }
 
-    /** 방과 상관없이 그 사람의 마지막 글 시각. 없으면 null 값 */
-    public Instant lastSentAt(long userId) {
-        return kr.readingroom.app.common.Db.instant(dsl.fetchOne("select max(created_at) as at from room_message where user_id = ?", userId), "at");
+    /** 방과 상관없이 since 보다 뒤에 보낸 그 사람의 글 수 (3초 안 3건 제한) */
+    public int countSince(long userId, Instant since) {
+        return dsl.fetchOne("select count(*) as n from room_message where user_id = ? and created_at > ?::timestamptz", userId, since.toString()).get("n", Integer.class);
+    }
+
+    /** 방과 상관없이 그 사람의 직전 글(내용·시각). 없으면 null */
+    public Record lastMessage(long userId) {
+        return dsl.fetchOne("select content, created_at from room_message where user_id = ? order by created_at desc, id desc limit 1", userId);
     }
 
     public Record insert(long roomId, long userId, String content, Integer page, Instant now) {

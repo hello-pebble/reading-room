@@ -6,7 +6,11 @@
 <title>내 방 프로토타입 · 독서 공유방</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="room.css">
+<link rel="stylesheet" href="village.css">
+<link rel="stylesheet" href="shared-room.css">
+<link rel="stylesheet" href="neighbor.css">
 </head>
 <body>
 <div class="app">
@@ -18,11 +22,13 @@
  <div class="main">
   <div class="stage-wrap" id="stageWrap">
    <canvas id="stage" role="img" aria-label="내 방"></canvas>
+   <button class="neighbor-exit" id="neighborExit" type="button">← 마을로</button>
+   <div class="ov" id="giftMark" style="display:none">✦</div>
    <div class="ov" id="nameTag"></div><div class="ov" id="lampLabel" style="display:none"></div><div class="ov" id="newMark" style="display:none">✦</div><div class="ov" id="newMarkWin" style="display:none">✦</div><div class="ov" id="newMarkSofa" style="display:none">✦</div>
    <div class="fail" id="fail">이 브라우저에서는 3D를 그릴 수 없어요. 크롬이나 엣지에서 열어 주세요.</div>
    <div class="hint" id="hint">가구를 눌러 사용 · 바닥을 눌러 이동</div>
    <div class="camp-top"><button class="camp-exit" id="campExit" type="button">← 마을로</button></div>
-   <div class="camp-side" id="campSide"><button type="button" class="cs-people" data-camp="members" aria-label="참여자" title="참여자"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.2" cy="10" r="2.3" fill="#b9c7e8" stroke="#3b4a6b" stroke-width="1.3" stroke-linejoin="round"/><path d="M1 19v-1.2a4.2 4.2 0 0 1 8.4 0V19z" fill="#b9c7e8" stroke="#3b4a6b" stroke-width="1.3" stroke-linejoin="round"/><circle cx="18.8" cy="10" r="2.3" fill="#b9c7e8" stroke="#3b4a6b" stroke-width="1.3" stroke-linejoin="round"/><path d="M14.6 19v-1.2a4.2 4.2 0 0 1 8.4 0V19z" fill="#b9c7e8" stroke="#3b4a6b" stroke-width="1.3" stroke-linejoin="round"/><circle cx="12" cy="8" r="3.2" fill="#8aa0d6" stroke="#3b4a6b" stroke-width="1.3" stroke-linejoin="round"/><path d="M6.5 20.5v-2a5.5 5.5 0 0 1 11 0v2z" fill="#8aa0d6" stroke="#3b4a6b" stroke-width="1.3" stroke-linejoin="round"/></svg></button><button type="button" class="cs-info" data-camp="info" aria-label="방 정보" title="방 정보"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="#f4bb42" stroke="#9c6320" stroke-width="1.4"/><circle cx="12" cy="7.7" r="1.5" fill="#7a4a14"/><rect x="10.7" y="10.6" width="2.6" height="7" rx="1.2" fill="#7a4a14"/></svg></button></div>
+   <div class="camp-side" id="campSide"><button type="button" class="cs-people" data-camp="members" aria-label="참여자" title="참여자"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.2" cy="10" r="2.3" fill="#b9c7e8"/><path d="M1 19v-1.2a4.2 4.2 0 0 1 8.4 0V19z" fill="#b9c7e8"/><circle cx="18.8" cy="10" r="2.3" fill="#b9c7e8"/><path d="M14.6 19v-1.2a4.2 4.2 0 0 1 8.4 0V19z" fill="#b9c7e8"/><circle cx="12" cy="8" r="3.2" fill="#8aa0d6"/><path d="M6.5 20.5v-2a5.5 5.5 0 0 1 11 0v2z" fill="#8aa0d6"/></svg></button><button type="button" class="cs-info" data-camp="info" aria-label="방 정보" title="방 정보"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.4" fill="#f4bb42"/><circle cx="12" cy="7.7" r="1.5" fill="#7a4a14"/><rect x="10.7" y="10.6" width="2.6" height="7" rx="1.2" fill="#7a4a14"/></svg></button></div>
    <div class="cm-backdrop" id="campModal"><aside class="panel cm-panel" id="campModalPanel" role="dialog" aria-modal="true" aria-label="참여자 · 방 정보"></aside></div>
    <button class="camp-chat-toggle" id="campChatToggle" type="button"></button>
    <canvas id="minimap" width="224" height="224" aria-hidden="true"></canvas>
@@ -40,6 +46,11 @@
 <div class="toast" id="toast"></div>
 <script src="vendor/three.min.js"></script>
 <script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"><\/script>')</script>
+<script src="room.js"></script>
+<script src="village.js"></script>
+<script src="shared-room.js"></script>
+<script src="neighbor.js"></script>
+<script src="scene.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -5,9 +5,11 @@
   "scripts": {
     "check": "node tests/check-syntax.js",
     "test": "node --test --test-force-exit tests/scenarios.test.js",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test",
+    "e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "jsdom": "^26.1.0"
   }
 }

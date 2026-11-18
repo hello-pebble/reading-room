@@ -13,10 +13,11 @@ const opened = [];
 const closeAll = () => { for (const w of opened.splice(0)) { try { w.close(); } catch (e) {} } };
 
 function load({ state } = {}) {
-  const appJs = fs.readFileSync(path.join(path.dirname(FILE), 'app.js'), 'utf8');   // 스크립트는 app.js에 있다 → 페이지에 끼워 넣는다
   const html = fs.readFileSync(FILE, 'utf8')
-    .replace('<script src="app.js"></script>', () => '<script>\n' + appJs + '</script>')
-    .replace(/<script src="(?!app\.js)[^"]*"><\/script>/g, '')               // three.min.js 제외
+    .replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
+      if (src.startsWith('vendor/') || /^https?:/.test(src)) return ''; // 3D 라이브러리 제외
+      return '<script>\n' + fs.readFileSync(path.join(path.dirname(FILE), src), 'utf8') + '</script>';
+    }) // 실제 HTML의 스크립트 순서대로 읽는다 (파일을 하나라도 빠뜨리면 실패한다)
     .replace(/<script>window\.THREE\|\|document\.write[\s\S]*?<\/script>/, ''); // CDN 대체 로더 제외
   const errors = [];
   const vc = new VirtualConsole();

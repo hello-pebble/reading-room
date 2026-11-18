@@ -1,0 +1,53 @@
+/* 내 방 전용: 책·메모·별점·책장·달력·거울 */
+
+#lampLabel{background:#3b3226;color:#fff;font-size:12px;padding:1px 8px;border-radius:7px;white-space:nowrap}
+#lampLabel.warn{background:#b5453a}
+#newMark,#newMarkWin,#newMarkSofa{color:#e0a43a;font-size:20px;transform:translate(-50%,-50%);animation:tw 1.2s ease-in-out infinite}
+.mir{display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px;align-items:start}
+.mir-l{display:flex;flex-direction:column;gap:10px;position:sticky;top:64px}
+.mir-pv{background:#eef4f3;border-radius:14px;display:flex;align-items:center;justify-content:center;height:320px}
+.mir-pv img{height:300px;width:auto}
+#goal::-webkit-outer-spin-button,#goal::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* 목표 입력칸의 위아래 버튼은 없애고 [−] [+]만 둔다 */
+#goal{-moz-appearance:textfield;appearance:textfield}
+.bthumb{width:48px;height:68px;border-radius:6px;overflow:hidden;flex:none;box-shadow:0 1px 3px rgba(40,30,20,.25)}
+.bthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal b{font-weight:normal;color:var(--muted);font-size:12px}
+.cal i{font-style:normal;display:flex;flex-direction:column;align-items:center;justify-content:center;height:38px;border-radius:10px;font-size:14px}
+.cal i.on{background:#e4efe2}
+.cal i.on::after{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:2px}
+.cal i.today{box-shadow:0 0 0 2px var(--ink)}
+.shuffle{width:48px;height:48px;padding:0;border-radius:50%;align-self:center;display:flex;align-items:center;justify-content:center}
+.mir-r .opt{margin-bottom:16px}
+.mir-r .opt:last-child{margin-bottom:0}
+.mir-r .opt label{margin:0 0 8px}
+.mir-r .row.wrap{gap:8px}
+@media (max-width:640px){.mir{grid-template-columns:1fr;gap:16px}.mir-l{position:static}.mir-pv{height:210px}.mir-pv img{height:190px}}
+.note{border-left:3px solid var(--accent);padding:6px 10px;margin:8px 0;background:#fbf7ee;border-radius:0 8px 8px 0;font-size:14px}
+.note.q{border-color:var(--warm);font-style:italic}
+.note .meta{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;margin-top:4px;font-style:normal}
+.stars button{border:0;background:transparent;font-size:24px;padding:0 2px;color:#d6c9ad}
+.stars button.on{color:#e0a43a}
+.book{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:9px;margin:7px 0;background:#fff;width:100%;text-align:left}
+.spine{width:12px;height:42px;border-radius:3px;flex:none}
+.tabs{display:flex;gap:6px;margin:10px 0}
+.tabs button{padding:6px 12px;border-radius:999px;font-size:14px}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);padding:0}
+.sw.on{box-shadow:0 0 0 2px var(--ink)}
+.preset{padding:6px 10px;font-size:13px}
+.preset.on{background:var(--ink);color:#fff}
+.acc{font-size:13px;padding:6px 10px}
+.acc.on{background:var(--ink);color:#fff}
+.acc[disabled]{opacity:.5;cursor:not-allowed}
+.progress{height:8px;background:#eee4cf;border-radius:99px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent)}
+.furn{cursor:pointer}
+.furn .hull{fill:transparent;stroke:transparent;stroke-width:4;stroke-linejoin:round}
+.furn.hl .hull{stroke:#fff6d8}
+.furn.hl .shape{filter:brightness(1.06)}
+@media (hover:hover){.furn:hover .hull{stroke:#fff6d8}.furn:hover .shape{filter:brightness(1.06)}}
+.home-f{display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:6px 0;padding:9px 10px}
+.home-f i{font-style:normal;width:22px;text-align:center}
+.furn.dim{opacity:.35}

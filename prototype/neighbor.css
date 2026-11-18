@@ -1,0 +1,13 @@
+/* 이웃집 방문·추천 책 선택 */
+/* 체크무늬 벽지 배경 (캔버스 뒤에 깔리는 배경 자체) */
+.stage-wrap.neighbor{background:repeating-conic-gradient(#fbe4ee 0 25%,#fff7fb 0 50%) 0 0/56px 56px}
+.neighbor-exit{display:none;position:absolute;top:12px;left:12px;z-index:4;background:rgba(255,250,240,.76)}
+.stage-wrap.neighbor .neighbor-exit{display:block}
+.neighbor-choice{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:12px 0}
+.neighbor-choice .grow{min-width:0;overflow-wrap:anywhere}
+.neighbor-choice button{flex:none;white-space:nowrap}
+.neighbor-gift{display:flex;align-items:center;gap:12px;margin:12px 0}
+.neighbor-gift p{margin:4px 0}
+.neighbor-demo{margin:16px 0;font-size:13px;color:var(--muted)}
+#giftMark{color:#e0a43a;font-size:20px;animation:tw 1.2s ease-in-out infinite}
+@media(max-width:760px){.neighbor-exit{top:8px;left:8px}.neighbor-choice{gap:8px}.neighbor-choice .bthumb{width:36px;height:52px}}

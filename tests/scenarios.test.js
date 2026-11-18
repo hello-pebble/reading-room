@@ -20,6 +20,117 @@ test('부팅: 오류 없이 열리고 기본 상태가 있다', () => {
   fin(a);
 });
 
+test('이웃집 추천: 읽는 중·완독만 선택하고, 집마다 한 권을 저장하며 확인 후 다시 꽂는다', () => {
+  const a = load();
+  a.ev(`S.reading={id:99,title:'읽는 중인 책',author:'저자',notes:[],page:10};
+    S.dropped=[{id:100,title:'포기한 책'}];S.later=[{id:101,title:'나중 책'}];
+    ROOM_L=L;VIEW='village';openV('neighbor:neighbor-0');openNeighbor('shelf')`);
+  assert.equal(a.ev('VIEW'), 'neighbor');
+  const text = a.doc.getElementById('panel').textContent;
+  assert.match(text, /읽는 중인 책/);
+  assert.doesNotMatch(text, /포기한 책|나중 책/);
+  assert.equal(a.ev("putRecommendation('finished:100')"), false);
+  assert.equal(a.ev("putRecommendation('later:101')"), false);
+  a.click('#panel [data-act=giftPut][data-key=reading]');
+  assert.equal(a.state().recommendations['neighbor-0'].book.title, '읽는 중인 책');
+  assert.equal(a.state().reading.title, '읽는 중인 책', '추천해도 내 책은 그대로 남아야 해요');
+  assert.equal(a.ev("putRecommendation('finished:1')"), false);
+  const restored = load({ state: a.state() });
+  restored.ev("ROOM_L=L;VIEW='village';visitNeighbor('neighbor-0');openNeighbor('shelf')");
+  assert.equal(restored.doc.querySelector('[data-act=giftPut]'), null);
+  restored.ev("neighborAction('giftRead',{dataset:{house:'neighbor-0'}})");
+  assert.ok(restored.state().recommendations['neighbor-0'], '방문자는 집 주인 대신 확인 처리할 수 없어요');
+  restored.click('[data-act=giftOwner]');
+  restored.click('[data-act=giftRead]');
+  assert.equal(restored.state().recommendations['neighbor-0'], undefined);
+  assert.ok(restored.doc.querySelector('[data-act=giftPut]'));
+  assert.equal(restored.ev("putRecommendation('finished:1')"), true);
+  restored.ev("leaveNeighbor();visitNeighbor('neighbor-1')");
+  assert.equal(restored.ev("putRecommendation('finished:1')"), true, '다른 집에는 별도로 추천할 수 있어요');
+  fin(restored);
+  fin(a);
+});
+
+test('추천받은 책: 내 책장에 표시하고 확인하면 칸을 비우며, 추천할 책이 없으면 빈 안내를 보인다', () => {
+  const a = load();
+  a.ev(`S.recommendations.me={from:'neighbor-0',book:{title:'추천받은 책',author:'저자'},at:Date.now()};render();openF('shelf')`);
+  assert.match(a.doc.getElementById('panel').textContent, /추천받은 책/);
+  assert.equal(a.doc.getElementById('giftMark').style.display, 'block');
+  a.click('[data-act=giftRead]');
+  assert.equal(a.state().recommendations.me, undefined);
+  assert.equal(a.doc.getElementById('giftMark').style.display, 'none');
+  a.ev("S.finished=[];S.reading=null;closePanel();ROOM_L=L;VIEW='village';visitNeighbor('neighbor-0');openNeighbor('shelf')");
+  assert.match(a.doc.getElementById('panel').textContent, /아직 추천할 수 있는 책이 없어요/);
+  assert.equal(a.doc.querySelector('[data-act=giftPut]'), null);
+  fin(a);
+});
+
+test('분리된 마을·공유방: 개설 입력, 동의, Enter 전송, 장면 나가기와 재입장이 이어진다', () => {
+  const a = load();
+  const input = (id, value) => {
+    const el = a.doc.getElementById(id);
+    el.value = value;
+    el.dispatchEvent(new a.w.Event('input', { bubbles: true }));
+  };
+  a.ev("VIEW='village';openV('fire:new')");
+  a.change('#rbook', 'typed');
+  input('rbookt', '분리 확인 책');
+  input('rname', '분리 확인 모닥불');
+  input('rmax', '4');
+  a.click('#panel [data-act=rcreate]');
+  const room = a.state().news.find(n => n.title === '분리 확인 모닥불');
+  assert.equal(room.book, '분리 확인 책');
+  assert.equal(room.max, 4);
+  a.ev(`openV('room:${room.id}')`);
+  a.click('#panel [data-act=rcAgree]');
+  assert.equal(a.ev('VIEW'), 'shared');
+  input('rc', '공유방에 남기는 글');
+  a.doc.getElementById('rc').dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  assert.equal(a.state().news.find(n => n.id === room.id).messages.length, 1, '전송 이벤트가 중복 연결되면 안 돼요');
+  a.click('#campSide [data-camp=info]');
+  assert.ok(a.doc.getElementById('campModal').classList.contains('open'));
+  a.click('#campModalPanel [data-act=cmClose]');
+  assert.equal(a.ev('VIEW'), 'shared');
+  a.click('#campExit');
+  a.click('#panel [data-act=campLeave]');
+  assert.equal(a.ev('VIEW'), 'village');
+  const restored = load({ state: a.state() });
+  restored.ev(`VIEW='village';openV('room:${room.id}')`);
+  assert.equal(restored.ev('VIEW'), 'shared');
+  assert.match(restored.doc.getElementById('rcLog').textContent, /공유방에 남기는 글/);
+  fin(restored);
+  fin(a);
+});
+
+test('분리된 내 방: 입력 이벤트로 책·메모를 저장하고 다시 열어도 유지된다', () => {
+  const a = load();
+  const input = (id, value) => {
+    const el = a.doc.getElementById(id);
+    el.value = value;
+    el.dispatchEvent(new a.w.Event('input', { bubbles: true }));
+  };
+  a.ev("openF('sofa')");
+  input('bt', '분리 확인용 책');
+  input('ba', '테스트 저자');
+  input('btp', '240');
+  a.click('#panel [data-act=addBook]');
+  input('nc', '다시 열어도 남는 메모');
+  a.click('#panel [data-act=addNote]');
+  a.ev("openF('lamp')");
+  a.click('#panel [data-act=startTimer]');
+  assert.equal(a.state().session.status, 'RUNNING');
+  const restored = load({ state: a.state() });
+  restored.ev("openF('sofa')");
+  assert.match(restored.doc.getElementById('panel').textContent, /다시 열어도 남는 메모/);
+  assert.equal(restored.state().reading.totalPages, 240);
+  restored.ev("VIEW='village';openV('board')");
+  assert.ok(restored.doc.querySelector('#panel [data-act=newRoom]'), '내 방 버튼 처리가 마을 버튼을 가로채면 안 돼요');
+  restored.click('#panel [data-act=newRoom]');
+  assert.equal(restored.ev('panelOpen'), 'fire:new');
+  fin(restored);
+  fin(a);
+});
+
 test('마을 구역: 모닥불 자리 8개는 모두 모닥불 구역 안이고 광장 밖이다', () => {
   const a = load();
   const { VSLOTS, PLAZA, ZONE } = JSON.parse(a.ev('JSON.stringify({VSLOTS,PLAZA,ZONE})'));
@@ -296,6 +407,6 @@ test('키보드: 창을 열면 포커스가 창 제목으로 가고, 닫으면 �
 });
 
 test('동작 줄이기: prefers-reduced-motion 규칙이 애니메이션과 전환을 끈다', () => {
-  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'prototype', 'style.css'), 'utf8');
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'prototype', 'common.css'), 'utf8');
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none!important[^}]*transition:none!important/);
 });

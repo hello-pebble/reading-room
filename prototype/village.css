@@ -1,0 +1,33 @@
+/* 마을 전용: 광장 채팅·미니맵·접속 표시 */
+
+.stage-wrap.vil .hint{max-width:calc(100% - 150px);border-radius:14px;line-height:1.4}
+/* 마을: 오른쪽 위 미니맵과 윗선을 맞추고 겹치지 않게 줄바꿈 */
+#online{display:none;position:absolute;right:14px;bottom:8px;z-index:2;pointer-events:none;font-size:11px;color:var(--muted);opacity:.7}
+/* 정보성 안내: 눈에 띄지 않게 하단에 연하게 */
+.stage-wrap.vil #online{display:block}
+#minimap{display:none;position:absolute;top:12px;right:12px;width:112px;height:112px;z-index:3;pointer-events:auto;cursor:default;background:rgba(255,250,240,.88);border:1px solid #d9cfb8;border-radius:10px;box-shadow:0 2px 6px rgba(60,40,20,.15)}
+.stage-wrap.vil #minimap{display:block}
+.plog{max-height:46vh;overflow-y:auto;margin:8px 0}
+/* 마을 광장 대화창: 모달이 아니라 마을 화면 위에 뜨는 반투명 채팅창. 광장 안에 서 있을 때만 자동으로 뜬다 (결정 #40) */
+#plazaChat{display:none;position:absolute;z-index:4;left:12px;top:12px;bottom:12px;width:300px;flex-direction:column;overflow:hidden;   /* PC: 배경(마을 화면) 높이에 맞춰 왼쪽에 세로로 길게. 글 수와 상관없이 크기 고정 */
+ background:rgba(255,250,240,.72);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border:1px solid rgba(217,207,184,.9);border-radius:14px;box-shadow:0 4px 14px rgba(60,40,20,.18);color:var(--ink);font-size:13px}
+.stage-wrap.pz #plazaChat{display:flex}
+.stage-wrap.pz #online{display:none}
+#pzHead{border:0;background:none;display:flex;gap:6px;align-items:center;width:100%;padding:7px 10px;font-size:12px;color:var(--muted);text-align:left;min-height:0}
+#pzLog{flex:1;min-height:0;overflow-y:auto;padding:0 6px 2px 10px}
+/* 스크롤바 모양은 위의 공통 규칙 */
+#pzLog .msg{font-size:13px;margin:3px 0;overflow-wrap:anywhere}
+#pzLog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
+#pzLog .msg.me{text-align:right}
+#pzForm{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px 8px}
+#pzForm input{flex:1;min-width:0;background:rgba(255,255,255,.88);font-size:16px}
+/* 아이폰 사파리는 16px보다 작은 입력칸을 누르면 화면을 확대한다 */
+#pzForm #pzE{width:100%;min-height:0}
+#plazaChat.min #pzLog,#plazaChat.min #pzForm{display:none}
+#plazaChat.min{top:auto;height:auto}
+@media (max-width:760px){#plazaChat{left:0;right:0;top:auto;width:auto;height:230px;bottom:var(--kb,0px);max-height:55%;border-radius:14px 14px 0 0;border-width:1px 0 0 0}#plazaChat.min{height:auto}}
+.vstar{color:#e0a100}
+.plog .msg{overflow-wrap:anywhere}
+.plog .msg.me{text-align:right}
+.plog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
+.stage-wrap.vil #newMark,.stage-wrap.vil #newMarkWin,.stage-wrap.vil #newMarkSofa,.stage-wrap.vil #lampLabel{display:none!important}

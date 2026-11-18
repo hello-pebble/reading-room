@@ -24,6 +24,13 @@ class UserIdFilterTest {
     }
 
     @Test
+    void invitePreviewIsPublicButOnlyForGet() throws Exception {
+        mvc.perform(get("/rooms/invite/ABCDEFGH")).andExpect(status().isNotFound());           // 헤더 없이 필터를 통과(이 테스트에는 컨트롤러가 없어 404)
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/rooms/invite/ABCDEFGH")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/rooms")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void preflightPassesWithoutUserId() throws Exception {
         var req = new org.springframework.mock.web.MockHttpServletRequest("OPTIONS", "/books/search");
         var res = new org.springframework.mock.web.MockHttpServletResponse();

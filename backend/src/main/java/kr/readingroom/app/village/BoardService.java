@@ -49,22 +49,25 @@ public class BoardService {
         };
     }
 
-    /** 보관 기간이 지난 종료 방이면 null */
-    private RoomResponse view(Record r, long userId, Instant now) {
+    /** 상태는 저장값이 아니라 시각으로: closedAt이 있거나 closeAt이 지났으면 CLOSED, openAt 전이면 SCHEDULED, 아니면 OPEN */
+    public static String state(Instant open, Instant close, Instant closed, Instant now) {
+        if (closed != null || !close.isAfter(now)) return "CLOSED";
+        return open.isAfter(now) ? "SCHEDULED" : "OPEN";
+    }
+
+    /** 보관 기간이 지난 종료 방이면 null. 공유방 개설·입장 응답(`room` 패키지)도 같은 모양을 쓴다. */
+    public static RoomResponse view(Record r, long userId, Instant now) {
         Instant open = Db.instant(r, "open_at"), close = Db.instant(r, "close_at"), closed = Db.instant(r, "closed_at");
-        String state;
+        String state = state(open, close, closed, now);
         Instant deleteAt = null;
-        if (closed != null || !close.isAfter(now)) {
-            state = "CLOSED";
+        if (state.equals("CLOSED")) {
             deleteAt = (closed != null ? closed : close).plus(KEEP);
             if (!deleteAt.isAfter(now)) return null;
-        } else {
-            state = open.isAfter(now) ? "SCHEDULED" : "OPEN";
         }
         boolean mine = r.get("created_by", Long.class) == userId;
         return new RoomResponse(r.get("id", Long.class), r.get("kind", String.class), r.get("title", String.class), r.get("isbn", String.class),
                 state, open, close, closed, deleteAt, r.get("participants", Long.class).intValue(), r.get("max_participants", Integer.class),
-                mine, r.get("joined", Boolean.class), r.get("agreed", Boolean.class), r.get("owner_nickname", String.class),
+                mine, r.get("joined", Boolean.class), r.get("agreed", Boolean.class), r.get("unread", Boolean.class), r.get("owner_nickname", String.class),
                 mine ? r.get("invite_code", String.class) : null);
     }
 }

@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import kr.readingroom.app.common.ApiException;
+import kr.readingroom.app.common.ChatRate;
 import kr.readingroom.app.common.Db;
 import kr.readingroom.app.village.dto.PlazaMessageRequest;
 import kr.readingroom.app.village.dto.PlazaMessageResponse;
@@ -16,11 +17,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 마을 광장 대화: 한 줄 40자, 사용자당 5초에 1건, 글은 24시간만 보관한다 (결정 #34). */
+/** 마을 광장 대화: 한 줄 40자, 사용자당 3초에 3건·같은 글 30초 연속 금지(결정 #61, `ChatRate`), 글은 24시간만 보관한다 (결정 #34). */
 @Service
 public class PlazaService {
     static final int MAX_CHARS = 40, PAGE = 30;
-    static final Duration KEEP = Duration.ofHours(24), COOLDOWN = Duration.ofSeconds(5);
+    static final Duration KEEP = Duration.ofHours(24);
     private final PlazaRepository plaza;
     private final Clock clock;
     private final ObjectMapper json = new ObjectMapper();
@@ -37,9 +38,9 @@ public class PlazaService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_CONTENT", "한 줄은 1~" + MAX_CHARS + "자로 적어 주세요");
         Instant now = clock.instant();
         plaza.lockSender(userId);
-        Instant last = Db.instant(plaza.lastMessage(userId), "at");
-        if (last != null && last.plus(COOLDOWN).isAfter(now))
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_FAST", "조금 뒤에 보내 주세요");
+        Record last = plaza.lastMessage(userId);
+        ChatRate.check(now, plaza.countSince(userId, now.minus(ChatRate.WINDOW).toString()), last == null ? null : last.get("content", String.class),
+                last == null ? null : Db.instant(last, "created_at"), content);
         return view(plaza.insert(userId, content, now.toString()));
     }
 

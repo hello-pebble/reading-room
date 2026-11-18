@@ -19,9 +19,10 @@ public class UserIdFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
         String p = req.getRequestURI();
-        // 브라우저가 먼저 보내는 CORS 확인(OPTIONS)과 책 검색(공개 서지 데이터)은 사용자 헤더 없이 통과시킨다.
+        // 브라우저가 먼저 보내는 CORS 확인(OPTIONS), 책 검색(공개 서지 데이터), 초대 링크 미리보기(GET /rooms/invite/{code}, 로그인 전에 보여 준다)는
+        // 사용자 헤더 없이 통과시킨다.
         // TODO: 구글 로그인이 생기면 책 검색도 로그인 필요 + 호출 횟수 제한으로 바꾼다(국립중앙도서관 호출 한도 보호).
-        return req.getMethod().equals("OPTIONS") || p.equals("/health") || p.equals("/books/search") || p.startsWith("/dev/") || p.startsWith("/error");
+        return req.getMethod().equals("OPTIONS") || p.equals("/health") || p.equals("/books/search") || (req.getMethod().equals("GET") && p.startsWith("/rooms/invite/")) || p.startsWith("/dev/") || p.startsWith("/error");
     }
 
     @Override

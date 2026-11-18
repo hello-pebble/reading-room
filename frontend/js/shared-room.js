@@ -97,7 +97,7 @@ ICON_SHARE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wi
 // 초대 링크: 링크 칸 옆에 복사(공유) 아이콘 버튼. 상자로 감싸지 않고 참여자 창처럼 글자 중심으로 보인다
 function inviteBlock(n){return `<div class="rinv"><div class="rlbl">초대 링크</div><div class="rcopy"><input id="invLink" readonly value="${esc(inviteLink(n))}" aria-label="초대 링크"><button class="ibtn" data-act="copyLink" data-id="${n.id}" aria-label="링크 복사" title="링크 복사">${ICON_COPY}</button>${navigator.share?`<button class="ibtn" data-act="shareLink" data-id="${n.id}" aria-label="공유" title="공유">${ICON_SHARE}</button>`:''}</div><div class="muted" style="margin-top:6px">초대 코드 ${n.inviteCode}${n.vis==='public'?' · 마을 게시판에도 보여요':''}</div><div class="muted">체험판에서는 이 브라우저에서 만든 모닥불만 열려요.</div></div>`}
 // ===== 공유방 대화 (결정 #38, 기능 정의서 RC-01~RC-17) =====
-const MAXMSG=300,SEND_GAP=5000;let rcLast=0;
+const MAXMSG=300;
 const NAMEPOOL=['@나무','@달빛','@구름','@바다','@모래','@하늘','@바람','@여울','@노을','@이끼','@솔','@봄비','@담쟁이','@반딧불','@물결','@새벽','@고래','@해님','@도토리','@별빛','@안개','@돌담','@산들','@풀잎','@종이배','@낮달','@오솔길','@소나기','@온새미','@아침'];
 const BOOKPOOL=['아몬드','어린 왕자','사피엔스','채식주의자','불편한 편의점','모순','데미안','82년생 김지영'];
 const ROOM_SAY=['처음엔 느리게 읽히다가 중반부터 확 빨려 들어갔어요','이 장면에서 한참 멈춰 있었어요','문장이 너무 좋아서 밑줄 쳤어요','저는 이 인물이 이해되면서도 답답했어요','여기까지 읽은 분 계세요?','다음 장이 기대돼요','잠깐 덮어 두고 생각 좀 했어요','오늘은 여기까지 읽고 쉴게요','마음에 남는 문장이 있어요','예상 못 한 전개였어요','분위기가 확 달라지는 부분이었어요','같이 읽으니까 끝까지 읽게 돼요'];
@@ -188,10 +188,10 @@ function rcFoot(n){
  return `<div class="foot">${chip}<div class="row"><textarea id="rc" rows="2" maxlength="${MAXMSG}" placeholder="이야기를 남겨요" style="flex:1;resize:none">${esc(panelView.draft||'')}</textarea><button class="primary" data-act="rcSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="rcE" style="margin-top:4px"></div></div>`}
 function rcSend(n){
  const ta=document.getElementById('rc'),e=document.getElementById('rcE'),t=ta.value.trim().slice(0,MAXMSG);if(!t)return;
- if(Date.now()-rcLast<SEND_GAP){e.textContent='조금 뒤에 보내 주세요';return}
+ const gate=chatGate('room',t);if(gate){e.textContent=gate;return}
  const pg=n.rtype==='OWN'?null:rcPage(n);
  const mm={id:'m'+Date.now(),who:'나',text:t,page:pg??null,ts:Date.now()};n.messages.push(mm);campBubble(n,mm);if(n.messages.length>300)n.messages.splice(0,n.messages.length-300);
- rcLast=Date.now();panelView.draft='';ta.value='';e.textContent='';n.lastRead=Date.now();save();render();rcRefresh(n,true);ta.focus()}
+ chatMark('room',t);panelView.draft='';ta.value='';e.textContent='';n.lastRead=Date.now();save();render();rcRefresh(n,true);ta.focus()}
 const CROWN='<svg class="crown" viewBox="0 0 24 24" width="15" height="15" role="img" aria-label="방장"><title>방장</title><path d="M3.2 17.6 2.6 8.4 8 12.4 12 5.6 16 12.4 21.4 8.4 20.8 17.6Z" fill="#f4bb42" stroke="#9c6320" stroke-width="1.4" stroke-linejoin="round"/><rect x="3.2" y="17.6" width="17.6" height="3.2" rx="1.3" fill="#e0952f" stroke="#9c6320" stroke-width="1.4"/><circle cx="2.6" cy="7.6" r="1.5" fill="#fff1c0" stroke="#9c6320" stroke-width="1.1"/><circle cx="12" cy="4.8" r="1.6" fill="#fff1c0" stroke="#9c6320" stroke-width="1.1"/><circle cx="21.4" cy="7.6" r="1.5" fill="#fff1c0" stroke="#9c6320" stroke-width="1.1"/></svg>';   // 방을 연 사람(방장) 표시. 직접 그린 왕관 (작게 써도 또렷하도록 굵은 윤곽선)
 function rcMembersHtml(n){
  const rows=[{name:S.user.nickname+' (나)',owner:n.owner==='나'},...n.members.map(x=>({name:x,owner:x===n.owner,book:n.rtype==='OWN'?BOOKPOOL[rcHash(x)%BOOKPOOL.length]:''}))];

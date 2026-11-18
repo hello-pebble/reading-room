@@ -90,7 +90,8 @@ function syncPlazaChat(){
 function plazaSend(){
  const inp=document.getElementById('pz'),e=document.getElementById('pzE'),t=inp.value.trim().slice(0,40);if(!t){inp.value='';return}
  if(!inPlaza(sim.x,sim.z)){e.textContent='광장 안으로 걸어가는 중이에요. 도착하면 보낼 수 있어요';return}
- e.textContent='';inp.value='';inp.focus();plazaSay('나',t,-1,true);
+ const gate=chatGate('plaza',t);if(gate){e.textContent=gate;return}
+ chatMark('plaza',t);e.textContent='';inp.value='';inp.focus();plazaSay('나',t,-1,true);
  setTimeout(()=>{if(VIEW==='village')plazaSay('@'+NPCS[1].name,NPC_REPLY[Math.floor(Math.random()*NPC_REPLY.length)],1)},2200+Math.random()*2000);
 }
 // 체험판: 가짜 이웃이 가끔 말을 건다

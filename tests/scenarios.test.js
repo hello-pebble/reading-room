@@ -170,8 +170,8 @@ test('광장 대화: 광장 안에서만 채팅창이 뜨고, 40자로 자르고
   a.ev(`Object.assign(sim,{x:2,z:5});syncPlazaChat()`);
   assert.ok(!wrap.classList.contains('pz'), '광장 밖에서는 채팅창이 숨어야 해요');
   // 광장 안: 채팅창이 뜬다
-  a.ev(`Object.assign(sim,{x:15,z:12});syncPlazaChat()`);
-  assert.ok(a.ev('inPlaza(15,12)'));
+  a.ev(`Object.assign(sim,{x:PLAZA.cx,z:PLAZA.cz});syncPlazaChat()`);   // 광장 한가운데 (광장 위치가 바뀌어도 맞도록 좌표를 직접 쓰지 않는다)
+  assert.ok(a.ev('inPlaza(PLAZA.cx,PLAZA.cz)'));
   assert.ok(wrap.classList.contains('pz'), '광장 안에서는 채팅창이 떠야 해요');
   a.doc.getElementById('pz').value = '가'.repeat(60); a.ev('plazaSend()');
   assert.equal(a.state().plaza.at(-1).text.length, 40);

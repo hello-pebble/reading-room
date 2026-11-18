@@ -86,14 +86,14 @@ const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
 // 마을: 문으로 나가면 들어가는 장면. 방과 같이 크기가 고정이다.
 // 마을은 두 구역으로 나뉜다: 가운데 돌바닥 "광장"(누구와도 짧게 대화)과 동쪽 흙바닥 "모닥불 구역"(공유방, 대화는 방 안에서만)
 const VSLOTS=[[26.0,6.2],[32.0,8.7],[26.0,11.2],[32.0,13.7],[26.0,16.2],[32.0,18.7],[26.0,21.2],[32.0,23.7]]; // 공유방 모닥불 자리 (빈 자리 하나는 "모닥불 피우기")
-const PLAZA={x0:8.6,z0:7.0,x1:21.6,z1:17.0,cx:15.1,cz:12.0}; // 대화 가능 구역 (13×10칸). 이 안에 있을 때만 말풍선으로 말할 수 있다
+const PLAZA={x0:1.6,z0:10.0,x1:14.6,z1:20.0,cx:8.1,cz:15.0}; // 대화 가능 구역 (13×10칸). 이 안에 있을 때만 말풍선으로 말할 수 있다
 const VMAX=100; // 마을 동시 접속 정원 (결정 #41, 조정 가능)
 const RMAX=20;  // 공유방 최대 인원 (결정 #41)
 const PUBLIC_ROOMS=false; // 베타는 초대만 (결정 #41, 열린 결정 M ②). 켜면 개설 창에 "마을에 공개" 선택지가 다시 나온다
-const ZONE={x0:23.0,z0:4.0,x1:35.4,z1:25.6,g0:11.0,g1:13.2}; // 모닥불 구역 (12×21.6칸). g0~g1은 울타리 입구
+const ZONE={x0:23.0,z0:4.0,x1:35.4,z1:25.6,g0:4.5,g1:6.7}; // 모닥불 구역 (12×21.6칸). g0~g1은 울타리 입구 (위쪽 길이 닿는 북서쪽)
 const inPlaza=(x,z)=>x>PLAZA.x0&&x<PLAZA.x1&&z>PLAZA.z0&&z<PLAZA.z1;
 // 체험판용 가짜 이웃. 서버가 생기면 그날 광장에 온 실제 사람으로 바뀐다
-const NPCS=[{name:'나무',x:11.6,z:9.6,av:{color:'#e6f4e0',expr:'happy',face:'none',head:'sprout',prop:'mug'}},{name:'달빛',x:19.0,z:9.8,av:{color:'#e8e4ff',expr:'sleepy',face:'glasses',head:'none',prop:'book'}},{name:'구름',x:12.6,z:14.8,av:{color:'#ffe6ec',expr:'wink',face:'none',head:'bow',prop:'balloon'}},{name:'바다',x:18.6,z:14.6,av:{color:'#e0f0fb',expr:'normal',face:'sunglasses',head:'none',prop:'lantern'}},{name:'모래',x:15.4,z:8.6,av:{color:'#fbeed6',expr:'surprised',face:'none',head:'beanie',prop:'none'}}];
+const NPCS=[{name:'나무',x:4.6,z:12.6,av:{color:'#e6f4e0',expr:'happy',face:'none',head:'sprout',prop:'mug'}},{name:'달빛',x:12.0,z:12.8,av:{color:'#e8e4ff',expr:'sleepy',face:'glasses',head:'none',prop:'book'}},{name:'구름',x:5.6,z:17.8,av:{color:'#ffe6ec',expr:'wink',face:'none',head:'bow',prop:'balloon'}},{name:'바다',x:11.6,z:17.6,av:{color:'#e0f0fb',expr:'normal',face:'sunglasses',head:'none',prop:'lantern'}},{name:'모래',x:8.4,z:11.6,av:{color:'#fbeed6',expr:'surprised',face:'none',head:'beanie',prop:'none'}}];
 const NPC_SAY=['오늘 몇 쪽 읽었어요?','방금 한 권 완독했어요!','비 오는 날엔 스탠드 켜고 읽는 게 최고예요','『아몬드』 읽어 본 분 계세요?','저는 지금 150쪽쯤이에요','모닥불에서 같이 읽을 분~','30분만 읽어도 오늘은 성공이죠','다음엔 어떤 책 읽을지 고민 중이에요'];
 const NPC_REPLY=['저도요!','오, 좋은데요','어떤 책이에요?','화이팅이에요','같이 읽어요'];
 const VIL={X:36,Y:27,minX:1.2,minZ:3.4,start:[4.0,4.0],home:[4.0,3.8]}; // 걸어 다니는 큰 마을. 카메라가 유령을 따라간다
@@ -429,18 +429,36 @@ const G3=(function(){
   const road='#cdb890',stone='#d9cfb8';
   BB(PLAZA.x0,PLAZA.z0,.02,PLAZA.x1-PLAZA.x0,PLAZA.z1-PLAZA.z0,.02,stone);   // 대화 광장 (돌바닥)
   const curb='#b3a78c';[[PLAZA.x0,PLAZA.z0,PLAZA.x1-PLAZA.x0,.16],[PLAZA.x0,PLAZA.z1-.16,PLAZA.x1-PLAZA.x0,.16],[PLAZA.x0,PLAZA.z0,.16,PLAZA.z1-PLAZA.z0],[PLAZA.x1-.16,PLAZA.z0,.16,PLAZA.z1-PLAZA.z0]].forEach(([x,y,w,d])=>BB(x,y,.02,w,d,.1,curb));
-  BB(3.6,3.0,.02,1.0,5.0,.02,road);BB(3.6,7.5,.02,5.2,1.0,.02,road);   // 내 집 앞길 → 광장
-  BB(PLAZA.x1,ZONE.g0,.02,ZONE.x0-PLAZA.x1,ZONE.g1-ZONE.g0,.02,road);   // 광장 → 모닥불 구역 입구
+  BB(3.6,3.0,.02,1.0,7.0,.02,road);   // 내 집 앞길: 남쪽(화면 왼쪽 아래)으로 내려가 광장에 닿는다
+  BB(PLAZA.x1,11.0,.02,22.7-PLAZA.x1,2.2,.02,road);   // 광장 → 세로 길(x≈22) → 모닥불 구역 입구
+  // 갈림길: 집 앞길(z≈5)에서 갈라진다. 계속 남쪽(화면 왼쪽)으로 가면 광장, 동쪽(화면 오른쪽)으로 꺾으면 광장을 거치지 않고 모닥불 구역(공유방) 입구로 간다
+  BB(4.6,4.6,.02,18.1,1.0,.02,road);BB(22.0,4.6,.02,.7,8.6,.02,road);
+  {const sg=new THREE.Group();sg.position.set(5.8,0,6.8);villageG.add(sg);   // 갈림길 푯말: 돌색 판은 광장(왼쪽), 주황 판은 공유방 모닥불(오른쪽)
+   sg.add(mesh(new THREE.BoxGeometry(.14,1.7,.14),mat('#7d5330',.9),[0,.85,0]));
+   sg.add(mesh(new THREE.BoxGeometry(1.0,.26,.07),mat('#d9cfb8',.9),[.05,1.35,.5],[1,1,1],[0,-1.45,0]));
+   sg.add(mesh(new THREE.BoxGeometry(1.0,.26,.07),mat('#e8764a',.9),[.5,1.0,-.05],[1,1,1],[0,.12,0]));
+   addLabel('<b>광장</b>',5.9,1.9,8.2);addLabel('<b>공유방 모닥불</b>',7.4,1.5,6.5)}
   BB(ZONE.x0,ZONE.z0,.03,ZONE.x1-ZONE.x0,ZONE.z1-ZONE.z0,.02,'#a88f68'); // 모닥불 구역 (흙바닥)
   {const fp='#6a4527',fx=ZONE.x0-.2;for(let z=ZONE.z0;z<ZONE.z1;z+=1.1){if(z>ZONE.g0-.3&&z<ZONE.g1+.1)continue;BB(fx,z,0,.12,.12,.7,fp)}
    BB(fx+.04,ZONE.z0,.42,.05,ZONE.g0-ZONE.z0,.07,fp);BB(fx+.04,ZONE.g1,.42,.05,ZONE.z1-ZONE.g1,.07,fp);   // 울타리. g0~g1이 입구
    BB(fx-.04,ZONE.g0-.2,0,.16,.16,1.5,'#7d5330');BB(fx-.04,ZONE.g1,0,.16,.16,1.5,'#7d5330');BB(fx-.08,ZONE.g0-.2,1.5,.24,ZONE.g1-ZONE.g0+.36,.12,'#7d5330')}
-  {const st=new THREE.Group();st.position.set(PLAZA.cx,0,PLAZA.cz);villageG.add(st);   // 광장 단상: 누르면 대화
-   st.scale.setScalar(1.3);st.add(mesh(new THREE.CylinderGeometry(1.0,1.1,.22,24),mat('#a8743f',.8),[0,.13,0]));st.add(mesh(new THREE.CylinderGeometry(.8,.8,.04,24),mat('#c99560',.8),[0,.25,0]));
-   st.add(mesh(new THREE.CylinderGeometry(.05,.06,1.1,8),mat('#5a4332',.8),[.7,.8,0]));st.add(mesh(sph(.17),mat('#fff3c4',.4,{emissive:'#ffe08a',emissiveIntensity:.7}),[.7,1.45,0]));
-   vhull(st,-1.1,-1.1,0,2.2,2.2,1.4,'plaza');vcollect('plaza',st)}
+  {const st=new THREE.Group();st.position.set(PLAZA.cx,0,PLAZA.cz);villageG.add(st);   // 광장 분수대: 누르면 대화
+   st.scale.setScalar(1.15);const stn='#b9b2a2',stl='#d3ccbc',wtr=new THREE.MeshBasicMaterial({color:'#8fd0f0'}),wtl=new THREE.MeshBasicMaterial({color:'#e3f6ff'});
+   st.add(mesh(new THREE.CylinderGeometry(1.45,1.5,.32,28),mat(stn,.9),[0,.16,0]));   // 수조 몸통
+   st.add(mesh(new THREE.TorusGeometry(1.32,.14,8,32),mat(stl,.9),[0,.36,0],[1,1,1],[Math.PI/2,0,0]));   // 둥근 연석
+   {const w=new THREE.Mesh(new THREE.CylinderGeometry(1.22,1.22,.03,28),wtr);w.position.y=.34;w.userData.nodim=true;st.add(w)}   // 물
+   st.add(mesh(new THREE.CylinderGeometry(.2,.28,.62,12),mat(stn,.9),[0,.64,0]));   // 가운데 기둥
+   st.add(mesh(new THREE.CylinderGeometry(.78,.42,.2,22),mat(stl,.9),[0,.98,0]));   // 아래 물받이
+   {const w=new THREE.Mesh(new THREE.CylinderGeometry(.66,.66,.03,22),wtr);w.position.y=1.09;w.userData.nodim=true;st.add(w)}
+   st.add(mesh(new THREE.CylinderGeometry(.1,.14,.42,10),mat(stn,.9),[0,1.28,0]));   // 윗기둥
+   st.add(mesh(new THREE.CylinderGeometry(.42,.22,.15,18),mat(stl,.9),[0,1.5,0]));   // 위 물받이
+   {const w=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,.03,18),wtr);w.position.y=1.59;w.userData.nodim=true;st.add(w)}
+   {const jet=new THREE.Group();jet.position.y=1.6;st.add(jet);   // 솟는 물줄기 (일렁이게 한다)
+    const c=new THREE.Mesh(new THREE.ConeGeometry(.07,.8,8),wtl);c.position.y=.4;c.userData.nodim=true;jet.add(c);const t=new THREE.Mesh(new THREE.SphereGeometry(.11,10,8),wtl);t.position.y=.82;t.userData.nodim=true;jet.add(t);
+    vilFlames.push({g:jet,base:1,ph:1.3})}
+   vhull(st,-1.6,-1.6,0,3.2,3.2,1.9,'plaza');vcollect('plaza',st)}
   NPCS.forEach((p,i)=>{const gm=build(p.av);gm.root.userData.nodim=true;villageG.add(gm.root);vilNpcs.push({M:gm,x:p.x,z:p.z,rot:Math.atan2(PLAZA.cx-p.x,PLAZA.cz-p.z),ph:i*2.3});addLabel('@'+p.name,p.x,2.65,p.z)});
-  BB(1.5,14.2,.03,5.2,4.2,.02,'#7fb6d8');                              // 연못
+  BB(16.4,19.6,.03,5.2,4.2,.02,'#7fb6d8');                              // 연못
   const house=(f,x,y,w,d,h,wall,roof,nWin,seed,mine)=>{
    const g=new THREE.Group();villageG.add(g);vilHouses.push([x,y,w,d,!!mine]);
    BB(x,y,0,w,d,h,0,g,wm({base:wall,planks:8,vertical:true,seed}));
@@ -452,7 +470,7 @@ const G3=(function(){
   house('home',3.0,1.0,2.0,2.0,1.7,'#c9a06a','#b5653a',2,41,true);
   [[7.2,.6,1.8,1.6,1.4,'#d8b27a','#7d9a6a',2,43],[11.0,.5,1.5,1.3,1.3,'#caa070','#a8663d',1,47],[14.6,.6,1.9,1.7,1.5,'#d3ad78','#6f8fa8',2,53],[18.4,.5,1.6,1.4,1.3,'#c99e68','#a85d4a',1,59],[22.0,.6,1.8,1.6,1.4,'#d8b27a','#8a7aa8',2,61],[25.8,.6,1.7,1.5,1.4,'#d3ad78','#7a9a6a',2,67],[29.6,.5,1.5,1.4,1.3,'#c99e68','#a8663d',1,71],[33.2,.6,1.7,1.5,1.4,'#d8b27a','#6f8fa8',2,73]]
    .forEach(([x,y,w,d,h,wall,roof,n,sd])=>house(null,x,y,w,d,h,wall,roof,n,sd,false));
-  const bg=new THREE.Group();villageG.add(bg);const bx=11.3,bz=6.3;
+  const bg=new THREE.Group();villageG.add(bg);const bx=PLAZA.x0+6.5,bz=PLAZA.z0-.7;
   BB(bx,bz,0,.15,.15,1.7,'#7d5330',bg);BB(bx+1.4,bz,0,.15,.15,1.7,'#7d5330',bg);
   BB(bx-.1,bz+.05,.8,1.8,.1,.9,0,bg,wm({base:'#a8743f',planks:4,seed:51}));
   BB(bx-.2,bz-.05,1.7,2.0,.35,.1,'#6a4527',bg);
@@ -461,7 +479,7 @@ const G3=(function(){
   [[PLAZA.x0-.4,PLAZA.z0-.4],[PLAZA.x1+.2,PLAZA.z0-.4],[PLAZA.x0-.4,PLAZA.z1+.2],[PLAZA.x1+.2,PLAZA.z1+.2]].forEach(([x,z])=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
    g.add(mesh(new THREE.CylinderGeometry(.05,.06,1.7,8),mat('#5a4332',.8),[0,.85,0]));g.add(mesh(sph(.16),mat('#ffd66b',.4,{emissive:'#ffcf5a',emissiveIntensity:.9}),[0,1.8,0]))});
   let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647;
-  const rects=[[2.4,.2,VIL.X,4.4],[PLAZA.x0-.6,PLAZA.z0-.4,PLAZA.x1+.6,PLAZA.z1+.6],[3.2,2.8,5.0,9.0],[3.2,7.2,9.4,8.8],[ZONE.x0-.6,3.4,VIL.X,VIL.Y],[1.2,13.8,7.0,18.6]];
+  const rects=[[2.4,.2,VIL.X,4.4],[PLAZA.x0-.6,PLAZA.z0-.4,PLAZA.x1+.6,PLAZA.z1+.6],[3.2,2.8,5.0,10.4],[ZONE.x0-.6,3.4,VIL.X,VIL.Y],[16.2,19.4,21.8,24.0],[4.4,4.4,22.9,5.8],[21.8,4.4,22.9,13.4],[14.4,10.8,23.0,13.4],[4.8,5.8,7.0,8.2],[7.6,8.6,10.6,10.4]];
   const near=(x,z)=>VSLOTS.some(([a,b])=>Math.hypot(a-x,b-z)<2.2)||Math.hypot(x-VIL.start[0],z-VIL.start[1])<2.2;
   const tree=(x,z,s)=>{const olw=OL;OL=false;treeInner(x,z,s);OL=olw},treeInner=(x,z,s)=>{const g=new THREE.Group();g.position.set(x,0,z);villageG.add(g);
    g.add(mesh(new THREE.CylinderGeometry(.07*s,.1*s,.7*s,8),mat('#7a5536',.9),[0,.35*s,0]));
@@ -719,7 +737,8 @@ function drawMini(){
  const dot=(x,z,c,r,ring)=>{const [a,b]=P(x,z);mctx.beginPath();mctx.arc(a,b,r,0,7);if(ring){mctx.strokeStyle=c;mctx.lineWidth=2;mctx.stroke()}else{mctx.fillStyle=c;mctx.fill()}};
  const txt=(s,x,z)=>{const [a,b]=P(x,z);mctx.fillText(s,a,b)};
  mctx.fillStyle='#8fbf78';mctx.fillRect(0,0,W,H);
- quad(0,0,VIL.X,VIL.Y,'#a9d48c');quad(1.5,14.2,6.7,18.4,'#7fb6d8');
+ quad(0,0,VIL.X,VIL.Y,'#a9d48c');quad(16.4,19.6,21.6,23.8,'#7fb6d8');
+ [[3.6,3.0,4.6,10.0],[PLAZA.x1,11.0,22.7,13.2],[4.6,4.6,22.7,5.6],[22.0,4.6,22.7,13.2]].forEach(r=>quad(...r,'#cdb890'));   // 길 (갈림길 포함)
  quad(PLAZA.x0,PLAZA.z0,PLAZA.x1,PLAZA.z1,'#e6dcc4');quad(ZONE.x0,ZONE.z0,ZONE.x1,ZONE.z1,'#a88f68');
  G3.houses().forEach(([x,y,w,d,m])=>quad(x,y,x+w,y+d,m?'#c0542f':'#8a6a45'));
  mctx.font='bold 20px sans-serif';mctx.textAlign='center';mctx.textBaseline='middle';mctx.fillStyle='#6b5f4c';
@@ -837,7 +856,7 @@ function openF(f){
  if(f!=='mirror')zoom(false);
 }
 // 마을의 게시판·모닥불·내 방
-function vTarget(f){if(f==='board')return [12.1,7.7];if(f==='plaza')return [PLAZA.cx,PLAZA.cz+1.5];const i=f==='fire:new'?S.news.length:Math.max(0,vilOrder().findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
+function vTarget(f){if(f==='board')return [PLAZA.x0+7.3,PLAZA.z0+.7];if(f==='plaza')return [PLAZA.cx,PLAZA.cz+2.3];const i=f==='fire:new'?S.news.length:Math.max(0,vilOrder().findIndex(n=>'room:'+n.id===f)),s=VSLOTS[Math.min(i,VSLOTS.length-1)];return [Math.min(VIL.X-.8,s[0]+.9),Math.min(VIL.Y-.8,s[1]+.9)]}
 function openV(f){
  if(f==='home'){closePanel();walkTo(VIL.home[0],VIL.home[1],()=>leaveVillage());return}
  if(f==='plaza'){closePanel();walkTo(...vTarget(f),()=>{if(canHover){const i=document.getElementById('pz');if(i&&pzShown)i.focus()}});return}   // 광장 단상을 누르면 걸어가고, 도착하면 대화창이 저절로 뜬다 (창을 따로 열지 않는다)

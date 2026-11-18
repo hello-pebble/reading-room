@@ -137,7 +137,7 @@ function render(){
  document.getElementById('stageWrap').classList.toggle('neighbor',visiting);
  document.getElementById('giftMark').style.display=VIEW==='room'&&gift?'block':'none';
  // 화면 위 표시
- const nt=document.getElementById('nameTag');nt.textContent=S.user.nickname;
+ const nt=document.getElementById('nameTag');{const r=VIEW==='shared'?S.news.find(n=>n.id===CAMP_ID):null;nt.textContent=S.user.nickname+(r&&r.book?rcBookTag(r,'나'):'')}
  const ll=document.getElementById('lampLabel');ll.style.display=VIEW==='room'&&(lampOn||lampWarn)?'block':'none';ll.className='ov'+(lampWarn?' warn spark':'');ll.innerHTML=`<span id="lampTime">${lampWarn?'확인 필요':fmtHMS(elapsed())}</span>`;
  document.getElementById('newMark').style.display=VIEW==='room'&&S.newItem?'block':'none';
  document.getElementById('newMarkWin').style.display=VIEW==='room'&&winNew?'block':'none';

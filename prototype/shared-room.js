@@ -5,7 +5,7 @@ const RMAX=20;  // 공유방 최대 인원 (결정 #41)
 
 const PUBLIC_ROOMS=false; // 베타는 초대만 (결정 #41, 열린 결정 M ②). 켜면 개설 창에 "마을에 공개" 선택지가 다시 나온다
 
-const shortTitle=n=>String(n.book||n.title||'').replace(/[『』]/g,'').replace(/\s*(같이 읽기|이야기방)\s*$/,'').trim();
+const shortTitle=n=>String(n.title||n.book||'').replace(/[『』]/g,'').replace(/\s*(같이 읽기|이야기방)\s*$/,'').trim();
 const roomLeft=n=>n.deleteAt?Math.max(0,Math.ceil((n.deleteAt-Date.now())/DAY)):0;
 const roomSub=n=>{
  if(n.kind==='CLOSED'&&n.deleteAt)return (n.done?'가져옴 · ':'')+'가져오기 마감 D-'+roomLeft(n);
@@ -81,6 +81,7 @@ const ROOM_SAY=['처음엔 느리게 읽히다가 중반부터 확 빨려 들어
 const rcKey=s=>String(s||'').replace(/[『』\s]/g,'');
 const roomBook=n=>n.book||shortTitle(n);
 const rcMine=m=>m.who==='나'&&!m.left;
+const rcBookTag=(n,name)=>n.rtype==='OWN'?' 『'+(name==='나'?n.book:BOOKPOOL[rcHash(name)%BOOKPOOL.length])+'』':'';   // 각자 읽기 방은 이름 옆에 그 사람이 읽는 책을 붙인다
 const rcName=m=>m.left?'나간 참여자':m.who==='나'?S.user.nickname:m.who;
 const rcHash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h};
 const rcColor=s=>SPINE[rcHash(s)%SPINE.length];
@@ -200,7 +201,7 @@ function roomPanel(id){
  if(tab==='info')body=rcInfoHtml(n);
  const camp=VIEW==='shared';
  // 책 제목은 한 화면에 한 번만: 장면에서는 위 제목줄이, 모달에서는 창 제목이 맡는다
- const bk=!camp||rcKey(n.title).includes(rcKey(roomBook(n)))?'':'『'+esc(roomBook(n))+'』 · ';
+ const bk=n.rtype==='OWN'?'각자 읽기 · ':!camp||rcKey(n.title).includes(rcKey(roomBook(n)))?'':'『'+esc(roomBook(n))+'』 · ';
  return head(camp?'대화':t,true)+`<div class="rsub">${bk}참여 ${n.people}/${n.max}명 · ${state}</div>`+(camp?'':tabs)+body}
 // 대화 화면의 버튼들. 처리했으면 true
 function rcAct(act,b){

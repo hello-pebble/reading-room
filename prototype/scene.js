@@ -381,6 +381,7 @@ function createScene(){
  } function syncVillage(list){
   const key=JSON.stringify(list);if(key===vilKey||!villageG)return;vilKey=key;
   if(vilFiresG){villageG.remove(vilFiresG);dispose(vilFiresG)}
+  vilPick=vilPick.filter(k=>!k.userData.fire);Object.keys(vilMats).forEach(k=>{if(k.startsWith('room:')||k==='fire:new')delete vilMats[k]});   // 이전 모닥불의 클릭 영역·재질이 남으면 새 모닥불 자리를 눌러도 옛 방이 열린다
   vilFiresG=new THREE.Group();villageG.add(vilFiresG);vilFlames=[];
   vilLabels.filter(l=>l.fire).forEach(l=>l.el.remove());vilLabels=vilLabels.filter(l=>!l.fire);
   const stone0=mat('#9a958a',.95),logM0=mat('#4a3322',.9);
@@ -407,7 +408,7 @@ function createScene(){
    vhull(g,-.8,-.8,0,1.6,1.6,1.3,'fire:new');vcollect('fire:new',g);
    addLabel('<b>+ 모닥불 피우기</b>',x,1.2,z,true);
   }
-  function vhull(g,x,y,z,w,dp,h,f){const k=new THREE.Mesh(new THREE.BoxGeometry(w,h,dp),new THREE.MeshBasicMaterial({visible:false}));k.position.set(x+w/2,z+h/2,y+dp/2);k.userData={f,hull:true};g.add(k);vilPick.push(k)}
+  function vhull(g,x,y,z,w,dp,h,f){const k=new THREE.Mesh(new THREE.BoxGeometry(w,h,dp),new THREE.MeshBasicMaterial({visible:false}));k.position.set(x+w/2,z+h/2,y+dp/2);k.userData={f,hull:true,fire:true};g.add(k);vilPick.push(k)}
  }
  function buildCamp(n){
   campG=new THREE.Group();scene.add(campG);campGuests=[];
@@ -426,7 +427,7 @@ function createScene(){
    if(i===3)return;
    const j=i>3?i-1:i,name=n.members[j]||NPCS[j%NPCS.length].name;
    const av=NPCS[j%NPCS.length].av,g=build(av);g.root.scale.setScalar(.8);campG.add(g.root);
-   campGuests.push({M:g,x,z,rot:Math.atan2(-x,-z),ph:i*.7});addLabel(esc(name.startsWith('@')?name:'@'+name),x,2.45,z);
+   campGuests.push({M:g,x,z,rot:Math.atan2(-x,-z),ph:i*.7});addLabel(esc(name.startsWith('@')?name:'@'+name)+esc(rcBookTag(n,name.replace(/^@/,''))),x,2.45,z);
   });
   for(let i=0;i<9;i++){const a=i/9*Math.PI*2,rad=5.3+(i%3)*.6,x=Math.cos(a)*rad,z=Math.sin(a)*rad;
    if(x+z>1)continue;

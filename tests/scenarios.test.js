@@ -65,6 +65,35 @@ test('추천받은 책: 내 책장에 표시하고 확인하면 칸을 비우며
   fin(a);
 });
 
+test('모닥불 이름: 직접 지은 방 이름이 마을 목록에 책 제목 대신 그대로 보인다', () => {
+  const a = load();
+  const input = (id, value) => { const el = a.doc.getElementById(id); el.value = value; el.dispatchEvent(new a.w.Event('input', { bubbles: true })); };
+  a.ev("VIEW='village';openV('fire:new')");
+  a.change('#rbook', 'typed');
+  input('rbookt', '읽는 책');
+  input('rname', '내가 지은 이름');
+  a.click('#panel [data-act=rcreate]');
+  assert.ok(a.ev("vilList()").some(r => r.short === '내가 지은 이름'));
+  fin(a);
+});
+
+test('각자 읽기 방: 부제에 책 제목 대신 "각자 읽기"를, 이름 옆에는 읽는 책을 붙인다', () => {
+  const a = load();
+  const input = (id, value) => { const el = a.doc.getElementById(id); el.value = value; el.dispatchEvent(new a.w.Event('input', { bubbles: true })); };
+  a.ev("VIEW='village';openV('fire:new')");
+  a.click('#panel [data-act=rkind][data-v=OWN]');
+  a.change('#rbook', 'typed');
+  input('rbookt', '데미안');
+  input('rname', '책 자랑');
+  a.click('#panel [data-act=rcreate]');
+  const room = a.state().news.find(n => n.title === '책 자랑');
+  assert.equal(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나')`), ' 『데미안』');
+  assert.match(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나무')`), /^ 『.+』$/);
+  a.ev(`S.news.find(n=>n.id==='${room.id}').rtype='SAME'`);
+  assert.equal(a.ev(`rcBookTag(S.news.find(n=>n.id==='${room.id}'),'나')`), '');
+  fin(a);
+});
+
 test('분리된 마을·공유방: 개설 입력, 동의, Enter 전송, 장면 나가기와 재입장이 이어진다', () => {
   const a = load();
   const input = (id, value) => {

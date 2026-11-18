@@ -124,7 +124,7 @@ select{font:inherit;color:inherit;width:100%;padding:9px 10px;border:1px solid v
 #pzLog .msg i{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
 #pzLog .msg.me{text-align:right}
 #pzForm{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px 8px}
-#pzForm input{flex:1;min-width:0;background:rgba(255,255,255,.88)}
+#pzForm input{flex:1;min-width:0;background:rgba(255,255,255,.88);font-size:16px}   /* 아이폰 사파리는 16px보다 작은 입력칸을 누르면 화면을 확대한다 */
 #pzForm #pzE{width:100%;min-height:0}
 #plazaChat.min #pzLog,#plazaChat.min #pzForm{display:none}
 #plazaChat.min{top:auto;height:auto}

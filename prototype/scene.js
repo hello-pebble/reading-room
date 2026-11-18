@@ -527,7 +527,7 @@ function createScene(){
    const t=now/1000;if(campFire)campFire.scale.set(1+.05*Math.sin(t*8),1+.1*Math.sin(t*9),1+.05*Math.cos(t*7));
    campGuests.forEach(g=>applyPose(g.M,{x:g.x,y:.18,z:g.z,rot:g.rot,t:t+g.ph,mv:0,sit:1}));
    vilLabels.forEach(l=>place(l.el,l.x,l.y,l.z));
-   vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:campGuests[b.i]&&campGuests[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+2.27,p.z,-26);return true});   // 모닥불 장면의 말풍선: 이름표 바로 위 26px. 월드 높이로 띄우면 큰 화면(PC)에서 캐릭터와 멀어진다 (i=-1 나, 0~ 앉은 참여자)
+   vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:campGuests[b.i]&&campGuests[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+(b.i<0?2.5:2.45),p.z,b.i<0?-22:-25);return true});   // 모닥불 장면의 말풍선: 이름표와 같은 기준점에서 위로 띄운다(내 이름표는 낮아서 22px, 참여자는 25px). 이름표 위 간격이 화면 크기와 상관없이 약 6px로 일정. 월드 높이로 띄우면 큰 화면(PC)에서 캐릭터와 멀어진다 (i=-1 나, 0~ 앉은 참여자)
   }
   R.render(scene,cam);
  }

@@ -218,6 +218,30 @@ test('공유방 스포 안내: 안 읽은 책이면 대화는 전부 보이고 �
   fin(a);
 });
 
+test('모닥불 장면 대화창: 대화만 있고 탭이 없으며 책 제목을 반복하지 않는다. 참여자·방 정보는 대화창과 별도 모달로 연다', () => {
+  const a = load();
+  a.ev(`S.news=[{id:'o1',kind:'OPEN',title:'『미지의책』 같이 읽기',book:'미지의책',author:'저자',rtype:'SAME',agreed:true,people:2,max:8,members:['@가'],owner:'@가',messages:[{id:'m1',who:'@가',text:'안녕하세요',page:null,ts:Date.now()}],period:'11.01 ~ 11.08'}];S.news.forEach(rcNorm);VIEW='shared';CAMP_ID='o1';panelOpen='room:o1';panelView={};renderPanel()`);
+  const panel = () => a.ev(`document.querySelector('#panel').textContent`), modal = () => a.ev(`document.querySelector('#campModalPanel').textContent`);
+  const isOpen = () => a.ev(`document.querySelector('#campModal').classList.contains('open')`);
+  assert.equal(a.ev(`!!document.querySelector('#panel .rtabs')`), false, '장면의 대화창에는 탭이 없어야 해요');
+  assert.equal(a.ev(`document.querySelector('#panel .panel-head h2').textContent`), '대화');
+  assert.ok(panel().split('미지의책').length - 1 <= 1, '대화창에 책 제목이 반복되면 안 돼요');
+  assert.equal(isOpen(), false, '처음에는 모달이 닫혀 있어요');
+  a.ev(`panelView.sheet='members';renderPanel()`);
+  assert.equal(isOpen(), true);
+  assert.equal(a.ev(`document.querySelector('#campModalPanel .panel-head h2').textContent`), '참여자');
+  assert.ok(a.ev(`!!document.querySelector('#campModalPanel .cm-body .rgrid .rmem')`), '참여자는 바둑판으로 보여요');
+  assert.ok(a.ev(`!!document.getElementById('rcLog')`) && a.ev(`document.querySelector('#panel .panel-head h2').textContent`) === '대화', '모달이 떠도 대화창은 그대로예요');
+  a.ev(`panelView.sheet='info';renderPanel()`);
+  assert.equal(a.ev(`document.querySelector('#campModalPanel .panel-head h2').textContent`), '방 정보');
+  assert.ok(!modal().includes('미지의책'), '방 정보에도 같은 책 방은 책 제목을 다시 쓰지 않아요');
+  assert.equal(a.ev(`!!document.querySelector('#campModalPanel [data-act=rcLeaveAsk]')`), false, '방 정보에는 방 나가기 버튼이 없어요');
+  a.click('#campModalPanel [data-act=cmClose]');
+  assert.equal(isOpen(), false, '모달의 ✕는 모달만 닫아요');
+  assert.equal(a.ev(`VIEW`), 'shared', '모달을 닫아도 모닥불 장면에 그대로 있어요');
+  fin(a);
+});
+
 test('공유방 입력줄: 안 읽은 책이고 내 쪽수가 없으면 쪽수 칸이 없고, 소파에서 읽는 중이면 쪽수 칸이 있다', () => {
   const a = load();
   a.ev(`S.news=[{id:'o1',kind:'OPEN',title:'『미지의책』 같이 읽기',book:'미지의책',author:'저자',rtype:'SAME',agreed:true,people:2,max:8,members:['@가'],owner:'@가',messages:[],period:'11.01 ~ 11.08'}];S.news.forEach(rcNorm);panelOpen='room:o1';panelView={};renderPanel()`);

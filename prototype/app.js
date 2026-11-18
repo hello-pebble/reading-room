@@ -606,7 +606,7 @@ const G3=(function(){
   T.x=Math.max(0,Math.min(VIL.X,T.x+panP.x-q.x));T.z=Math.max(0,Math.min(VIL.Y,T.z+panP.z-q.z));
   cam.position.copy(T).addScaledVector(dirV,40);cam.lookAt(T);cam.updateMatrixWorld();sun.position.set(T.x+9,14,T.z+6);sun.target.position.set(T.x,0,T.z);panP=groundAt(ev)||panP}
  const panEnd=()=>{panP=null},follow=()=>{camFree=false};
- function place(e,x,y,z){V.set(x,y,z).project(cam);e.style.left=((V.x*.5+.5)*cv.clientWidth)+'px';e.style.top=((-V.y*.5+.5)*cv.clientHeight)+'px'}
+ function place(e,x,y,z,dy=0){V.set(x,y,z).project(cam);e.style.left=((V.x*.5+.5)*cv.clientWidth)+'px';e.style.top=((-V.y*.5+.5)*cv.clientHeight+dy)+'px'}   // dy: 화면 픽셀 보정(음수면 위로)
  let last=performance.now();
  function frame(now){
   requestAnimationFrame(frame);
@@ -638,7 +638,7 @@ const G3=(function(){
    const t=now/1000;if(campFire)campFire.scale.set(1+.05*Math.sin(t*8),1+.1*Math.sin(t*9),1+.05*Math.cos(t*7));
    campGuests.forEach(g=>applyPose(g.M,{x:g.x,y:.18,z:g.z,rot:g.rot,t:t+g.ph,mv:0,sit:1}));
    vilLabels.forEach(l=>place(l.el,l.x,l.y,l.z));
-   vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:campGuests[b.i]&&campGuests[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+3.5,p.z);return true});   // 모닥불 장면의 말풍선 (i=-1 나, 0~ 앉은 참여자)
+   vilBub=vilBub.filter(b=>{const p=b.i<0?M.root.position:campGuests[b.i]&&campGuests[b.i].M.root.position;if(!p||now>b.until){b.el.remove();return false}place(b.el,p.x,p.y+2.27,p.z,-26);return true});   // 모닥불 장면의 말풍선: 이름표 바로 위 26px. 월드 높이로 띄우면 큰 화면(PC)에서 캐릭터와 멀어진다 (i=-1 나, 0~ 앉은 참여자)
   }
   R.render(scene,cam);
  }

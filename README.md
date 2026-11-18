@@ -15,7 +15,9 @@
 | `DECISIONS.md` | 결정 기록과 아직 열려 있는 결정 |
 | `FEATURE_DEFINITION.md` | 내 방 기능 정의서 (기능 ID, 동작, 규칙·예외, 데이터, 제약) |
 | `FEATURE_GUIDE.md` | 내 방 기능 설명서 (사용자용 사용법) |
-| `prototype/index.html` | 클릭해서 테스트할 수 있는 내 방 프로토타입. 3D 유령 + 원목 방. 인터넷 없이도 열림 (`prototype/vendor/three.min.js` 함께 필요) |
+| `prototype/index.html` | 클릭해서 테스트할 수 있는 내 방 프로토타입의 화면 뼈대. 3D 유령 + 원목 방. 인터넷 없이도 열림 (`style.css`, `app.js`, `vendor/three.min.js`를 같은 폴더에서 함께 읽는다) |
+| `prototype/style.css` | `index.html`의 스타일. 화면 모양을 고칠 때는 이 파일을 연다 |
+| `prototype/app.js` | `index.html`의 동작(상태, 3D, 패널, 공유방). 기능을 고칠 때는 이 파일을 연다 |
 | `prototype/vendor/three.min.js` | 3D 라이브러리 three.js r149 (MIT, 약 0.6MB). 오프라인용으로 함께 둠 |
 | `prototype/index-voxel.html` | 이전 복셀 캐릭터 버전 (SVG, 외부 의존성 없음). 되돌릴 때 사용 |
 | `prototype/toon-compare.html` | 소프트 3D와 툰 셰이딩을 나란히 보는 작은 비교 화면 |
@@ -108,7 +110,7 @@
 ### 자동 검사 (`npm run verify`)
 
 - `npm install`(처음 한 번) 뒤 `npm run verify`로 **문법 검사 + 시나리오 테스트 23개**(약 2초)를 돌린다. 코드를 바꿀 때마다 돌리고, 통과해야 커밋한다.
-- `tests/check-syntax.js`는 `prototype/*.html`의 인라인 스크립트 문법을, `tests/scenarios.test.js`는 페이지를 가상 브라우저(jsdom)에 올려 타이머·기록·쪽수·완독일·광장 대화·공유방 가져오기·거울·키보드 같은 규칙을 실제로 조작해 확인한다. 지금까지 겪은 결함(3시간 확인 우회, 날짜 기준, 쪽수 범위, 셔플 색, 가져오기 책 처리 등)이 되돌아오지 않게 막는 용도다.
+- `tests/check-syntax.js`는 `prototype/app.js`와 `prototype/*.html`의 인라인 스크립트 문법을, `tests/scenarios.test.js`는 페이지를 가상 브라우저(jsdom)에 올려 타이머·기록·쪽수·완독일·광장 대화·공유방 가져오기·거울·키보드 같은 규칙을 실제로 조작해 확인한다. 지금까지 겪은 결함(3시간 확인 우회, 날짜 기준, 쪽수 범위, 셔플 색, 가져오기 책 처리 등)이 되돌아오지 않게 막는 용도다.
 - 테스트는 3D를 올리지 않아서 **3D 그림, 터치, 알림 팝업, 화면 겹침**은 못 본다. 이런 것은 브라우저로 직접 확인한다.
 - 서버는 `cd backend && ./gradlew test`로 따로 검사한다 (내 방 API 시나리오 77개, 실제 PostgreSQL 사용). 코드를 바꾸면 이 검사와 `npm run verify`를 둘 다 통과시킨다.
 - `AGENTS.md`는 자동으로 일하는 에이전트(예: Ralph, 클라우드 세션)가 읽는 작업 지침이다.

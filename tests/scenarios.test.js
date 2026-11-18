@@ -262,6 +262,6 @@ test('키보드: 창을 열면 포커스가 창 제목으로 가고, 닫으면 �
 });
 
 test('동작 줄이기: prefers-reduced-motion 규칙이 애니메이션과 전환을 끈다', () => {
-  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'prototype', 'index.html'), 'utf8');
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'prototype', 'style.css'), 'utf8');
   assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none!important[^}]*transition:none!important/);
 });

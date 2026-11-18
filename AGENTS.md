@@ -1,6 +1,6 @@
 # 독서 공유방 작업 지침 (AI 에이전트용)
 
-독서 기록·공유 웹서비스의 프로토타입. 코드는 `prototype/index.html` 한 파일(HTML+CSS+JS, three.js 3D)이다. 설명과 결정은 한국어 문서에 있다.
+독서 기록·공유 웹서비스의 프로토타입. 코드는 `prototype/index.html`(화면 뼈대), `prototype/style.css`(스타일), `prototype/app.js`(동작, three.js 3D) 세 파일이다. 설명과 결정은 한국어 문서에 있다.
 
 ## 검사 — 코드를 바꾸면 반드시 돌린다
 
@@ -11,7 +11,7 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 
 | 명령 | 하는 일 |
 |---|---|
-| `npm run check` | `prototype/*.html`의 인라인 스크립트가 문법 오류 없이 컴파일되는지 본다 |
+| `npm run check` | `prototype/app.js`와 `prototype/*.html`의 인라인 스크립트가 문법 오류 없이 컴파일되는지 본다 |
 | `npm test` | `tests/scenarios.test.js` — 페이지를 가상 브라우저(jsdom)에 올려 패널·버튼·저장 상태를 실제로 조작한다 (약 2초) |
 
 - 테스트는 3D(three.js)를 올리지 않는다. 그래서 **3D 그림, 실제 터치, 알림 팝업, 화면 겹침**은 테스트가 못 본다. 화면이 바뀌는 일이면 브라우저로 직접 확인한다.

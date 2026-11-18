@@ -15,7 +15,7 @@
 
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설·입장·대화·가져오기, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했다. 입장·나가기·보관 동의, 공유방 대화·읽음·가져오기, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
@@ -75,6 +75,7 @@
 | `shared_room` | id, created_by, kind(`SAME`/`OWN`), isbn, title, visibility(`INVITE`/`PUBLIC`), max_participants, invite_code, open_at, close_at, status(`SCHEDULED`/`OPEN`/`CLOSED`), closed_at | 종료 후 7일. `isbn`은 `SAME`에서 필수, `OWN`은 비움. invite_code unique(8자리, 헷갈리는 글자 `I O 0 1` 제외). max_participants 2~10 |
 | `room_participant` | room_id, user_id, book_id, joined_at, agreed_at(보관 동의), last_read_at, left_at | 종료 후 7일. unique(room_id, user_id). `book_id`는 이 방에서 내가 읽는 책 (`SAME`은 방의 책과 같은 ISBN, `OWN`은 내가 고른 책, 없을 수 있음). 가져오기는 `book_id`의 책에 붙인다 |
 | `room_message` | id, room_id, user_id, content(최대 300자), page(같은 책 방, 1~9999, 없을 수 있음), created_at | 종료 후 7일. 보낸 글은 삭제·수정하지 않는다(#53). 나간 사람의 글은 남긴다 (결정 #38) |
+| `room_open_log` | id, user_id, room_id(외래키 없음), opened_at | 영구(사용자와 함께 삭제). 개설할 때마다 한 줄. 예정 방을 취소하면 `shared_room` 행이 지워지므로, "하루(한국 시간) 3번, 취소해도 센다"(#53)를 세려면 방과 따로 남긴 이 기록이 필요하다. 동시 2개는 이 기록이 아니라 `shared_room`을 시각으로 센다 (결정 #59) |
 | `book_room_archive` | id, book_id, room_id, room_title, opened_at, closed_at, snapshot(JSON), imported_at | 영구. unique(book_id, room_id) |
 
 ### 마을 광장
@@ -171,10 +172,10 @@
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| POST | `/rooms` | 모닥불 피우기(개설). body `{kind, isbn?, title?, visibility(베타는 `INVITE`만, #41), maxParticipants(2~10), openAt (생략하면 지금), hours(1~7), bookId?}`. 개설자는 자동으로 참여자가 된다. 한 사용자가 동시에 열 수 있는 방(`SCHEDULED`·`OPEN`)은 2개, 하루(한국 시간)에 개설할 수 있는 방은 3개(취소해도 센다), 넘으면 409. 시간이 다 되면 서버가 방을 `CLOSED`로 바꾼다. `SAME`인데 `isbn`이 없으면 400. `openAt`이 지금보다 앞서면 400 |
-| GET | `/rooms/invite/{code}` | 초대 링크 미리보기 (방 이름, 종류, 책, 개설자 닉네임, 현재/최대 인원, 기간). 로그인 전에도 보여 준다 |
+| POST | `/rooms` | 모닥불 피우기(개설). body `{kind, isbn?, title?, visibility(베타는 `INVITE`만, #41), maxParticipants(2~10), openAt (생략하면 지금), hours(1~7), bookId?}`. 개설자는 자동으로 참여자가 된다. 한 사용자가 동시에 열 수 있는 방(`SCHEDULED`·`OPEN`, 시각으로 계산)은 2개(`ROOM_LIMIT_LIVE`), 하루(한국 시간)에 개설할 수 있는 방은 3개(`ROOM_LIMIT_DAILY`, 취소해도 센다: `room_open_log`), 넘으면 409. **구현(`RoomController.create`)**: 201과 마을 게시판과 같은 방 한 줄(`inviteCode` 포함). `kind`는 `SAME`/`OWN`, `maxParticipants`·`hours`는 정수만(아니면 400), `visibility`는 생략 또는 `INVITE`(`PUBLIC`은 400), `OWN`이면 `isbn`은 무시하고 비운다. `bookId`는 내 책이어야 하고(없으면 404) `SAME`이면 그 책의 ISBN이 방의 `isbn`과 같아야 한다(400). 방 이름은 최대 100자이고 비우면 자동(`『책』 같이 읽기`는 `bookId` 책의 제목을 쓰고 없으면 `같이 읽기`, 각자 읽기는 `닉네임의 모닥불`). 초대 코드는 서버가 8자리(`I O 0 1` 제외)로 만든다 시간이 다 되면 서버가 방을 `CLOSED`로 바꾼다. `SAME`인데 `isbn`이 없으면 400. `openAt`이 지금보다 앞서면 400 |
+| GET | `/rooms/invite/{code}` | 초대 링크 미리보기 (방 이름, 종류, 책, 개설자 닉네임, 현재/최대 인원, 기간). 로그인 전에도 보여 준다. **구현**: `X-User-Id` 없이 열리고(`UserIdFilter` 예외, GET만) 코드는 대소문자를 가리지 않는다. 응답 `{title, kind, isbn, bookTitle, status, ownerNickname, participants, maxParticipants, openAt, closeAt, closedAt}`(방 id·초대 코드·참여자 목록은 없다). 종료된 방은 `status`가 `CLOSED`로 보이고, 없거나(취소 포함) 보관 7일이 지난 방은 404 |
 | POST | `/rooms/join` | body `{code, bookId?}`. 정원이 차면 409, 이미 참여 중이면 200 (멱등), 종료된 방이면 410 |
-| POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관 |
+| POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관. **구현**: 응답 `{id, result(CANCELED/CLOSED), closedAt}`. 개설자가 아니면 403(`NOT_OWNER`), 없으면 404, 이미 끝난 방(일찍 끝냄·시간 지남)은 409(`ROOM_ALREADY_CLOSED`). 취소해도 `room_open_log`는 남는다 |
 | DELETE | `/rooms/{id}/participants/me` | 방 나가기. 내 글은 남고 익명("나간 참여자")으로 내려간다. 개설자는 나갈 수 없다(409) |
 | POST | `/rooms/{id}/agree` | 보관 동의 기록(`agreed_at`). 동의 전에는 글 목록을 내려주지 않는다 (403) |
 | GET | `/rooms/{id}/messages?after=` | 글 목록. 삭제하지 않은 글은 모두 내려준다(쪽수 잠금은 #43으로 없어졌다). 다른 사람의 진행 퍼센트는 내려주지 않는다 |

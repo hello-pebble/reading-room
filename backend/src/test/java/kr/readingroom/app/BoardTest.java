@@ -10,7 +10,7 @@ class BoardTest extends ApiTestBase {
 
     long room(long creator, String title, String open, String close, String closedAt) {
         long id = dsl.fetchOne("insert into shared_room(created_by, kind, title, invite_code, open_at, close_at, closed_at) "
-                + "values (?, 'OWN', ?, ?, ?::timestamptz, ?::timestamptz, ?::timestamptz) returning id", creator, title, "CODE000" + (++seq), open, close, closedAt).get("id", Long.class);
+                + "values (?, 'OWN', ?, ?, ?::timestamptz, ?::timestamptz, ?::timestamptz) returning id", creator, title, "WXYZAAA" + (char) ('A' + (++seq)), open, close, closedAt).get("id", Long.class);
         dsl.execute("insert into room_participant(room_id, user_id, agreed_at) values (?, ?, now())", id, creator);
         return id;
     }
@@ -21,7 +21,7 @@ class BoardTest extends ApiTestBase {
         long r = room(a, "책 자랑", "2026-11-17T02:00:00Z", "2026-11-17T05:00:00Z", null);
         mvc.perform(GET(a, "/rooms")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].title").value("책 자랑")).andExpect(jsonPath("$[0].status").value("OPEN"))
-                .andExpect(jsonPath("$[0].mine").value(true)).andExpect(jsonPath("$[0].inviteCode").value("CODE0001"))
+                .andExpect(jsonPath("$[0].mine").value(true)).andExpect(jsonPath("$[0].inviteCode").value("WXYZAAAB"))
                 .andExpect(jsonPath("$[0].ownerNickname").exists()).andExpect(jsonPath("$[0].participants").value(1));
         mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(0));
         dsl.execute("insert into room_participant(room_id, user_id) values (?, ?)", r, b);
@@ -69,6 +69,6 @@ class BoardTest extends ApiTestBase {
         long a = newUser("alice");
         org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> room(a, "너무 김", "2026-11-17T01:00:00Z", "2026-11-17T09:00:00Z", null));
         org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> dsl.execute("insert into shared_room(created_by, kind, title, invite_code, open_at, close_at) "
-                + "values (?, 'SAME', 'x', 'CODE9999', now(), now() + interval '2 hours')", a));
+                + "values (?, 'SAME', 'x', 'WXYZPQRS', now(), now() + interval '2 hours')", a));
     }
 }

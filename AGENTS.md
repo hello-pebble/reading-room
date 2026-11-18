@@ -27,3 +27,25 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 - 상태는 `localStorage` 키 `myroom-proto-v1`의 객체 `S`. 저장 구조를 바꾸면 로드 직후에 이관 코드를 넣는다 (예: `if(!S.later)S.later=[]`).
 - 날짜·시간은 한국 시간(`Asia/Seoul`) 기준이다 (달력, 오늘 읽은 시간, 완독일).
 - 커밋 메시지와 사용자 응답은 한국어. 한 번에 하나의 작은 변경을 하고, 검사를 통과한 뒤에만 커밋한다.
+
+## 백엔드 (`backend/`, Spring Boot + jOOQ + PostgreSQL)
+
+- 요청은 `Controller → Service → Repository` 순서로 흐르고, 요청·응답은 기능 패키지의 `dto/` record다. 수정 위치와 패키지 표는 `backend/README.md`를 먼저 본다. SQL은 Repository에만 두고 값은 `?`로 바인딩한다. 스키마는 Flyway(`src/main/resources/db/migration/V*.sql`)로만 바꾸고 이미 있는 마이그레이션은 고치지 않는다(새 `V9__…` 추가).
+- 검사: `cd backend && ./gradlew test`. DB가 필요한 통합 테스트(`ApiTestBase`)는 기본으로 내장 PostgreSQL(zonky)을 띄우고, 안 되면 `TEST_DATABASE_URL`(`jdbc:postgresql://…`), `TEST_DATABASE_USER`, `TEST_DATABASE_PASSWORD`로 외부 DB를 준다(테스트마다 스키마를 비운다). 루트 사용자로는 PostgreSQL이 실행되지 않으니 일반 사용자로 돌린다. 시각은 `TestClock`으로 고정·이동한다.
+- API 계약은 `docs/DATA_API.md`가 기준이다. 경로·필드·상태 코드를 바꾸면 그 문서와 `docs/DECISIONS.md`를 같이 고친다. 오류는 `ApiException`(상태, 코드, 한국어 메시지)으로 던진다.
+- 인증은 임시다: `X-User-Id` 헤더(`UserIdFilter`). 구글 로그인(결정 #55)이 붙으면 교체한다. 책 검색(`GET /books/search`)만 헤더 없이 열려 있다.
+- 시간 규칙은 서버 `Clock`으로 계산하고(`Instant`, 응답은 UTC ISO), 날짜 자르기는 `Asia/Seoul`이다. 상태처럼 시각으로 알 수 있는 값은 저장값에만 기대지 말고 시각으로 계산한다(예: `BoardService`).
+- 비밀 키(`NL_CERT_KEY`, VAPID 등)는 환경변수로만 받는다. 코드·문서·커밋·로그에 값을 적지 않는다. 키가 없을 때는 503처럼 명확한 오류로 응답한다.
+
+## 지금 상태와 다음 작업
+
+- **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 승인 대기), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치). 화면은 아직 서버에 연결되지 않았고 `localStorage`로 동작한다(책 검색만 주소 끝 `?searchApi=`로 연결).
+- **다음 작업: 공유방(모닥불) 백엔드를 `room` 패키지로 만든다.** 이미 있는 테이블 `shared_room`·`room_participant`(`V8__village.sql`)를 쓰고, `docs/DATA_API.md`의 `/rooms` 표를 따른다: 개설 `POST /rooms`(진행 1~7시간, 동시 2개, 하루 3번·한국 시간 기준 취소해도 셈, 최대 인원 2~10, 초대 코드 8자리), 초대 미리보기 `GET /rooms/invite/{code}`, 입장 `POST /rooms/join`, 닫기 `POST /rooms/{id}/close`, 나가기, 보관 동의 `POST /rooms/{id}/agree`, 대화 `GET·POST /rooms/{id}/messages`(300자, 5초 1건, 삭제·수정 없음), 읽음 `POST /rooms/{id}/read`, 가져오기 `POST /rooms/{id}/import`, 시각이 되면 열리고 끝나는 배치. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56 을 따른다.
+- 한 번에 한 기능(예: 개설 → 입장 → 대화 순)씩 만들고, 기능마다 통합 테스트를 추가한다.
+
+## 작업 방식
+
+- 코드를 고친 뒤 **커밋·푸시하기 전에 관련 문서를 먼저 최신으로 반영**하고, 코드와 문서를 한 커밋으로 묶어 푸시한다. 반영할 문서가 없으면 없다고 남긴다.
+- 푸시할 브랜치는 작업을 시킨 사람이 정한 곳이다. 따로 말이 없으면 새 작업 브랜치로 올리고 `main`에 직접 푸시하지 않는다. 시작할 때 최신 `main`을 받아 온다.
+- 이미 커밋된 다른 사람의 변경(특히 `docs/`, `frontend/`)은 되돌리지 않는다. 막히거나 결정이 필요하면 추측하지 말고 무엇이 필요한지 적어 알린다.
+- 폴더 구조(결정 #57): 루트에는 `README.md`, `AGENTS.md`와 `backend/`, `frontend/`, `docs/`, `tests/`만 둔다. 임시 스크립트·결과물은 커밋하지 않는다.

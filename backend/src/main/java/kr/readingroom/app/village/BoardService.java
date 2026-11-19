@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class BoardService {
-    static final Duration KEEP = Duration.ofDays(7);
+    public static final Duration KEEP = Duration.ofDays(7);
     private static final Map<String, Integer> ORDER = Map.of("OPEN", 0, "SCHEDULED", 1, "CLOSED", 2);
     private final BoardRepository rooms;
     private final Clock clock;

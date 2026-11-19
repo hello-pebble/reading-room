@@ -2,7 +2,10 @@ package kr.readingroom.app.calendar;
 
 import kr.readingroom.app.calendar.dto.*;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -11,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.ClockConfig;
+import org.jooq.Record;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +60,39 @@ public class CalendarService {
                 GoalChange.list(g.changes()), g.inherited(), clock.instant());
     }
 
-    /** 독서한 날 전체: 끝난 스탠드·직접 기록(DONE)의 ended_at 날짜 + 완독(DONE) 책의 finished_at 날짜. 버려진·진행 중·확인 필요 기록은 세지 않는다. */
+    /**
+     * 한국 날짜 하루의 읽은 시간(분). 끝난 스탠드·직접 기록과 저장된 모닥불 입장을 그 날로 잘라 **구간을 합쳐** 더하므로
+     * 겹치는 구간은 한 번만 센다(결정 #65). 진행 중인 스탠드·열린 입장은 넣지 않는다(화면이 실시간으로 더한다).
+     */
+    @Transactional(readOnly = true)
+    public ReadingTimeResponse readingTime(long userId, String dateParam) {
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.ofInstant(now, ClockConfig.SEOUL);
+        LocalDate date = today;
+        if (dateParam != null) {
+            try {
+                if (!dateParam.matches("\\d{4}-\\d{2}-\\d{2}")) throw new DateTimeParseException("형식", dateParam, 0);
+                date = LocalDate.parse(dateParam);
+            } catch (DateTimeParseException e) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_DATE", "date는 YYYY-MM-DD 형식이에요");
+            }
+            if (date.isAfter(today)) throw new ApiException(HttpStatus.BAD_REQUEST, "FUTURE", "오늘보다 뒤는 볼 수 없어요");
+        }
+        Instant from = date.atStartOfDay(ClockConfig.SEOUL).toInstant(), to = date.plusDays(1).atStartOfDay(ClockConfig.SEOUL).toInstant();
+        long seconds = 0;
+        Instant coveredUntil = from;
+        for (Record r : calendarRepository.readingIntervals(userId, from.toString(), to.toString())) {   // 시작 순: 지나온 끝 뒤의 부분만 더한다
+            Instant s = r.get("s", OffsetDateTime.class).toInstant(), e = r.get("e", OffsetDateTime.class).toInstant();
+            if (s.isBefore(coveredUntil)) s = coveredUntil;
+            if (e.isAfter(s)) {
+                seconds += Duration.between(s, e).toSeconds();
+                coveredUntil = e;
+            }
+        }
+        return new ReadingTimeResponse(date.toString(), seconds / 60, now);
+    }
+
+    /** 독서한 날 전체: 끝난 스탠드·직접 기록(DONE)의 ended_at 날짜 + 완독(DONE) 책의 finished_at 날짜 + 저장된 모닥불 입장의 left_at 날짜. 버려진·진행 중·확인 필요 기록은 세지 않는다. */
     Set<LocalDate> readingDays(long userId) {
         Set<LocalDate> out = new HashSet<>();
         calendarRepository.readingDays(userId, userId)

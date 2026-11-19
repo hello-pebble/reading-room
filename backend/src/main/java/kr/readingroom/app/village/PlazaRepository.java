@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 /** SQL 실행만 담당한다. 글자 수·도배 제한·24시간 규칙은 서비스에서 한다. */
 @Repository
 public class PlazaRepository {
-    private static final String COLS = "m.id, m.user_id, u.handle, u.nickname, u.avatar::text as avatar, m.content, m.created_at ";
+    private static final String COLS = "m.id, m.user_id, u.public_id::text as public_id, u.nickname, u.avatar::text as avatar, m.content, m.created_at ";
     private static final String FROM = "from plaza_message m join app_user u on u.id = m.user_id ";
     private final DSLContext dsl;
 

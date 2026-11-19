@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class RoomMessageRepository {
     /** 글쓴이가 지금도 참여 중인지(left)는 참여 행으로 안다. 나간 뒤 다시 들어왔으면 left가 false라 글이 다시 이름으로 보인다. */
-    private static final String COLS = "m.id, m.user_id, u.handle, u.nickname, u.avatar::text as avatar, m.content, m.page, m.created_at, "
+    private static final String COLS = "m.id, m.user_id, u.public_id::text as public_id, u.nickname, u.avatar::text as avatar, m.content, m.page, m.created_at, "
             + "(p.left_at is not null) as left_room ";
     private static final String FROM = "from room_message m join app_user u on u.id = m.user_id "
             + "left join room_participant p on p.room_id = m.room_id and p.user_id = m.user_id ";

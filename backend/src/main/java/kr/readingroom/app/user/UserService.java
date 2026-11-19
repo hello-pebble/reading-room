@@ -30,15 +30,18 @@ public class UserService {
         return view(r);
     }
 
-    public UserResponse create(String handle, String nickname) {
-        if (handle == null || !handle.matches("^[a-z0-9_]{3,15}$"))
-            throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_HANDLE", "handle은 영소문자·숫자·_ 3~15자예요");
-        if (nickname == null || nickname.isBlank() || nickname.length() > 30)
-            throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_NICKNAME", "닉네임은 1~30자예요");
-        if (userRepository.countByHandle(handle).get(0, Integer.class) > 0)
-            throw new ApiException(HttpStatus.CONFLICT, "HANDLE_TAKEN", "이미 쓰는 handle이에요");
-        Record r = userRepository.insert(handle, nickname.trim());
-        return view(r);
+    /** 개발용 사용자 만들기(/dev/users). 닉네임은 Nickname 규칙을 지켜야 한다. */
+    public UserResponse create(String nickname) {
+        Nickname.require(nickname);
+        return view(userRepository.insert(nickname));
+    }
+
+    /** 닉네임 정하기·바꾸기. 규칙은 Nickname(한글·영문·숫자 1~5자, 공백·이모티콘·특수문자 금지). 닉네임은 겹쳐도 된다. */
+    public UserResponse changeNickname(long userId, String nickname) {
+        Nickname.require(nickname);
+        if (userRepository.updateNickname(nickname, userId) == 0)
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "사용자를 찾을 수 없어요");
+        return get(userId);
     }
 
     static final Map<String, List<String>> ALLOWED = Map.of(
@@ -78,8 +81,8 @@ public class UserService {
 
     private UserResponse view(Record r) {
         try {
-            return new UserResponse(r.get("id", Long.class), r.get("handle", String.class), r.get("nickname", String.class),
-                    json.readValue(r.get("avatar", String.class), AvatarResponse.class));
+            return new UserResponse(r.get("id", Long.class), r.get("public_id", String.class), r.get("nickname", String.class),
+                    json.readValue(r.get("avatar", String.class), AvatarResponse.class), r.get("needs_nickname", Boolean.class));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);
         }

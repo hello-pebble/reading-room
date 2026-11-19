@@ -46,10 +46,18 @@ public abstract class ApiTestBase extends PgTestBase {
         dsl.execute("truncate app_user restart identity cascade");
     }
 
-    protected long newUser(String handle) throws Exception {
+    /** 테스트용 사용자. label에서 영문·숫자만 남겨 5자까지를 닉네임으로 쓴다 (닉네임 규칙 #67). 사용자를 가리키는 값은 공개 번호 publicId(결정 #69). */
+    protected long newUser(String label) throws Exception {
+        String nickname = label.replaceAll("[^A-Za-z0-9]", "");
+        if (nickname.length() > 5) nickname = nickname.substring(0, 5);
         MvcResult r = mvc.perform(MockMvcRequestBuilders.post("/dev/users").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"handle\":\"" + handle + "\",\"nickname\":\"" + handle + "\"}")).andReturn();
+                .content("{\"nickname\":\"" + nickname + "\"}")).andReturn();
         return json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+    }
+
+    /** 다른 사람에게 보이는 사용자 번호(무작위 UUID) */
+    protected String publicId(long uid) {
+        return dsl.fetchOne("select public_id::text as p from app_user where id = ?", uid).get("p", String.class);
     }
 
     protected MockHttpServletRequestBuilder as(long uid, MockHttpServletRequestBuilder b) {

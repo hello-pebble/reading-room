@@ -71,7 +71,7 @@ public class PlazaService {
         } catch (Exception e) {
             avatar = null;
         }
-        return new PlazaMessageResponse(r.get("id", Long.class), r.get("user_id", Long.class), r.get("handle", String.class),
+        return new PlazaMessageResponse(r.get("id", Long.class), r.get("public_id", String.class),
                 r.get("nickname", String.class), avatar, r.get("content", String.class), Db.instant(r, "created_at"));
     }
 }

@@ -20,7 +20,13 @@ class NeighborTest extends ApiTestBase {
                 + "values (?, '9788937460449', ?, '헤세', 'https://img/c.jpg', 200, 50, ?, 5, '인생 책') returning id", uid, title, status).get("id", Long.class);
     }
 
-    String house(String handle) { return "/neighbors/" + handle + "/recommendation"; }
+    /** 닉네임으로 그 사람의 공개 번호(UUID)를 찾는다. 없는 이름은 존재하지 않는 번호를 돌려준다. (이웃집 주소는 닉네임이 아니라 공개 번호, 결정 #69) */
+    String pid(String nickname) {
+        var r = dsl.fetchOne("select public_id::text as p from app_user where nickname = ? limit 1", nickname);
+        return r == null ? "00000000-0000-4000-8000-000000000000" : r.get("p", String.class);
+    }
+
+    String house(String nickname) { return "/neighbors/" + pid(nickname) + "/recommendation"; }
 
     @Test
     void recommendCopiesOnlyBookInfoAndShowsTheSenderNickname() throws Exception {
@@ -110,15 +116,15 @@ class NeighborTest extends ApiTestBase {
     void visitShowsOccupiedButOnlyRevealsMyOwnBook() throws Exception {
         long a = newUser("alice"), b = newUser("bobby"), c = newUser("carol");
         long ba = book(a, "앨리스 책", "DONE");
-        mvc.perform(GET(a, "/neighbors/bobby")).andExpect(status().isOk()).andExpect(jsonPath("$.handle").value("bobby"))
+        mvc.perform(GET(a, "/neighbors/" + pid("bobby"))).andExpect(status().isOk()).andExpect(jsonPath("$.publicId").value(pid("bobby"))).andExpect(jsonPath("$.handle").doesNotExist())
                 .andExpect(jsonPath("$.nickname").value("bobby")).andExpect(jsonPath("$.occupied").value(false)).andExpect(jsonPath("$.mine").value(false))
                 .andExpect(jsonPath("$.book").doesNotExist());
         mvc.perform(POST(a, house("bobby"), Map.of("bookId", ba))).andExpect(status().isCreated());
-        mvc.perform(GET(a, "/neighbors/bobby")).andExpect(jsonPath("$.occupied").value(true)).andExpect(jsonPath("$.mine").value(true))
+        mvc.perform(GET(a, "/neighbors/" + pid("bobby"))).andExpect(jsonPath("$.occupied").value(true)).andExpect(jsonPath("$.mine").value(true))
                 .andExpect(jsonPath("$.book.title").value("앨리스 책"));                                            // 내가 꽂은 책은 보인다
-        mvc.perform(GET(c, "/neighbors/bobby")).andExpect(jsonPath("$.occupied").value(true)).andExpect(jsonPath("$.mine").value(false))
+        mvc.perform(GET(c, "/neighbors/" + pid("bobby"))).andExpect(jsonPath("$.occupied").value(true)).andExpect(jsonPath("$.mine").value(false))
                 .andExpect(jsonPath("$.book").doesNotExist());                                                    // 남이 꽂은 책은 숨긴다
-        mvc.perform(GET(a, "/neighbors/BOBBY ")).andExpect(status().isOk());                                      // 핸들은 대소문자·공백을 가리지 않는다
+        mvc.perform(GET(a, "/neighbors/" + pid("bobby").toUpperCase())).andExpect(status().isOk());              // 번호는 대소문자를 가리지 않는다
     }
 
     @Test
@@ -126,15 +132,17 @@ class NeighborTest extends ApiTestBase {
         long a = newUser("alice"), b = newUser("bobby");
         long bk = book(a, "데미안", "DONE");
         mvc.perform(POST(a, house("nobody"), Map.of("bookId", bk))).andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("HOUSE_NOT_FOUND"));
-        mvc.perform(GET(a, "/neighbors/nobody")).andExpect(status().isNotFound());
+        mvc.perform(GET(a, "/neighbors/" + pid("nobody"))).andExpect(status().isNotFound());                     // 없는 번호
+        for (String malformed : new String[] {"nobody", "bobby", "123", "not-a-uuid", "1-1-1-1-1", "00000000-0000-4000-8000-00000000000g"})
+            mvc.perform(GET(a, "/neighbors/" + malformed)).andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("HOUSE_NOT_FOUND"));   // 번호 모양이 아니어도 500이 아니라 404
         mvc.perform(POST(a, house("alice"), Map.of("bookId", bk))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("OWN_HOUSE"));
-        mvc.perform(GET(a, "/neighbors/alice")).andExpect(status().isBadRequest());
+        mvc.perform(GET(a, "/neighbors/" + pid("alice"))).andExpect(status().isBadRequest());
         for (Object bad : new Object[]{"x", "5", 0, -1, 1.5})
             mvc.perform(POST(a, house("bobby"), Map.of("bookId", bad))).andExpect(status().isBadRequest());
         mvc.perform(POST(a, house("bobby"), Map.of())).andExpect(status().isBadRequest());
-        mvc.perform(post("/neighbors/bobby/recommendation").header("X-User-Id", a).contentType("application/json").content("{")).andExpect(status().isBadRequest());
-        mvc.perform(post("/neighbors/bobby/recommendation").contentType("application/json").content("{\"bookId\":1}")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/neighbors/bobby")).andExpect(status().isUnauthorized());
+        mvc.perform(post(house("bobby")).header("X-User-Id", a).contentType("application/json").content("{")).andExpect(status().isBadRequest());
+        mvc.perform(post(house("bobby")).contentType("application/json").content("{\"bookId\":1}")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/neighbors/" + pid("bobby"))).andExpect(status().isUnauthorized());
         mvc.perform(get("/me/recommendation")).andExpect(status().isUnauthorized());
         mvc.perform(post("/me/recommendation/confirm")).andExpect(status().isUnauthorized());
         assertThat(b).isPositive();

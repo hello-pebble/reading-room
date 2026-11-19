@@ -17,15 +17,16 @@ public class NeighborController {
         this.neighbors = neighbors;
     }
 
-    @GetMapping("/neighbors/{handle}")
-    public HouseResponse visit(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable String handle) {
-        return neighbors.visit(uid, handle);
+    /** 집은 그 사람의 공개 번호(무작위 UUID)로 찾는다 (결정 #69) */
+    @GetMapping("/neighbors/{publicId}")
+    public HouseResponse visit(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable String publicId) {
+        return neighbors.visit(uid, publicId);
     }
 
-    @PostMapping("/neighbors/{handle}/recommendation")
+    @PostMapping("/neighbors/{publicId}/recommendation")
     @ResponseStatus(HttpStatus.CREATED)
-    public RecommendationResponse recommend(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable String handle, @RequestBody RecommendRequest body) {
-        return neighbors.recommend(uid, handle, body);
+    public RecommendationResponse recommend(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable String publicId, @RequestBody RecommendRequest body) {
+        return neighbors.recommend(uid, publicId, body);
     }
 
     /** 내 집에 도착한 확인 전 추천(보낸 사람 닉네임 포함). 없으면 204 */

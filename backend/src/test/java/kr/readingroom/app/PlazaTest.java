@@ -21,7 +21,8 @@ class PlazaTest extends ApiTestBase {
     void sendReturnsMessageAndLimitsToThreePerThreeSeconds() throws Exception {
         long a = newUser("alice"), b = newUser("bob");
         mvc.perform(POST(a, "/plaza/messages", Map.of("content", "  안녕하세요  "))).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.content").value("안녕하세요")).andExpect(jsonPath("$.handle").value("alice"))
+                .andExpect(jsonPath("$.content").value("안녕하세요")).andExpect(jsonPath("$.publicId").value(publicId(a)))
+                .andExpect(jsonPath("$.handle").doesNotExist()).andExpect(jsonPath("$.userId").doesNotExist())   // 핸들·내부 번호는 밖으로 나가지 않는다 (결정 #69)
                 .andExpect(jsonPath("$.avatar.color").exists()).andExpect(jsonPath("$.createdAt").value("2026-11-17T03:00:00Z"));
         clock.advance(Duration.ofSeconds(1));
         mvc.perform(POST(a, "/plaza/messages", Map.of("content", "둘"))).andExpect(status().isCreated());

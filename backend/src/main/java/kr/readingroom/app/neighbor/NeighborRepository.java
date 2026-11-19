@@ -15,9 +15,9 @@ public class NeighborRepository {
         this.dsl = dsl;
     }
 
-    /** 핸들로 집 주인을 찾는다 */
-    public Record findHouse(String handle) {
-        return dsl.fetchOne("select id, handle, nickname from app_user where handle = ? and status = 'ACTIVE'", handle);
+    /** 공개 번호(UUID)로 집 주인을 찾는다 (결정 #69) */
+    public Record findHouse(java.util.UUID publicId) {
+        return dsl.fetchOne("select id, public_id::text as public_id, nickname from app_user where public_id = ?::uuid and status = 'ACTIVE'", publicId.toString());
     }
 
     /** 내 책(소유 확인)의 추천에 복사할 정보와 상태 */

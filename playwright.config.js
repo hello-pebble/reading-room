@@ -7,7 +7,13 @@ module.exports = defineConfig({
   retries: 1,       // 3D를 처음 띄울 때 가끔 느려서 한 번 더 시도한다
   workers: 2,
   reporter: [['list']],
-  use: { baseURL: 'http://localhost:4173', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  use: {
+    baseURL: 'http://localhost:4173',
+    // headless에서도 사용 가능한 GPU로 WebGL을 그린다. GPU가 없는 환경은 소프트웨어로 대체된다.
+    launchOptions: { args: ['--enable-gpu'] },
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
   webServer: { command: 'node tests/serve.js', url: 'http://localhost:4173/index.html', reuseExistingServer: true, timeout: 20000 },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },

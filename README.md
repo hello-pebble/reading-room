@@ -132,4 +132,5 @@
 - 테스트는 3D를 올리지 않아서 **3D 그림, 터치, 알림 팝업, 화면 겹침**은 못 본다. 이런 것은 브라우저로 직접 확인한다.
 - 서버는 `cd backend && ./gradlew test`로 따로 검사한다 (내 방 API 시나리오 77개, 실제 PostgreSQL 사용). 코드를 바꾸면 이 검사와 `npm run verify`를 둘 다 통과시킨다.
 - **실제 브라우저 테스트**: `npx playwright install chromium`(처음 한 번) 뒤 `npm run e2e`로 Playwright가 Chromium을 띄워 데스크톱·폰 두 화면에서 3D 그림, 화면 넘침·겹침, 실제 클릭·키보드 흐름을 본다(테스트 6개 × 2화면, 약 2분). jsdom이 못 보는 부분을 맡는다. 실패하면 `test-results/`에 스크린샷과 trace가 남는다.
+- E2E의 3D 렌더링은 `playwright.config.js`의 `--enable-gpu`로 사용 가능한 GPU를 활용한다(2026-11-19, 결정 #74). GPU가 없는 환경은 소프트웨어 렌더링으로 대체될 수 있다. 테스트 제어·자바스크립트 실행에는 계속 CPU가 쓰이고, 병렬 실행 수는 기존 2개를 유지한다.
 - `AGENTS.md`는 자동으로 일하는 에이전트(예: Ralph, 클라우드 세션)가 읽는 작업 지침이다.

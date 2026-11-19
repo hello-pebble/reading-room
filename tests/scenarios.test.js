@@ -683,7 +683,7 @@ test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로
   await settle();
   a.click('#logoutBtn');
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time|me\/calendar)/.test(p)), ['/me', '/auth/logout']);
+  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time|me\/calendar|rooms)/.test(p)), ['/me', '/auth/logout']);
   assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
   assert.equal(a.w.localStorage.getItem(TOKEN), null);
   assert.equal(a.ev('panelOpen'), 'login');
@@ -1220,5 +1220,169 @@ test('서버 광장: 글자는 그대로 보인다(HTML 주입 방지)', async (
   await enterPlaza(a);
   assert.equal(pzLog(a).querySelector('img'), null);
   assert.match(pzLog(a).textContent, /<img src=x/);
+  fin(a);
+});
+
+// ---- 서버 연결 5‑1단계: 마을 게시판과 공유방 개설·입장·나가기·닫기 (서버의 방이 기준) ----
+const HR = 3600000;
+const roomApp = async (setup) => {
+  const r = await bookApp((s) => {
+    s.seed('bob', '밥');
+    if (setup) setup(s);
+  });
+  return r;
+};
+const toVillage = async (a) => {
+  a.ev('enterVillage()');
+  await sleep(350);
+};
+// alice(나)를 방에 참여시켜 둔다 (agreed: 보관 동의까지)
+const joinSeeded = (s, room, agreed) => room.parts.push({ uid: s.users.alice.id, agreed: agreed ? Date.now() : false, left: false });
+const newsOf = (a) => a.state().news;
+
+test('서버 마을 게시판: 로그인하면 내가 참여한 서버의 방만 불러오고 체험판 방은 사라진다(가짜 참여자·대화도 없다)', async () => {
+  const { a } = await roomApp((s) => {
+    joinSeeded(s, s.seedRoom('bob', { title: '『데미안』 같이 읽기', max: 6 }), false);
+    const mine = s.seedRoom('alice', { kind: 'OWN', title: '나의 모닥불', openAt: Date.now() + 5 * HR });
+    mine.parts.splice(0, 1, { uid: s.users.alice.id, agreed: false, left: false });
+  });
+  const news = newsOf(a);
+  assert.equal(news.length, 2, '서버가 준 두 개뿐이에요');
+  const open = news.find((n) => n.kind === 'OPEN'), soon = news.find((n) => n.kind === 'SOON');
+  assert.equal(open.title, '『데미안』 같이 읽기');
+  assert.equal(open.max, 6);
+  assert.equal(open.people, 2);
+  assert.equal(open.mine, false);
+  assert.equal(open.agreed, false);
+  assert.equal(soon.mine, true);
+  assert.match(soon.inviteCode, /^INVITE/, '개설자에게는 서버의 초대 코드가 와요');
+  assert.deepEqual(open.messages, []);
+  assert.deepEqual(open.members, []);
+  assert.equal(open.inviteCode, '', '개설자가 아니면 초대 코드가 없고 만들어 채우지 않아요');
+  fin(a);
+});
+
+test('서버 모닥불 피우기: 서버가 만든 방이 게시판에 생기고, 서버가 거절하면 문구를 보이고 방은 생기지 않는다', async () => {
+  const { srv, a } = await roomApp((s) => readingSeed(s, { isbn: '9788937460777' }));
+  await toVillage(a);
+  a.ev(`openV('fire:new')`);
+  a.click('#panel [data-act=rcreate]');
+  await settle();
+  const c = calls(srv, 'POST', /^\/rooms$/);
+  assert.equal(c.length, 1);
+  assert.equal(c[0].body.kind, 'SAME');
+  assert.equal(c[0].body.isbn, '9788937460777');
+  assert.equal(c[0].body.bookId, srv.users.alice.books[0].id);
+  assert.equal(c[0].body.maxParticipants, 8);
+  assert.equal(c[0].body.hours, 3);
+  assert.equal(c[0].body.visibility, 'INVITE');
+  assert.equal(c[0].body.title, undefined, '이름을 비우면 서버가 정해요');
+  const n = newsOf(a).find((x) => x.mine);
+  assert.ok(n && n.kind === 'OPEN');
+  assert.match(n.title, /데미안/);
+  assert.equal(a.ev('panelView.created'), n.id);
+  // 같은 책 방을 더 열어 동시에 열 수 있는 수(2개)를 넘긴다
+  a.ev(`openV('fire:new')`);
+  a.click('#panel [data-act=rcreate]');
+  await settle();
+  a.ev(`openV('fire:new')`);
+  a.click('#panel [data-act=rcreate]');
+  await settle();
+  assert.match(a.doc.getElementById('rerr').textContent, /동시에 열 수 있는 모닥불은 2개/);
+  assert.equal(newsOf(a).filter((x) => x.mine).length, 2);
+  fin(a);
+});
+
+test('서버 초대 코드 입장: 코드(링크 포함)로 서버에 들어가고 방 창이 열린다. 없는 코드·가득 찬 방은 서버 문구가 나온다', async () => {
+  const { srv, a } = await roomApp((s) => {
+    s.seedRoom('bob', { title: '밥의 모닥불', code: 'ABC234', max: 3 });
+    const full = s.seedRoom('bob', { title: '가득 찬 방', code: 'FULL234', max: 2 });
+    full.parts.push({ uid: 999, agreed: false, left: false });
+  });
+  await toVillage(a);
+  a.ev(`openV('board')`);
+  a.doc.getElementById('jl').value = '이상한코드';
+  a.click('#panel [data-act=joinLink]');
+  await settle();
+  assert.match(text(a, 'toast'), /초대 코드를 찾을 수 없어요/);
+  a.doc.getElementById('jl').value = 'https://x.test/#join=FULL234';
+  a.click('#panel [data-act=joinLink]');
+  await settle();
+  assert.match(text(a, 'toast'), /정원이 가득 찼어요/);
+  assert.equal(newsOf(a).length, 0);
+  a.doc.getElementById('jl').value = ' abc234 ';
+  a.click('#panel [data-act=joinLink]');
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'abc234' });
+  const n = newsOf(a)[0];
+  assert.equal(n.title, '밥의 모닥불');
+  assert.equal(n.people, 2);
+  assert.equal(n.agreed, false);
+  assert.equal(a.ev('panelOpen'), 'room:' + n.id, '들어오면 그 방의 안내 창이 열려요');
+  fin(a);
+});
+
+test('서버 보관 동의와 나가기: 동의하면 서버에 기록되고, 나가면 서버에서 나온 뒤 게시판에서 사라진다', async () => {
+  const { srv, a } = await roomApp((s) => joinSeeded(s, s.seedRoom('bob', { title: '밥의 모닥불' }), false));
+  await toVillage(a);
+  const id = newsOf(a)[0].id;
+  a.ev(`openV('room:${id}')`);
+  a.click('#panel [data-act=rcAgree]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/agree$/).length, 1);
+  assert.equal(newsOf(a)[0].agreed, true);
+  assert.ok(srv.rooms[0].parts.find((p) => p.uid === srv.users.alice.id).agreed);
+  // 나가기
+  a.ev(`rcAct('rcLeave', { dataset: { id: '${id}' } })`);
+  await settle();
+  assert.equal(calls(srv, 'DELETE', /\/participants\/me$/).length, 1);
+  assert.equal(newsOf(a).length, 0, '나온 방은 게시판에서 사라져요');
+  fin(a);
+});
+
+test('서버 모닥불 닫기: 열린 방은 일찍 끄고(종료로 바뀜), 예정 방은 취소하면 사라진다', async () => {
+  const { srv, a } = await roomApp((s) => {
+    s.seedRoom('alice', { title: '열린 방' });
+    s.seedRoom('alice', { title: '예정 방', openAt: Date.now() + 5 * HR });
+  });
+  await toVillage(a);
+  const open = newsOf(a).find((n) => n.title === '열린 방'), soon = newsOf(a).find((n) => n.title === '예정 방');
+  a.ev(`sharedRoomAction('closeRoom', { dataset: { id: '${soon.id}' } })`);
+  await settle();
+  assert.equal(newsOf(a).some((n) => n.title === '예정 방'), false);
+  a.ev(`sharedRoomAction('closeRoom', { dataset: { id: '${open.id}' } })`);
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/close$/).length, 2);
+  const closed = newsOf(a).find((n) => n.title === '열린 방');
+  assert.equal(closed.kind, 'CLOSED');
+  assert.ok(closed.deleteAt > Date.now());
+  fin(a);
+});
+
+test('서버 모닥불 피우기: ISBN이 없는 책으로는 같은 책 방을 못 열고 서버 문구가 나온다(각자 읽기 방은 열린다)', async () => {
+  const { srv, a } = await roomApp((s) => readingSeed(s)); // 직접 적은 책이라 ISBN이 없다
+  await toVillage(a);
+  a.ev(`openV('fire:new')`);
+  a.click('#panel [data-act=rcreate]');
+  await settle();
+  assert.match(a.doc.getElementById('rerr').textContent, /같은 책 방은 책\(isbn\)이 필요해요/);
+  assert.equal(newsOf(a).length, 0);
+  a.click('#panel [data-act=rkind][data-v=OWN]');
+  a.click('#panel [data-act=rcreate]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /^\/rooms$/).at(-1).body.kind, 'OWN');
+  assert.equal(newsOf(a).length, 1);
+  fin(a);
+});
+
+test('서버 초대 링크: #join= 코드로 열면 로그인이 끝난 뒤에 그 방에 들어간다', async () => {
+  const { srv, a } = await roomApp((s) => s.seedRoom('bob', { title: '밥의 모닥불', code: 'LINK234' }));
+  assert.equal(newsOf(a).length, 0);
+  a.ev(`PENDING_JOIN = 'LINK234'; afterSignIn()`);
+  await settle();
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'LINK234' });
+  assert.equal(newsOf(a).length, 1);
+  assert.equal(a.ev('PENDING_JOIN'), '', '한 번만 들어가요');
   fin(a);
 });

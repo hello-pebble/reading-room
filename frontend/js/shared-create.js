@@ -76,6 +76,7 @@ function createRoom() {
     err = (m) => {
       document.getElementById('rerr').textContent = m;
     };
+  if (API.enabled) return serverCreateRoom(nf, err); // 방은 서버가 만든다 (rooms.js)
   const b = nfBook(nf),
     max = Math.round(+nf.max);
   if (roomsMadeToday() >= 3) return err('모닥불은 하루에 3번까지 피울 수 있어요. 내일 다시 피워 주세요');
@@ -149,6 +150,10 @@ function findByCode(c) {
   return S.news.find((n) => n.inviteCode === c);
 }
 function joinByCode(c) {
+  if (API.enabled) {
+    serverJoin(c); // 초대 코드는 서버가 찾는다 (rooms.js)
+    return true;
+  }
   const n = findByCode(c);
   if (!n) {
     toast('초대 코드를 찾을 수 없어요. 체험판에서는 같은 브라우저에서 만든 모닥불만 열려요');

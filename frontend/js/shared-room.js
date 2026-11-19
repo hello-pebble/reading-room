@@ -180,7 +180,7 @@ function roomCard(n, noAct, hideTitle) {
       : rcEmpty(n)
         ? `<span class="muted">가져올 대화가 없어요</span>`
         : `<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
-  if (noAct) act = '';
+  if (noAct || (API.enabled && n.kind !== 'OPEN')) act = ''; // 알림·가져오기는 5‑3단계에서 서버와 잇는다
   const tag = n.rtype ? `<span class="badge gray">${n.rtype === 'OWN' ? '각자 읽기' : '같은 책'}</span>` : '';
   return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}${hideTitle ? '' : `<b class="grow" style="font-weight:normal">${esc(n.title)}</b>`}</div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period ? ' · ' + esc(n.period) : ''}</div>${act}</div>`;
 }
@@ -230,5 +230,5 @@ const ICON_COPY =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="6" r="2.6"/><circle cx="18" cy="18" r="2.6"/><path d="M8.3 10.9l7.4-3.8M8.3 13.1l7.4 3.8"/></svg>';
 // 초대 링크: 링크 칸 옆에 복사(공유) 아이콘 버튼. 상자로 감싸지 않고 참여자 창처럼 글자 중심으로 보인다
 function inviteBlock(n) {
-  return `<div class="rinv"><div class="rlbl">초대 링크</div><div class="rcopy"><input id="invLink" readonly value="${esc(inviteLink(n))}" aria-label="초대 링크"><button class="ibtn" data-act="copyLink" data-id="${n.id}" aria-label="링크 복사" title="링크 복사">${ICON_COPY}</button>${navigator.share ? `<button class="ibtn" data-act="shareLink" data-id="${n.id}" aria-label="공유" title="공유">${ICON_SHARE}</button>` : ''}</div><div class="muted" style="margin-top:6px">초대 코드 ${n.inviteCode}${n.vis === 'public' ? ' · 마을 게시판에도 보여요' : ''}</div><div class="muted">체험판에서는 이 브라우저에서 만든 모닥불만 열려요.</div></div>`;
+  return `<div class="rinv"><div class="rlbl">초대 링크</div><div class="rcopy"><input id="invLink" readonly value="${esc(inviteLink(n))}" aria-label="초대 링크"><button class="ibtn" data-act="copyLink" data-id="${n.id}" aria-label="링크 복사" title="링크 복사">${ICON_COPY}</button>${navigator.share ? `<button class="ibtn" data-act="shareLink" data-id="${n.id}" aria-label="공유" title="공유">${ICON_SHARE}</button>` : ''}</div><div class="muted" style="margin-top:6px">초대 코드 ${n.inviteCode}${n.vis === 'public' ? ' · 마을 게시판에도 보여요' : ''}</div><div class="muted">${API.enabled ? '링크를 받은 사람이 로그인한 뒤 열면 이 방에 들어올 수 있어요.' : '체험판에서는 이 브라우저에서 만든 모닥불만 열려요.'}</div></div>`;
 }

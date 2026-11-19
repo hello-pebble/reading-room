@@ -92,6 +92,15 @@ function sharedRoomAction(act, b) {
   if (act === 'closeRoom') {
     const n = S.news.find((x) => x.id === b.dataset.id);
     if (!n) return true;
+    if (API.enabled) {
+      const camp = VIEW === 'shared' && CAMP_ID === n.id;
+      serverRoomAct(n, 'close', () => {
+        toast(n.kind === 'SOON' ? '모닥불을 취소했어요' : '모닥불을 일찍 껐어요. 마을 게시판에 7일 동안 남아요');
+        if (camp) endCampToPlaza(0);
+        closePanel();
+      });
+      return true;
+    }
     if (n.kind === 'SOON') {
       S.news = S.news.filter((x) => x !== n);
       toast('모닥불을 취소했어요');
@@ -270,7 +279,9 @@ function bindSharedRoomEvents() {
     const m = /#join=([A-Za-z0-9]+)/.exec(location.hash);
     if (m) {
       history.replaceState(null, '', location.href.split('#')[0]);
-      setTimeout(() => joinByCode(m[1]), 700);
+      if (API.enabled)
+        PENDING_JOIN = m[1]; // 로그인이 끝난 뒤에 들어간다 (rooms.js)
+      else setTimeout(() => joinByCode(m[1]), 700);
     }
   })();
 }

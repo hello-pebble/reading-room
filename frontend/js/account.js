@@ -60,7 +60,14 @@ function applyUser(u) {
 const afterSignIn = () => {
   plazaReset(); // 다른 계정의 광장 글 표시가 남지 않게 (plaza.js)
   calReset(); // 다른 계정의 달력이 남지 않게. 이번 달은 다음 화면 그리기 때 서버에서 받는다 (calendar.js)
-  return Promise.all([loadBooks(), loadSession()]).catch((e) => toast(e.message));
+  return Promise.all([loadBooks(), loadSession(), loadRooms()])
+    .then(() => {
+      if (!PENDING_JOIN) return;
+      const code = PENDING_JOIN;
+      PENDING_JOIN = '';
+      serverJoin(code);
+    })
+    .catch((e) => toast(e.message));
 };
 
 async function doLogin() {

@@ -21,6 +21,7 @@ const recordFromServer = (s) => ({
   endedBy: s.endedBy,
 });
 function sesRefresh() {
+  calRefresh(); // 독서한 날·연속일이 바뀐다 (calendar.js)
   save();
   panelView = {};
   render();

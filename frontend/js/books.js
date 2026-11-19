@@ -149,6 +149,7 @@ async function serverEndBook(kind, rating, review) {
     (kind === 'finish' ? S.finished : S.dropped).push({ ...bookFromServer(b, r.notes), rooms: r.rooms || [] });
     S.reading = null;
     panelView = {};
+    calRefresh(); // 완독 수·독서한 날이 바뀐다 (calendar.js)
     save();
     closePanel();
     render();

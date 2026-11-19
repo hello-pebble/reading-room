@@ -42,6 +42,9 @@ public class BookService {
         Integer total = normTotal(b.totalPages());
         int cur = RequestJson.present(b.currentPage()) && b.currentPage().isNumber() ? (int) Math.max(0, Math.min(MAX_PAGES, b.currentPage().asLong())) : 0;
         try {
+            Record later = b.isbn() == null || b.isbn().isBlank() ? null : bookRepository.findLaterByIsbn(userId, b.isbn().trim());
+            if (later != null)       // 공유방에서 가져와 "나중에 읽을 책"에 담긴 책이면 새로 만들지 않고 읽는 중으로 바꾼다(공유방 기록이 따라온다)
+                return view(bookRepository.promoteLater(later.get("id", Long.class), total, cur, clock.instant().toString()));
             Record r = bookRepository.insert(userId, b.isbn(), title.trim(), b.author(), b.coverUrl(), total, cur, clock.instant().toString());
             return view(r);
         } catch (DuplicateKeyException e) {

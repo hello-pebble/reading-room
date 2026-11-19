@@ -2,12 +2,12 @@
 
 스택 가정: Java 21, Spring, jOOQ, Flyway, PostgreSQL. **내 방 부분은 `backend/`에 구현됐다** (아래 "구현 상태와 차이").
 
-## 이웃집 추천의 프로토타입 저장 (2026-11-18, 서버 미구현)
+## 이웃집 추천의 프로토타입 저장 (2026-11-18, 화면은 아직 localStorage — 서버 API는 구현됨, 아래 "이웃집 책 추천")
 
 - `myroom-proto-v1`의 `S.recommendations`에 집 ID별 미확인 추천 한 권을 저장한다. 이전 저장 상태에는 빈 객체를 추가한다. 키 `neighbor-0`~`neighbor-7`은 시연용 이웃집이고 `me`는 내 집이다.
 - 값은 `{from, book:{title,author,cover,isbn}, at}`다. `at`는 Unix 밀리초이며 표시 날짜는 한국 시간을 사용한다. 독서 메모·평점·진행률은 복사하지 않는다. 현재 읽는 책이나 완독 목록에서 선택한 순간의 책 정보만 복사한다.
 - 이미 차 있는 집은 덮어쓰지 않으며, 집 주인이 확인하면 해당 키를 삭제한다. 원본 책 목록과 추천받은 사람의 독서 목록은 변경하지 않는다.
-- 실제 사용자 간 API는 아직 없다. 서버 연결 때는 발신자의 책 소유·현재 상태, 받는 집의 빈 칸을 서버에서 검사하고 집별 미확인 한 권 제약을 원자적으로 보장해야 한다. 확인 처리는 수신자 본인만 허용한다. 프로토타입의 집 주인 시점 테스트 도구는 실제 인증 기능이 아니다.
+- 실제 사용자 간 API는 `neighbor` 패키지에 구현됐다(결정 #62): 발신자의 책 소유·현재 상태와 받는 집의 빈 칸을 서버에서 검사하고, 집별 미확인 한 권은 DB 부분 유니크 인덱스로 원자적으로 보장하며, 확인은 집 주인 본인만 한다. 화면은 아직 이 API에 연결되지 않았다. 프로토타입의 집 주인 시점 테스트 도구는 실제 인증 기능이 아니다.
 
 ## 백엔드 역할 분리 (2026-11-18)
 
@@ -15,7 +15,7 @@
 
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의·대화(`GET·POST /rooms/{id}/messages`)·읽음(`POST /rooms/{id}/read`)도 같은 패키지에 있다(테이블 `room_message`는 `V10__room_message.sql`). 공유방 가져오기, 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: **공유방 개방 알림 켜기·끄기(`PUT·DELETE /rooms/{id}/alarm`)와 내 서재로 가져오기(`POST /rooms/{id}/import`, 책의 공유방 탭 `GET /books/{id}/rooms`, 테이블 `room_alarm`·`book_room_archive`는 `V12__room_alarm_archive.sql`)**, 이웃집 책 추천(`GET /neighbors/{handle}`, `POST /neighbors/{handle}/recommendation`, `GET /me/recommendation`, `POST /me/recommendation/confirm`, `neighbor` 패키지, 테이블 `neighbor_recommendation`은 `V11__neighbor_recommendation.sql`)**, 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의·대화(`GET·POST /rooms/{id}/messages`)·읽음(`POST /rooms/{id}/read`)도 같은 패키지에 있다(테이블 `room_message`는 `V10__room_message.sql`). 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
@@ -76,7 +76,7 @@
 | `room_participant` | room_id, user_id, book_id, joined_at, agreed_at(보관 동의), last_read_at, left_at | 종료 후 7일. unique(room_id, user_id). `book_id`는 이 방에서 내가 읽는 책 (`SAME`은 방의 책과 같은 ISBN, `OWN`은 내가 고른 책, 없을 수 있음). 가져오기는 `book_id`의 책에 붙인다 |
 | `room_message` | id, room_id, user_id, content(최대 300자), page(같은 책 방, 1~9999, 없을 수 있음), created_at | 종료 후 7일. 보낸 글은 삭제·수정하지 않는다(#53). 나간 사람의 글은 남긴다 (결정 #38). 방이 지워지면 함께 지워진다(`ON DELETE CASCADE`). DB도 내용 1~300자(공백만은 안 됨)·`page` 1~9999를 지킨다. 인덱스 `(room_id, id)`, `(user_id, created_at)` |
 | `room_open_log` | id, user_id, room_id(외래키 없음), opened_at | 영구(사용자와 함께 삭제). 개설할 때마다 한 줄. 예정 방을 취소하면 `shared_room` 행이 지워지므로, "하루(한국 시간) 3번, 취소해도 센다"(#53)를 세려면 방과 따로 남긴 이 기록이 필요하다. 동시 2개는 이 기록이 아니라 `shared_room`을 시각으로 센다 (결정 #59) |
-| `book_room_archive` | id, book_id, room_id, room_title, opened_at, closed_at, snapshot(JSON), imported_at | 영구. unique(book_id, room_id) |
+| `book_room_archive` | id, user_id, book_id, room_id, room_title, opened_at, closed_at, snapshot(JSON), imported_at | 영구. unique(book_id, room_id)이고 **한 사람이 한 방은 한 번만**(unique(user_id, room_id)). `room_id`는 방이 7일 뒤 지워져도 남도록 **외래키를 걸지 않는다**. 책이 지워지면 함께 지워진다. 스냅샷은 객체 `{roomType, title, openedAt, closedAt, messages:[{mine, author, page, content, createdAt}]}`이고 다른 참여자는 `author`가 `참여자 A`·`B`…(처음 말한 순서)로 익명이며 사용자 id·닉네임이 들어 있지 않다 (결정 #63) |
 
 ### 마을 광장
 
@@ -84,12 +84,18 @@
 |---|---|---|
 | `plaza_message` | id, user_id, content(최대 40자), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 공개 가입 전에 만든다(#41) |
 
+### 이웃집 책 추천
+
+| 테이블 | 컬럼 | 수명 |
+|---|---|---|
+| `neighbor_recommendation` | id, to_user(집 주인), from_user, isbn, title, author, cover_url, created_at, confirmed_at | 확인해도 행은 남긴다(`confirmed_at` 기록). 받는 사람·보낸 사람이 탈퇴하면 함께 삭제. **집마다 `confirmed_at`이 없는 행은 한 개**(부분 유니크 인덱스 `to_user WHERE confirmed_at IS NULL`). DB도 자기 집 추천 금지(`from_user <> to_user`)·제목 비움 금지·`confirmed_at >= created_at`를 지킨다. 책 정보는 추천할 때 복사한 값이라 원본 책을 바꾸거나 지워도 영향이 없다(메모·평점·진행률은 복사하지 않는다) |
+
 ### 알림
 
 | 테이블 | 컬럼 | 제약 |
 |---|---|---|
 | `push_subscription` | id, user_id, endpoint, p256dh, auth, user_agent, created_at | unique(endpoint). 기기마다 한 행. 전송이 404·410이면 삭제 |
-| `room_alarm` | user_id, room_id, created_at | unique(user_id, room_id). 창문 [알림 받기]를 켜면 생성, 끄면 삭제 |
+| `room_alarm` | user_id, room_id, created_at | unique(user_id, room_id). 창문 [알림 받기]를 켜면 생성, 끄면 삭제. 방이 지워지거나(취소·7일 삭제) 사용자가 방을 나가면 함께 지워진다 |
 
 웹 알림(Notification)은 페이지를 열어 둔 동안만 오기 때문에, 창을 닫은 뒤에도 받으려면 서버가 웹 푸시(VAPID)로 보낸다. iOS 웹은 홈 화면에 추가한 경우에만 받을 수 있다. 앱은 같은 내용을 로컬 알림과 푸시로 보낸다.
 
@@ -157,8 +163,8 @@
 |---|---|---|
 | POST | `/me/push-subscription` | 알림 권한을 허용한 기기의 구독 정보 저장. 같은 endpoint면 덮어쓴다 (멱등) |
 | DELETE | `/me/push-subscription` | 구독 해제 |
-| PUT | `/rooms/{id}/alarm` | 공유방 알림 켜기 (`room_alarm` 생성). 이미 있으면 200 |
-| DELETE | `/rooms/{id}/alarm` | 공유방 알림 끄기 |
+| PUT | `/rooms/{id}/alarm` | 공유방 알림 켜기 (`room_alarm` 생성). 이미 있으면 200. **구현**: 새로 켜면 201, 응답 `{roomId, alarm:true}`. **참여 중인 사람만**(403 `NOT_PARTICIPANT`), **아직 열리지 않은(`SCHEDULED`) 방만**(열린 방은 409 `ROOM_ALREADY_OPEN`, 끝난 방은 410 `ROOM_CLOSED`), 없거나 보관 7일이 지난 방은 404. 실제 개방 푸시는 개방 배치가 보낸다(아직 없음). `GET /rooms` 응답의 `alarm`으로 켜짐 상태를 안다 |
+| DELETE | `/rooms/{id}/alarm` | 공유방 알림 끄기. **구현**: 204. 켜 둔 적이 없어도 204(멱등), 방이 없으면 404 |
 
 보내는 알림은 아래 세 가지다. 알림을 누르면 앱·웹이 해당 화면(스탠드 창 또는 창문)을 연다.
 
@@ -183,7 +189,9 @@
 | ~~DELETE~~ | ~~`/rooms/{id}/messages/{mid}`~~ | 폐지 (#53). 보낸 글은 삭제·수정하지 않는다 |
 | POST | `/rooms/{id}/read` | 마지막으로 읽은 시각(`last_read_at`) 저장. 새 글 별(✦) 계산에 쓴다. **구현**: 응답 `{roomId, lastReadAt}`(서버 시각). 참여 중인 사람만(아니면 403), 방이 없거나 보관 7일이 지났으면 404, 종료된 방도 보관 기간 안에는 된다. 동의 전에도 저장은 되지만 글 목록은 못 본다 |
 | GET | `/rooms?status=` | 마을 게시판, 창문 소식. 내가 만들었거나 참여 중(나가지 않은)인 방만 내려준다(베타는 공개 방이 없다, #41). 응답 `[{id, kind, title, isbn, status, openAt, closeAt, closedAt, deleteAt, participants, maxParticipants, mine, joined, agreed, unread, ownerNickname, inviteCode(개설자에게만)}]`(`unread`: 참여 중이고 마지막으로 읽은 뒤(읽은 적 없으면 처음부터) **다른 사람의** 새 글이 있으면 true = 새 글 별 ✦. 내 글은 별을 만들지 않는다). **`status`는 저장값이 아니라 시각으로 계산**한다(`closedAt`이 있거나 `closeAt`이 지났으면 `CLOSED`, `openAt` 전이면 `SCHEDULED`, 아니면 `OPEN`). 종료 방은 종료 시각(일찍 끝냈으면 `closedAt`)부터 7일 동안만 내려가고 `deleteAt`이 그 시각이다. 순서: 열린 방(최근에 연 것) → 예정 방(곧 열릴 것) → 지난 방(최근에 끝난 것). `status`가 `SCHEDULED·OPEN·CLOSED`가 아니면 400 |
-| POST | `/rooms/{id}/import` | 스냅샷 생성 (다른 참여자 익명화). 삭제된 글만 빼고 `page`와 함께 저장하며(`room_type`도 스냅샷에 담는다), 책의 공유방 탭은 모든 글을 그대로 내려준다. 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
+| POST | `/rooms/{id}/import` | **구현(결정 #63)**: body `{bookId?}`(생략 가능). 종료된 방(`CLOSED`)을 참여 중이고 **보관 동의한** 사람이 종료 후 보관 7일 안에만 가져올 수 있다(방이 열려 있으면 409 `ROOM_NOT_CLOSED`, 나간 사람·동의 전은 403, 7일이 지나면 404, 글이 없으면 409 `NOTHING_TO_IMPORT`). 붙일 내 책은 ① 요청의 `bookId`(내 책, 같은 책 방이면 방의 ISBN과 같아야 한다 400 `BOOK_MISMATCH`) ② 입장할 때 고른 책 ③ (같은 책 방) 같은 ISBN의 내 책 — 읽는 중·완독·포기가 나중에 읽을 책보다 먼저 ④ (같은 책 방) 없으면 방을 연 사람의 책 정보로 `LATER` 책을 새로 만든다(응답 `bookCreated:true`). 각자 읽기 방에서 책을 못 정하면 400 `BOOK_REQUIRED`. 새로 가져오면 201, 같은 방을 다시 가져오면 이미 가져온 기록을 200으로 돌려준다(멱등). 응답 `{id, bookId, bookStatus, bookCreated, roomId, roomTitle, kind, openedAt, closedAt, messageCount, importedAt}`(글은 담지 않는다). 아래는 처음 설계 메모다: 스냅샷 생성 (다른 참여자 익명화). 삭제된 글만 빼고 `page`와 함께 저장하며(`room_type`도 스냅샷에 담는다), 책의 공유방 탭은 모든 글을 그대로 내려준다. 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER`(나중에 읽을 책)로 책을 만들어 담는다. `LATER`는 완독 수·달력·해금에 세지 않고, 소파에 올리면 `READING`으로 바뀌며 스냅샷이 따라온다 |
+
+| GET | `/books/{id}/rooms` | 책의 [공유방] 탭. 내 책만(남의 책은 404). 가져온 기록을 최근 것부터 `[{…가져오기 응답과 같은 필드, messages:[{mine, author("나" 또는 "참여자 A"), page, content, createdAt}]}]`로 내려준다. 없으면 `[]`. 나중에 읽을 책(`LATER`)을 `POST /books`로 소파에 올리면(같은 ISBN) 새 책을 만들지 않고 **그 책이 `READING`으로 바뀌어** 공유방 기록이 그대로 따라온다(소파에 이미 읽는 책이 있으면 409 `ALREADY_READING`) |
 
 ### 마을 광장
 
@@ -192,6 +200,17 @@
 | GET | `/plaza/messages?since=` | 최근 24시간 대화. `since`(ISO 시각, 예 `2026-11-18T03:00:00Z`)가 없으면 가장 최근 30개, 있으면 그 이후 글을 오래된 순으로 최대 30개(24시간보다 오래된 `since`는 24시간 전으로 본다). 응답 `[{id, userId, handle, nickname, avatar, content, createdAt}]`, 잘못된 `since`는 400. 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
 | GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/100)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 100명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
 | POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거, 글자는 코드 포인트 기준). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 공유방 대화와 같은 `ChatRate`이지만 따로 센다. 같은 사람의 동시 전송은 DB 잠금으로 한 줄로 세운다), 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`. 성공하면 201과 만든 글 |
+
+### 이웃집 책 추천 API
+
+집은 사용자의 `handle`로 가리킨다(대소문자·공백 무시). 전부 로그인(`X-User-Id`) 필요.
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| GET | `/neighbors/{handle}` | 이웃집 방문. 응답 `{handle, nickname, occupied, mine, book}`. `occupied`는 아래 칸에 확인 전 추천이 있는지, `book`은 그 추천을 **내가** 꽂았을 때(`mine`)만 내려가고 남이 꽂은 책은 알려 주지 않는다. 없는 핸들은 404(`HOUSE_NOT_FOUND`), 내 집은 400(`OWN_HOUSE`) |
+| POST | `/neighbors/{handle}/recommendation` | 내 책 한 권을 그 집에 꽂는다. body `{bookId}`(정수, 아니면 400 `BAD_BOOK_ID`). 201과 `{id, fromNickname(나), book:{isbn,title,author,coverUrl}, createdAt}`. 내 책이 아니거나 없으면 404(`BOOK_NOT_FOUND`), **읽는 중(`READING`)·완독(`DONE`)이 아니면 400(`BOOK_NOT_ELIGIBLE`)** — 꽂는 순간의 상태로 다시 검사한다. 그 집에 확인 전 추천이 있으면 409(`HOUSE_OCCUPIED`, 덮어쓰지 않는다). 동시에 여러 명이 꽂아도 한 명만 201이다. 내 책과 기록은 바꾸지 않는다 |
+| GET | `/me/recommendation` | 내 집에 도착한 확인 전 추천 `{id, fromNickname, book, createdAt}`. 없으면 204. **보낸 사람은 닉네임(`fromNickname`, 보여 줄 때의 현재 닉네임)으로 밝힌다.** 핸들·사용자 id는 내려주지 않는다 |
+| POST | `/me/recommendation/confirm` | 집 주인이 [확인했어요]. 204. 확인할 추천이 없으면 404(`NO_RECOMMENDATION`). 경로가 내 집이라 집 주인 본인만 확인할 수 있다. 확인만으로 내 책장에 책을 더하지 않고, 칸이 비어 다시 추천받을 수 있다 |
 
 ## 배치 작업 (`@Scheduled`)
 
@@ -226,11 +245,12 @@ sync();
 
 ## 공유방 남은 일 메모 (2026-11-18)
 
-공유방 서버는 개설·입장·대화·읽음까지 `room` 패키지에 구현됐다(결정 #59·#60). 아래는 남은 일이다. 아직 코드는 없다.
+공유방 서버는 개설·입장·대화·읽음·알림 켜기·가져오기까지 `room` 패키지에 구현됐다(결정 #59·#60·#63). 아래는 남은 일이다.
 
-- **가져오기 `POST /rooms/{id}/import`**: 테이블 `book_room_archive`가 아직 없다(`V11__…`로 만든다). 스냅샷은 `room_message`를 `page`와 함께 담고 다른 참여자는 익명화한다. 내 책(`DONE`·`DROPPED`·`READING`)에 같은 ISBN이 없으면 `status=LATER` 책을 만든다. 가져오기 마감은 방 종료 후 7일이고, 지우는 배치보다 먼저여야 한다. 가져오기는 보관 동의(`agreed_at`)한 참여자만 할 수 있게 하자고 제안한다.
-- **개방·종료 배치(1분)**: `SCHEDULED`→`OPEN`으로 `status` 열 갱신과 개방 푸시(`room_alarm` 사용자와 개설자). 지금은 화면·API 모두 시각으로 상태를 계산하므로 배치가 늦거나 없어도 동작은 맞고, `status` 열은 보조값이다. `close_at`이 지난 방의 `status`를 `CLOSED`로 맞추는 것도 같은 배치에서 한다(일찍 끝낸 방은 `closed_at`이 이미 있다).
-- **하드 삭제(매일 새벽)**: `closed_at`(없으면 `close_at`) + 7일이 지난 방을 지운다. 글(`room_message`)·참여자는 `ON DELETE CASCADE`로 함께 지워진다. `room_open_log`는 방을 지워도 남겨야 하므로(하루 3번 제한) 이 배치가 지우지 않는다.
-- **`room_alarm`**(창문 알림 켜기 `PUT·DELETE /rooms/{id}/alarm`), **모닥불 머문 시간**(`reading_session`, `source=CAMP`, `room_id`, 종료 시각까지만 센다, 오늘 읽은 시간·달력에 합산)은 별도 작업이다.
-- **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`로 함께 지워진다). 재입장하면 보관 동의를 다시 받으므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다.
-- **테스트 요령**: `ApiTestBase`가 `TestClock`(기준 `2026-11-17T03:00:00Z`)과 `truncate app_user ... cascade`를 쓰므로 `app_user`에서 외래키로 이어진 새 테이블은 자동으로 비워진다. 방은 `RoomOpenTest`·`RoomJoinTest`·`RoomChatTest`의 `open(...)`처럼 API로 열면 규칙이 그대로 지켜진다. 글은 5초 제한 때문에 `clock.advance`로 시각을 옮겨 가며 보낸다.
+- **개방·종료 배치(1분)**: `SCHEDULED`→`OPEN`으로 `status` 열 갱신과 개방 푸시(`room_alarm` 사용자와 개설자, 테이블·켜기 API는 있다). 지금은 화면·API 모두 시각으로 상태를 계산하므로 배치가 늦거나 없어도 동작은 맞고, `status` 열은 보조값이다. `close_at`이 지난 방의 `status`를 `CLOSED`로 맞추는 것도 같은 배치에서 한다(일찍 끝낸 방은 `closed_at`이 이미 있다).
+- **가져오기 마감 D-1 알림 / 자동 가져오기 옵션**(SPEC "마감 알림"): 아직 없다.
+- **하드 삭제(매일 새벽)**: `closed_at`(없으면 `close_at`) + 7일이 지난 방을 지운다. 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워진다. `room_open_log`는 방을 지워도 남겨야 하고(하루 3번 제한), `book_room_archive`는 영구라 지우지 않는다(`room_id`에 외래키가 없어 방이 지워져도 남는다).
+- **모닥불 머문 시간**(`reading_session`, `source=CAMP`, `room_id`, 종료 시각까지만 센다, 오늘 읽은 시간·달력에 합산)은 별도 작업이다.
+- **광장 접속 인원 `GET /plaza/presence`**: 연결(SSE/WebSocket) 수로 세는데 연결 방식·경로가 문서에 정해져 있지 않아 만들지 않았다. 정원 100명이 차면 마을 입장 연결이 409를 받는 규칙까지 포함해 연결 방식을 먼저 정해야 한다.
+- **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`로 함께 지워진다). 재입장하면 보관 동의를 다시 받으므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다. 가져온 기록을 지우는 API(가져오기 취소)는 없다.
+- **테스트 요령**: `ApiTestBase`가 `TestClock`(기준 `2026-11-17T03:00:00Z`)과 `truncate app_user ... cascade`를 쓰므로 `app_user`에서 외래키로 이어진 새 테이블은 자동으로 비워진다. 방은 `RoomOpenTest`·`RoomJoinTest`·`RoomChatTest`·`RoomImportTest`의 `open(...)`·`roomWith(...)`처럼 API로 열면 규칙이 그대로 지켜진다. 글은 도배 제한(3초 3건) 때문에 `clock.advance`로 시각을 옮겨 가며 보낸다.

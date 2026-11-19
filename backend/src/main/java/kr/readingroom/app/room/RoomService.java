@@ -159,6 +159,31 @@ public class RoomService {
         if (room.get("created_by", Long.class) == userId)
             throw new ApiException(HttpStatus.CONFLICT, "OWNER_CANNOT_LEAVE", "방을 연 사람은 나갈 수 없어요. 모닥불을 닫아 주세요");
         if (rooms.leave(roomId, userId, clock.instant()) == 0) throw new ApiException(HttpStatus.NOT_FOUND, "NOT_PARTICIPANT", "참여 중인 모닥불이 아니에요");
+        rooms.deleteAlarm(userId, roomId);                          // 나간 사람에게는 개방 알림을 보내지 않는다
+    }
+
+    /**
+     * 예정 방의 개방 알림 켜기(창문·마을 게시판 [알림 받기]). 참여 중인 사람만, 아직 열리지 않은(SCHEDULED) 방만.
+     * 새로 켜면 true, 이미 켜져 있으면 false(멱등). 실제 푸시는 개방 배치가 보낸다(아직 없음).
+     */
+    @Transactional
+    public boolean alarmOn(long userId, long roomId) {
+        Instant now = clock.instant();
+        Record room = rooms.lock(roomId);
+        if (room == null || BoardService.view(rooms.view(roomId, userId), userId, now) == null) throw notFound();
+        Record me = rooms.participant(roomId, userId);
+        if (me == null || me.get("left_at") != null) throw new ApiException(HttpStatus.FORBIDDEN, "NOT_PARTICIPANT", "참여 중인 모닥불이 아니에요");
+        String state = BoardService.state(Db.instant(room, "open_at"), Db.instant(room, "close_at"), Db.instant(room, "closed_at"), now);
+        if (state.equals("CLOSED")) throw new ApiException(HttpStatus.GONE, "ROOM_CLOSED", "이미 끝난 모닥불이에요");
+        if (state.equals("OPEN")) throw new ApiException(HttpStatus.CONFLICT, "ROOM_ALREADY_OPEN", "이미 열린 모닥불이에요");
+        return rooms.insertAlarm(userId, roomId, now);
+    }
+
+    /** 개방 알림 끄기. 켜 둔 적이 없어도 204(멱등). 방이 없으면 404 */
+    @Transactional
+    public void alarmOff(long userId, long roomId) {
+        if (rooms.find(roomId) == null) throw notFound();
+        rooms.deleteAlarm(userId, roomId);
     }
 
     /** 보관 동의 기록. 참여 중인 사람만(403). 이미 동의했으면 처음 시각을 그대로 돌려준다. */

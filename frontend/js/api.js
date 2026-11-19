@@ -86,6 +86,8 @@ const API = (() => {
     get: (path) => request('GET', path),
     post: (path, body) => request('POST', path, body === undefined ? {} : body),
     put: (path, body) => request('PUT', path, body),
+    patch: (path, body) => request('PATCH', path, body),
+    del: (path) => request('DELETE', path),
   };
   return api;
 })();

@@ -46,6 +46,14 @@ public class NoteService {
         return new NoteCreatedResponse(note.id(), note.bookId(), note.type(), note.content(), note.page(), note.createdAt(), book.currentPage(), book.percent());
     }
 
+    /** 메모·인용구 삭제. 내 책의 메모만 지울 수 있고(남의 책·없는 메모는 404), 이미 올라간 현재 쪽은 줄지 않는다. */
+    @Transactional
+    public void delete(long userId, long bookId, long noteId) {
+        books.owned(userId, bookId);
+        if (noteRepository.deleteInBook(bookId, noteId) == 0)
+            throw new ApiException(HttpStatus.NOT_FOUND, "NOTE_NOT_FOUND", "메모를 찾을 수 없어요");
+    }
+
     public List<NoteResponse> list(long userId, long bookId) {
         books.owned(userId, bookId);
         List<NoteResponse> out = new ArrayList<>();

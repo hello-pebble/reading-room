@@ -63,10 +63,28 @@ function fakeServer() {
     return (users[label] = u);
   };
   const issue = (u) => { const t = 'tok-' + ++seq; tokens[t] = u; return t; };
+  // 책·메모 (서버 규칙을 화면 테스트에 필요한 만큼만 흉내 낸다: 소파는 한 권, 제목 필수, 쪽수는 올라가기만 한다)
+  const pct = (b) => (b.totalPages ? Math.min(100, Math.floor((b.currentPage / b.totalPages) * 100)) : null);
+  const bookView = (b) => { const { notes, ...rest } = b; return { ...rest, percent: pct(b) }; };
+  const mkBook = (u, o) => {
+    const b = { id: ++seq, isbn: o.isbn || null, title: o.title, author: o.author || null, coverUrl: o.coverUrl || null, totalPages: o.totalPages || null,
+      currentPage: o.currentPage || 0, status: o.status || 'READING', rating: o.rating || null, oneLineReview: o.oneLineReview || null,
+      startedAt: o.startedAt || '2026-11-17T03:00:00Z', finishedAt: o.finishedAt || null, notes: [] };
+    (u.books = u.books || []).push(b);
+    return b;
+  };
+  const raise = (b, page) => { if (page != null && page > b.currentPage) b.currentPage = b.totalPages ? Math.min(page, b.totalPages) : page; };
   const srv = {
     calls, users, tokens, down: false,
     // 이미 가입한 계정과 그 토큰을 만들어 둔다 (재방문·토큰 만료 시나리오용)
     seed(label, nickname) { return issue(mk(label, nickname)); },
+    // 그 계정에 책을 미리 만들어 둔다. notes: [{type, content, page}] (오래된 것부터)
+    seedBook(label, o) {
+      const b = mkBook(users[label], o);
+      let n = 0;
+      for (const m of o.notes || []) b.notes.push({ id: ++seq, bookId: b.id, type: m.type || 'MEMO', content: m.content, page: m.page == null ? null : m.page, createdAt: '2026-11-17T0' + (n++ % 10) + ':00:00Z' });
+      return b;
+    },
     async fetch(url, init = {}) {
       const method = init.method || 'GET', path = url.replace(API_BASE, '');
       const body = init.body ? JSON.parse(init.body) : {};
@@ -89,6 +107,47 @@ function fakeServer() {
         return res(200, { ...user });
       }
       if (method === 'POST' && path === '/auth/logout') { delete tokens[auth.replace('Bearer ', '')]; return res(204); }
+      const books = user.books || [];
+      let m;
+      if (method === 'GET' && (m = path.match(/^\/books\?status=(\w+)$/))) return res(200, books.filter((b) => b.status === m[1]).map(bookView));
+      if (method === 'POST' && path === '/books') {
+        const title = String(body.title == null ? '' : body.title).trim();
+        if (!title || title.length > 200) return res(400, { error: 'BAD_TITLE', message: '제목은 1~200자로 적어 주세요' });
+        if (books.some((b) => b.status === 'READING')) return res(409, { error: 'ALREADY_READING', message: '소파에 이미 읽는 책이 있어요. 먼저 완독하거나 포기해 주세요' });
+        return res(201, bookView(mkBook(user, { ...body, title })));
+      }
+      if ((m = path.match(/^\/books\/(\d+)(\/.*)?$/))) {
+        const b = books.find((x) => x.id === +m[1]);
+        if (!b) return res(404, { error: 'NOT_FOUND', message: '책을 찾을 수 없어요' });
+        const sub = m[2] || '';
+        if (method === 'PATCH' && !sub) {
+          if (body.totalPages !== undefined) b.totalPages = body.totalPages >= 1 ? Math.min(9999, body.totalPages) : null;
+          if (body.currentPage !== undefined) b.currentPage = Math.max(0, body.currentPage || 0);
+          return res(200, bookView(b));
+        }
+        if (method === 'GET' && sub === '/notes') return res(200, b.notes.slice().reverse());
+        if (method === 'POST' && sub === '/notes') {
+          const content = String(body.content == null ? '' : body.content);
+          if (!content.trim()) return res(400, { error: 'BAD_CONTENT', message: '내용은 1~2000자로 적어 주세요' });
+          const n = { id: ++seq, bookId: b.id, type: body.type || 'MEMO', content, page: body.page == null ? null : body.page, createdAt: '2026-11-17T03:00:00Z' };
+          b.notes.push(n);
+          raise(b, n.page);
+          return res(201, { ...n, currentPage: b.currentPage, percent: pct(b) });
+        }
+        if (method === 'DELETE' && (m = sub.match(/^\/notes\/(\d+)$/))) {
+          const i = b.notes.findIndex((n) => n.id === +m[1]);
+          if (i < 0) return res(404, { error: 'NOTE_NOT_FOUND', message: '메모를 찾을 수 없어요' });
+          b.notes.splice(i, 1);
+          return res(204);
+        }
+        if (method === 'POST' && (sub === '/finish' || sub === '/drop')) {
+          if (b.status !== 'READING') return res(409, { error: 'NOT_READING', message: '읽는 중인 책이 아니에요' });
+          b.status = sub === '/finish' ? 'DONE' : 'DROPPED';
+          b.finishedAt = '2026-11-17T03:00:00Z';
+          if (sub === '/finish') { b.rating = body.rating || null; b.oneLineReview = body.oneLineReview || null; }
+          return res(200, bookView(b));
+        }
+      }
       return res(404, { error: 'NOT_FOUND', message: '없는 주소예요' });
     },
   };

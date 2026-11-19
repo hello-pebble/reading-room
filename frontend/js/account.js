@@ -56,6 +56,9 @@ function applyUser(u) {
   render();
 }
 
+// 로그인한 직후와 새로고침 때: 서버의 책·메모를 불러온다 (books.js)
+const afterSignIn = () => loadBooks().catch((e) => toast(e.message));
+
 async function doLogin() {
   if (ACCT.busy) return;
   ACCT.label = document.getElementById('loginLabel').value.trim();
@@ -65,6 +68,7 @@ async function doLogin() {
     API.setToken(r.token);
     applyUser(r.user);
     showAccountButtons(true);
+    afterSignIn();
     if (r.user.needsNickname) {
       ACCT.locked = true;
       ACCT.nick = '';
@@ -136,6 +140,7 @@ async function bootAccount() {
     const u = await API.get('/me');
     applyUser(u);
     showAccountButtons(true);
+    afterSignIn();
     if (u.needsNickname) {
       ACCT.locked = true;
       ACCT.nick = '';

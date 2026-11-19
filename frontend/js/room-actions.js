@@ -35,6 +35,7 @@ function bindRoomEvents() {
       r.totalPages = Math.round(+tp) >= 1 ? Math.min(9999, Math.round(+tp)) : null;
       updProgress(r);
       save();
+      if (API.enabled) queueBookSave(r); // 입력이 멈추면 서버에 한 번 저장한다 (books.js)
       document.getElementById('pv').textContent = r.totalPages ? r.progress + '%' : '';
       const bar = panel.querySelector('.card .progress i');
       if (bar) bar.style.width = (r.progress || 0) + '%';
@@ -99,6 +100,10 @@ function roomAction(act, b) {
     }
     if (bad) return true;
     const tp = Math.round(+panelView.tp) >= 1 ? Math.min(9999, Math.round(+panelView.tp)) : null; // 전체 쪽수: 빈 값 또는 1~9999
+    if (API.enabled) {
+      serverAddBook(t, a, tp); // 서버 연결 모드: 서버가 받아들이면 소파에 올린다 (books.js)
+      return true;
+    }
     const li = S.later.findIndex((x) => x.title === t),
       lrooms = li >= 0 ? S.later.splice(li, 1)[0].rooms : []; // 나중에 읽을 책에 있던 책이면 목록에서 빼고 공유방 기록을 이어 받는다
     S.reading = {
@@ -163,6 +168,10 @@ function roomAction(act, b) {
     }
     const pg = Math.max(0, Math.round(+document.getElementById('np').value)) || null,
       rd = S.reading;
+    if (API.enabled) {
+      serverAddNote(c, pg);
+      return true;
+    }
     rd.notes.push({ type: panelView.type || 'MEMO', content: c, page: pg, at: today() });
     panelView.draft = '';
     if (pg && (rd.page == null || pg > rd.page)) {
@@ -176,6 +185,10 @@ function roomAction(act, b) {
     return true;
   }
   if (act === 'delNote') {
+    if (API.enabled) {
+      serverDelNote(+b.dataset.i);
+      return true;
+    }
     S.reading.notes.splice(+b.dataset.i, 1);
     save();
     renderPanel();
@@ -209,6 +222,10 @@ function roomAction(act, b) {
     }
     const rating = panelView.rating || 0,
       review = (panelView.review || '').trim(); // endSession()이 panelView를 비우기 전에 별점·한줄평을 챙긴다 (Codex QA)
+    if (API.enabled) {
+      serverEndBook('finish', rating, review);
+      return true;
+    }
     if (S.session) endSession(Date.now(), 'FINISH', true);
     const r = S.reading;
     const id = r.id || Date.now();
@@ -238,6 +255,10 @@ function roomAction(act, b) {
     if (S.session && S.session.status === 'NEEDS_CONFIRM') {
       openF('lamp');
       toast('먼저 스탠드 시간을 확인해 주세요');
+      return true;
+    }
+    if (API.enabled) {
+      serverEndBook('drop');
       return true;
     }
     if (S.session) endSession(Date.now(), 'FINISH', true);
@@ -296,7 +317,8 @@ function roomAction(act, b) {
     if (sp && sp.value !== '') r.page = Math.max(0, Math.round(+sp.value));
     updProgress(r);
     const m = (panelView.memo || '').trim();
-    if (m) r.notes.push({ type: 'MEMO', content: m, page: null, at: today() });
+    if (API.enabled) syncStandStop(r, m);
+    else if (m) r.notes.push({ type: 'MEMO', content: m, page: null, at: today() });
     endSession(Date.now(), 'LAMP');
     return true;
   }

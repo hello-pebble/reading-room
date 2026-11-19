@@ -579,7 +579,7 @@ test('서버 연결: 토큰이 없으면 로그인 창이 뜨고, 새 계정은 
   val(a, 'loginLabel', 'alice');
   a.click('#panel [data-act=login]');
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path), ['/dev/login']);
+  assert.equal(srv.calls[0].path, '/dev/login', '처음 부르는 곳은 로그인이에요(이어서 책을 불러와요)');
   assert.equal(srv.calls[0].auth, undefined, '로그인 요청에는 토큰이 없어요');
   assert.ok(a.w.localStorage.getItem(TOKEN), '토큰이 저장돼요');
   assert.equal(a.ev('panelOpen'), 'nickname', '새 계정이라 닉네임부터 정해요');
@@ -639,7 +639,7 @@ test('재방문: 저장된 토큰으로 바로 들어가고, 닉네임이 있으
   const token = srv.seed('alice', '나무');
   const a = load({ api: srv, local: { [TOKEN]: token } });
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path), ['/me']);
+  assert.equal(srv.calls[0].path, '/me', '내 정보를 먼저 불러와요(이어서 책을 불러와요)');
   assert.equal(a.ev('panelOpen'), null);
   assert.equal(text(a, 'hdrName'), '나무의 방');
   assert.equal(a.ev('S.user.publicId'), srv.users.alice.publicId);
@@ -683,11 +683,175 @@ test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로
   await settle();
   a.click('#logoutBtn');
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path), ['/me', '/auth/logout']);
+  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !p.startsWith('/books')), ['/me', '/auth/logout']);
   assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
   assert.equal(a.w.localStorage.getItem(TOKEN), null);
   assert.equal(a.ev('panelOpen'), 'login');
   assert.equal(a.doc.getElementById('nickBtn').hidden, true);
+  fin(a);
+});
+
+// ---- 서버 연결 2단계: 책·메모·완독/포기 (서버가 기준) ----
+const bookApp = async (setup) => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  if (setup) setup(srv);
+  const a = load({ api: srv, local: { [TOKEN]: token } });
+  a.ev('BOOK_SAVE_DELAY=20'); // 쪽수 저장 대기를 줄인다
+  await settle();
+  await settle();
+  return { srv, a };
+};
+const readingSeed = (srv, extra = {}) =>
+  srv.seedBook('alice', { title: '데미안', author: '헤세', totalPages: 200, currentPage: 50, ...extra });
+const sofa = (a) => a.ev("openF('sofa')");
+const calls = (srv, method, re) => srv.calls.filter((c) => c.method === method && re.test(c.path));
+
+test('서버 책 불러오기: 읽는 책·완독·포기와 메모를 서버에서 불러온다(데모 책은 사라진다)', async () => {
+  const { a } = await bookApp((srv) => {
+    readingSeed(srv, { notes: [{ content: '첫 메모' }, { type: 'QUOTE', content: '새는 알을 깨고', page: 50 }] });
+    srv.seedBook('alice', { title: '아몬드', author: '손원평', status: 'DONE', rating: 4, oneLineReview: '좋았다', finishedAt: '2026-10-12T03:00:00Z', notes: [{ content: '끝' }] });
+    srv.seedBook('alice', { title: '사피엔스', status: 'DONE', finishedAt: '2026-11-01T03:00:00Z' });
+    srv.seedBook('alice', { title: '포기한 책', status: 'DROPPED', finishedAt: '2026-11-05T03:00:00Z' });
+  });
+  const s = a.state();
+  assert.equal(s.reading.title, '데미안');
+  assert.equal(s.reading.page, 50);
+  assert.equal(s.reading.totalPages, 200);
+  assert.equal(s.reading.progress, 25);
+  assert.equal(s.reading.startedAt, '2026.11.17');
+  assert.deepEqual(s.reading.notes.map((n) => [n.type, n.content, n.page]), [['MEMO', '첫 메모', null], ['QUOTE', '새는 알을 깨고', 50]], '오래된 메모부터');
+  assert.deepEqual(s.finished.map((b) => b.title), ['아몬드', '사피엔스'], '완독일 순서');
+  assert.equal(s.finished[0].rating, 4);
+  assert.equal(s.finished[0].review, '좋았다');
+  assert.equal(s.finished[0].finishedAt, '2026.10.12');
+  assert.equal(s.finished[0].notes[0].content, '끝');
+  assert.deepEqual(s.dropped.map((b) => b.title), ['포기한 책']);
+  assert.ok(!s.finished.some((b) => b.title === '불편한 편의점'), '데모 책은 사라져요');
+  assert.match(text(a, 'hdrStats'), /읽은 책 2권/);
+  sofa(a);
+  assert.match(text(a, 'panel'), /새는 알을 깨고/);
+  fin(a);
+});
+
+test('책 올리기: 서버에 저장하고 서버 번호가 책 번호가 되며, 서버가 거절하면 상태를 바꾸지 않는다', async () => {
+  const { srv, a } = await bookApp();
+  assert.equal(a.state().reading, null);
+  sofa(a);
+  a.ev("panelView.t='데미안';panelView.a='헤세';panelView.tp='200'");
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  const post = calls(srv, 'POST', /^\/books$/)[0];
+  assert.deepEqual([post.body.title, post.body.author, post.body.totalPages, post.body.currentPage], ['데미안', '헤세', 200, 0]);
+  assert.equal(a.state().reading.id, srv.users.alice.books[0].id, '서버 번호를 써요');
+  assert.match(text(a, 'toast'), /소파에 『데미안』을 올렸어요/);
+  // 서버는 이미 읽는 책이 있다고 거절한다: 화면에는 없는 척하게 만들고 다시 올려 본다
+  a.ev('S.reading=null');
+  sofa(a);
+  a.ev("panelView.t='다른 책';panelView.a='저자'");
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  assert.equal(a.state().reading, null, '거절되면 화면 상태는 그대로예요');
+  assert.match(text(a, 'toast'), /소파에 이미 읽는 책이 있어요/);
+  assert.equal(srv.users.alice.books.length, 1);
+  fin(a);
+});
+
+test('쪽수 입력: 멈춘 뒤 한 번만 서버에 저장한다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s, { currentPage: 0 }));
+  sofa(a);
+  a.ev("(()=>{const i=document.getElementById('pg');for(const v of [10,20,30]){i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}))}})()");
+  assert.equal(calls(srv, 'PATCH', /^\/books\//).length, 0, '입력하는 동안에는 서버를 부르지 않아요');
+  await settle();
+  const patches = calls(srv, 'PATCH', /^\/books\//);
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0].body.currentPage, 30);
+  assert.equal(srv.users.alice.books[0].currentPage, 30);
+  assert.equal(a.state().reading.page, 30);
+  fin(a);
+});
+
+test('메모: 추가하면 서버 응답의 쪽수·퍼센트가 반영되고, 삭제하면 서버에서도 지운다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s, { currentPage: 10 }));
+  sofa(a);
+  a.ev("panelView.draft='좋았다'");
+  val(a, 'np', '80');
+  a.click('#panel [data-act=addNote]');
+  await settle();
+  const post = calls(srv, 'POST', /\/notes$/)[0];
+  assert.deepEqual([post.body.type, post.body.content, post.body.page], ['MEMO', '좋았다', 80]);
+  const s = a.state();
+  assert.equal(s.reading.page, 80);
+  assert.equal(s.reading.progress, 40);
+  assert.equal(s.reading.notes.length, 1);
+  assert.ok(s.reading.notes[0].id, '서버가 준 번호가 있어요');
+  assert.match(text(a, 'panel'), /좋았다/);
+  a.click('#panel [data-act=delNote]');
+  await settle();
+  assert.equal(calls(srv, 'DELETE', /\/notes\/\d+$/).length, 1);
+  assert.equal(srv.users.alice.books[0].notes.length, 0, '서버에서도 지워져요');
+  assert.equal(a.state().reading.notes.length, 0);
+  assert.equal(a.state().reading.page, 80, '읽은 쪽은 줄지 않아요');
+  fin(a);
+});
+
+test('완독·포기: 서버에 별점과 한줄평을 보내고 책장으로 옮긴다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s, { notes: [{ content: '메모' }] }));
+  sofa(a);
+  a.click('#panel [data-act=finish]');
+  a.ev("panelView.rating=4;panelView.review='오래 남을 책'");
+  a.click('#panel [data-act=doFinish]');
+  await settle();
+  const post = calls(srv, 'POST', /\/finish$/)[0];
+  assert.deepEqual([post.body.rating, post.body.oneLineReview], [4, '오래 남을 책']);
+  const s = a.state();
+  assert.equal(s.reading, null);
+  assert.equal(s.finished.length, 1);
+  assert.deepEqual([s.finished[0].title, s.finished[0].rating, s.finished[0].review, s.finished[0].notes.length], ['데미안', 4, '오래 남을 책', 1]);
+  assert.equal(srv.users.alice.books[0].status, 'DONE');
+  assert.match(text(a, 'hdrStats'), /읽은 책 1권/);
+  // 다음 책을 올리고 포기한다
+  sofa(a);
+  a.ev("panelView.t='포기할 책';panelView.a='저자'");
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  a.click('#panel [data-act=drop]');
+  a.click('#panel [data-act=doDrop]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/drop$/).length, 1);
+  assert.deepEqual(a.state().dropped.map((b) => b.title), ['포기할 책']);
+  assert.equal(a.state().reading, null);
+  fin(a);
+});
+
+test('완독을 서버가 거절하면 책은 소파에 그대로 있고 서버 문구가 나온다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  srv.users.alice.books[0].status = 'DONE'; // 다른 기기에서 이미 끝낸 책
+  sofa(a);
+  a.click('#panel [data-act=finish]');
+  a.click('#panel [data-act=doFinish]');
+  await settle();
+  assert.equal(a.state().reading.title, '데미안');
+  assert.equal(a.state().finished.length, 0);
+  assert.match(text(a, 'toast'), /읽는 중인 책이 아니에요/);
+  fin(a);
+});
+
+test('다른 계정으로 로그인하면 그 계정의 책으로 바뀐다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seed('bob', '밥');
+  });
+  assert.equal(a.state().reading.title, '데미안');
+  a.click('#logoutBtn');
+  await settle();
+  val(a, 'loginLabel', 'bob');
+  a.click('#panel [data-act=login]');
+  await settle();
+  await settle();
+  assert.equal(a.state().reading, null, '밥에게는 읽는 책이 없어요');
+  assert.equal(a.state().finished.length, 0);
+  assert.equal(text(a, 'hdrName'), '밥의 방');
   fin(a);
 });
 

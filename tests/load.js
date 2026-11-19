@@ -76,6 +76,15 @@ function fakeServer() {
   const raise = (b, page) => { if (page != null && page > b.currentPage) b.currentPage = b.totalPages ? Math.min(page, b.totalPages) : page; };
   const srv = {
     calls, users, tokens, down: false,
+    skew: 0, // 서버 시계가 화면 시계보다 앞선 만큼(ms)
+    now() { return Date.now() + srv.skew; },
+    // 그 계정의 스탠드 세션을 미리 만들어 둔다. startedAt·lastCheckAt·endedAt은 서버 시각(ms), 책은 그 계정의 읽는 책
+    seedSession(label, o) {
+      const u = users[label], b = (u.books || []).find((x) => x.status === 'READING');
+      const s = { id: ++seq, bookId: b.id, status: 'RUNNING', lastCheckAt: o.startedAt, ...o };
+      (u.sess = u.sess || []).push(s);
+      return s;
+    },
     // 이미 가입한 계정과 그 토큰을 만들어 둔다 (재방문·토큰 만료 시나리오용)
     seed(label, nickname) { return issue(mk(label, nickname)); },
     // 그 계정에 책을 미리 만들어 둔다. notes: [{type, content, page}] (오래된 것부터)
@@ -115,6 +124,61 @@ function fakeServer() {
         if (!title || title.length > 200) return res(400, { error: 'BAD_TITLE', message: '제목은 1~200자로 적어 주세요' });
         if (books.some((b) => b.status === 'READING')) return res(409, { error: 'ALREADY_READING', message: '소파에 이미 읽는 책이 있어요. 먼저 완독하거나 포기해 주세요' });
         return res(201, bookView(mkBook(user, { ...body, title })));
+      }
+      // 스탠드 세션 (서버 시각 srv.now()를 기준으로, 3시간 규칙·1분 미만 버림만 흉내 낸다)
+      const ss = (user.sess = user.sess || []);
+      const iso = (t) => (t == null ? null : new Date(t).toISOString());
+      const sv = (s) => ({ id: s.id, bookId: s.bookId, status: s.status, source: s.source || 'TIMER', startedAt: iso(s.startedAt), endedAt: iso(s.endedAt),
+        lastCheckAt: iso(s.lastCheckAt), endedBy: s.endedBy || null, endPage: s.endPage == null ? null : s.endPage, memo: s.memo || null,
+        minutes: s.endedAt == null ? null : Math.floor((s.endedAt - s.startedAt) / 60000) });
+      const live = () => { const s = ss.find((x) => x.status === 'RUNNING' || x.status === 'NEEDS_CONFIRM'); if (s && s.status === 'RUNNING' && srv.now() - s.startedAt > 3 * 3600000) s.status = 'NEEDS_CONFIRM'; return s; };
+      const closeS = (s, end, by, b) => {
+        s.endedAt = end; s.endedBy = by; s.status = end - s.startedAt < 60000 ? 'DISCARDED' : 'DONE';
+        const bk = books.find((x) => x.id === s.bookId);
+        if (b && b.totalPages && !bk.totalPages) bk.totalPages = b.totalPages;
+        if (b && b.endPage != null) { s.endPage = b.endPage; raise(bk, b.endPage); }
+        if (b && b.memo) { s.memo = b.memo; bk.notes.push({ id: ++seq, bookId: bk.id, type: 'MEMO', content: b.memo, page: null, createdAt: iso(end) }); }
+        return res(200, sv(s));
+      };
+      if (method === 'GET' && path === '/sessions/current') { const s = live(); return res(200, { session: s ? sv(s) : null, serverNow: iso(srv.now()) }); }
+      if (method === 'GET' && path === '/me/reading-time') {
+        const day = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+        const min = ss.filter((s) => s.status === 'DONE' && day(s.endedAt) === day(srv.now())).reduce((a, s) => a + Math.floor((s.endedAt - s.startedAt) / 60000), 0);
+        return res(200, { date: day(srv.now()), minutes: min, serverNow: iso(srv.now()) });
+      }
+      if (method === 'POST' && path === '/sessions/start') {
+        const bk = books.find((x) => x.status === 'READING');
+        if (!bk) return res(400, { error: 'NO_READING_BOOK', message: '소파에 책을 먼저 올려 주세요' });
+        const cur = live();
+        if (cur) return res(409, { error: 'ALREADY_RUNNING', message: '이미 스탠드가 켜져 있어요', session: sv(cur), serverNow: iso(srv.now()) });
+        const s = { id: ++seq, bookId: bk.id, status: 'RUNNING', startedAt: srv.now(), lastCheckAt: srv.now() };
+        ss.push(s);
+        return res(201, sv(s));
+      }
+      if (method === 'POST' && path === '/sessions/manual') {
+        const bk = books.find((x) => x.status === 'READING');
+        if (!bk) return res(400, { error: 'NO_READING_BOOK', message: '소파에 책을 먼저 올려 주세요' });
+        if (!(body.minutes >= 1 && body.minutes <= 600)) return res(400, { error: 'BAD_MINUTES', message: '1~600분 사이로 입력해 주세요' });
+        const start = srv.now() - (body.daysAgo || 0) * 86400000;
+        const s = { id: ++seq, bookId: bk.id, status: 'DONE', source: 'MANUAL', startedAt: start, endedAt: start + body.minutes * 60000, endedBy: 'MANUAL' };
+        ss.push(s);
+        return res(201, sv(s));
+      }
+      if ((m = path.match(/^\/sessions\/(\d+)\/(stop|check|confirm)$/))) {
+        const s = ss.find((x) => x.id === +m[1]);
+        if (!s) return res(404, { error: 'NOT_FOUND', message: '기록을 찾을 수 없어요' });
+        live();
+        if (m[2] === 'stop') return s.endedAt ? res(200, sv(s)) : closeS(s, s.status === 'NEEDS_CONFIRM' ? s.lastCheckAt : srv.now(), body.endedBy || 'LAMP', body);
+        if (m[2] === 'check') {
+          if (s.status !== 'RUNNING') return res(409, { error: 'NOT_RUNNING', message: '켜져 있는 스탠드에서만 [계속]을 누를 수 있어요' });
+          s.lastCheckAt = srv.now();
+          return res(200, sv(s));
+        }
+        if (s.status !== 'NEEDS_CONFIRM') return res(409, { error: 'NOT_NEEDS_CONFIRM', message: '확인이 필요한 스탠드가 아니에요' });
+        if (body.discard) { s.status = 'DISCARDED'; s.endedAt = srv.now(); return res(200, sv(s)); }
+        if (body.until === 'LAST_CHECK') return closeS(s, s.lastCheckAt - s.startedAt >= 60000 ? s.lastCheckAt : s.startedAt + 3600000, 'CONFIRM');
+        if (body.until === 'MINUTES') return closeS(s, s.startedAt + body.minutes * 60000, 'CONFIRM');
+        return res(400, { error: 'BAD_UNTIL', message: 'until은 LAST_CHECK 또는 MINUTES예요' });
       }
       if ((m = path.match(/^\/books\/(\d+)(\/.*)?$/))) {
         const b = books.find((x) => x.id === +m[1]);

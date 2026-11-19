@@ -56,8 +56,8 @@ function applyUser(u) {
   render();
 }
 
-// 로그인한 직후와 새로고침 때: 서버의 책·메모를 불러온다 (books.js)
-const afterSignIn = () => loadBooks().catch((e) => toast(e.message));
+// 로그인한 직후와 새로고침 때: 서버의 책·메모(books.js)와 켜진 스탠드·오늘 읽은 시간(sessions.js)을 불러온다
+const afterSignIn = () => Promise.all([loadBooks(), loadSession()]).catch((e) => toast(e.message));
 
 async function doLogin() {
   if (ACCT.busy) return;

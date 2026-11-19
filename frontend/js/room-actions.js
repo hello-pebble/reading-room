@@ -307,6 +307,10 @@ function roomAction(act, b) {
     return true;
   }
   if (act === 'stopSave') {
+    if (API.enabled) {
+      serverStopSave();
+      return true;
+    }
     const r = S.reading,
       sp = document.getElementById('sp'),
       stp = document.getElementById('stp');
@@ -317,12 +321,15 @@ function roomAction(act, b) {
     if (sp && sp.value !== '') r.page = Math.max(0, Math.round(+sp.value));
     updProgress(r);
     const m = (panelView.memo || '').trim();
-    if (API.enabled) syncStandStop(r, m);
-    else if (m) r.notes.push({ type: 'MEMO', content: m, page: null, at: today() });
+    if (m) r.notes.push({ type: 'MEMO', content: m, page: null, at: today() });
     endSession(Date.now(), 'LAMP');
     return true;
   }
   if (act === 'discard') {
+    if (API.enabled) {
+      serverConfirm({ discard: true });
+      return true;
+    }
     if (pipWin) pipDone(0);
     S.session = null;
     save();
@@ -342,10 +349,18 @@ function roomAction(act, b) {
     return true;
   }
   if (act === 'confirmLast') {
+    if (API.enabled) {
+      serverConfirm({ until: 'LAST_CHECK' });
+      return true;
+    }
     endSession(S.session.lastCheckAt, 'CONFIRM');
     return true;
   }
   if (act === 'confirmHour') {
+    if (API.enabled) {
+      serverConfirm({ until: 'LAST_CHECK' }); // 계속을 누른 적이 없으면 서버가 1시간으로 본다
+      return true;
+    }
     endSession(S.session.startedAt + 3600000, 'CONFIRM');
     return true;
   }
@@ -358,6 +373,10 @@ function roomAction(act, b) {
     const m = Math.round(+document.getElementById('cm').value);
     if (!(m >= 1 && m <= 600 && m * 60000 <= Date.now() - S.session.startedAt)) {
       document.getElementById('cmE').textContent = '1~600분 사이, 켠 뒤 지난 시간 안으로 입력해 주세요';
+      return true;
+    }
+    if (API.enabled) {
+      serverConfirm({ until: 'MINUTES', minutes: m });
       return true;
     }
     endSession(S.session.startedAt + m * 60000, 'CONFIRM');
@@ -377,6 +396,10 @@ function roomAction(act, b) {
     const m = Math.round(+document.getElementById('mm').value);
     if (!(m >= 1 && m <= 600)) {
       document.getElementById('mmE').textContent = '1~600분 사이로 입력해 주세요';
+      return true;
+    }
+    if (API.enabled) {
+      serverManual(m, panelView.day || 0);
       return true;
     }
     const d = new Date();

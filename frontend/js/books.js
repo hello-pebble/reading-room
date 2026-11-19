@@ -134,19 +134,6 @@ async function serverDelNote(i) {
     toast(e.message);
   }
 }
-// 스탠드를 끌 때 적은 쪽수·한 줄 메모도 서버에 저장한다
-async function syncStandStop(r, memo) {
-  queueBookSave(r);
-  if (!memo) return;
-  try {
-    r.notes.push(noteFromServer(await API.post('/books/' + r.id + '/notes', { type: 'MEMO', content: memo })));
-    save();
-    if (panelOpen) renderPanel();
-  } catch (e) {
-    toast(e.message);
-  }
-}
-
 // 완독·포기: 서버가 먼저 받아들여야 소파에서 책장으로 옮긴다
 async function serverEndBook(kind, rating, review) {
   const r = S.reading;

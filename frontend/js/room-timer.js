@@ -64,7 +64,7 @@ async function openPip() {
     if (!(S.session && S.session.status === 'RUNNING')) return;
     const sc = d.getElementById('scene');
     if (sc) sc.innerHTML = pipScene(false);
-    setTimeout(() => endSession(Date.now(), 'PIP'), 450);
+    setTimeout(() => (API.enabled ? serverStop('PIP') : endSession(Date.now(), 'PIP')), 450);
   });
   pipWin.addEventListener('pagehide', () => {
     pipWin = null;
@@ -113,12 +113,17 @@ const fmtMin = (m) => (m >= 60 ? Math.floor(m / 60) + '시간' + (m % 60 ? ' ' +
 function todayMin() {
   const k = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }),
     t = k(Date.now());
-  return S.sessions.filter((x) => k(x.endedAt || x.startedAt) === t).reduce((a, x) => a + x.minutes, 0);
+  const base = API.enabled ? SES.todayBase : 0; // 서버 연결 모드: 로그인 때 서버가 센 오늘 분에 이 화면에서 끝낸 기록을 더한다
+  return base + S.sessions.filter((x) => k(x.endedAt || x.startedAt) === t).reduce((a, x) => a + x.minutes, 0);
 } // 달력과 같은 기준: 한국 시간, 종료일에 세션 전체를 센다
 function startTimer() {
   if (!S.reading || S.session) return;
+  if (API.enabled) return serverStartTimer(); // 서버가 기록을 만든다 (sessions.js)
   const now = Date.now();
   S.session = { id: now, bookId: S.reading.id, startedAt: now, lastCheckAt: now, status: 'RUNNING' };
+  timerStarted();
+}
+function timerStarted() {
   save();
   panelView = {};
   render();
@@ -200,7 +205,8 @@ function bindRoomTimer() {
     const b = e.target.closest('[data-n]');
     if (!b) return;
     e.stopPropagation();
-    if (b.dataset.n === 'cont') {
+    if (b.dataset.n === 'cont' && API.enabled) serverCheck();
+    else if (b.dataset.n === 'cont') {
       S.session.lastCheckAt = Date.now();
       save();
       render();

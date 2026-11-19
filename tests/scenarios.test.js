@@ -683,7 +683,7 @@ test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로
   await settle();
   a.click('#logoutBtn');
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !p.startsWith('/books')), ['/me', '/auth/logout']);
+  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time)/.test(p)), ['/me', '/auth/logout']);
   assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
   assert.equal(a.w.localStorage.getItem(TOKEN), null);
   assert.equal(a.ev('panelOpen'), 'login');
@@ -869,5 +869,178 @@ test('서버에 닿지 않으면 로그인 창에 안내가 나온다', async ()
   a.click('#panel [data-act=login]');
   await settle();
   assert.equal(a.ev('panelOpen'), 'nickname', '다시 누르면 이어져요');
+  fin(a);
+});
+
+// ---- 서버 연결 2‑2단계: 스탠드 타이머·직접 기록 (서버 시각이 기준) ----
+const MIN = 60000;
+const lamp = (a) => a.ev("openF('lamp')");
+
+test('서버 스탠드 복원: 켜져 있던 스탠드를 서버에서 불러오고 서버 시계가 달라도 경과 시간이 맞다', async () => {
+  const { a } = await bookApp((srv) => {
+    readingSeed(srv);
+    srv.skew = 5 * MIN; // 서버 시계가 5분 앞서 있다
+    srv.seedSession('alice', { startedAt: srv.now() - 20 * MIN });
+  });
+  const s = a.state().session;
+  assert.equal(s.status, 'RUNNING');
+  assert.ok(s.id > 0);
+  const el = a.ev('elapsed()');
+  assert.ok(el > 19.9 * MIN && el < 20.5 * MIN, '경과 시간은 약 20분이에요: ' + el);
+  fin(a);
+});
+
+test('서버 스탠드 켜기: 서버가 만든 기록 번호로 켜지고, 이미 켜져 있으면 그 스탠드를 이어받는다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  assert.equal(a.state().session, null);
+  a.ev('startTimer()');
+  await settle();
+  assert.equal(calls(srv, 'POST', /^\/sessions\/start$/).length, 1);
+  const id = a.state().session.id;
+  assert.equal(id, srv.users.alice.sess[0].id);
+  // 다른 기기에서 켜 둔 상태로 다시 켜려 하면 이어받는다
+  a.ev('S.session = null');
+  a.ev('startTimer()');
+  await settle();
+  assert.equal(a.state().session.id, id);
+  fin(a);
+});
+
+test('서버 스탠드 켜기 실패: 책이 없으면 서버 문구가 나오고 켜지지 않는다', async () => {
+  const { a } = await bookApp();
+  a.ev('S.reading = {id: 1, title: "x", notes: [], page: 0, progress: 0}'); // 화면만 어긋난 상태
+  a.ev('startTimer()');
+  await settle();
+  assert.equal(a.state().session, null);
+  assert.match(text(a, 'toast'), /소파에 책을 먼저 올려 주세요/);
+  fin(a);
+});
+
+test('서버 스탠드 끄기: 쪽수·메모와 함께 서버에 보내고, 서버가 센 분을 기록에 넣는다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 30 * MIN });
+  });
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  val(a, 'sp', '90');
+  a.ev("panelView.memo = '좋은 장면'");
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  const c = calls(srv, 'POST', /\/sessions\/\d+\/stop$/);
+  assert.equal(c.length, 1);
+  assert.equal(c[0].body.endPage, 90);
+  assert.equal(c[0].body.memo, '좋은 장면');
+  assert.equal(c[0].body.endedBy, 'LAMP');
+  assert.equal(calls(srv, 'POST', /\/notes$/).length, 0, '메모는 스탠드 끄기에 실려 가고 따로 보내지 않아요');
+  const st = a.state();
+  assert.equal(st.session, null);
+  assert.equal(st.sessions.length, 1);
+  assert.equal(st.sessions[0].minutes, 30);
+  assert.equal(st.reading.page, 90);
+  assert.equal(st.reading.notes.at(-1).content, '좋은 장면');
+  assert.equal(srv.users.alice.books[0].currentPage, 90);
+  fin(a);
+});
+
+test('서버 스탠드 끄기 실패: 서버 문구를 보이고 스탠드는 그대로 켜져 있다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 30 * MIN });
+  });
+  srv.users.alice.sess[0].status = 'DONE'; // 다른 기기에서 먼저 끈 경우도 서버는 200이라 화면은 끝으로 맞춘다
+  srv.users.alice.sess[0].endedAt = srv.now();
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  assert.equal(a.state().session, null);
+  srv.down = true;
+  a.ev('S.session = {id: 999, bookId: 1, startedAt: Date.now() - 600000, lastCheckAt: Date.now(), status: "RUNNING"}');
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  assert.notEqual(a.state().session, null, '서버에 닿지 않으면 끄지 않아요');
+  assert.match(text(a, 'toast'), /서버에 연결할 수 없어요/);
+  fin(a);
+});
+
+test('서버 [계속]: 서버가 받은 확인 시각으로 알림 줄이 사라진다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 70 * MIN });
+  });
+  a.ev('renderNotice()');
+  assert.match(a.doc.getElementById('notice').textContent, /아직 읽고 있어요/);
+  a.click('#notice [data-n=cont]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/check$/).length, 1);
+  assert.ok(Date.now() - a.state().session.lastCheckAt < 5000);
+  a.ev('renderNotice()');
+  assert.equal(a.doc.getElementById('notice').style.display, 'none');
+  fin(a);
+});
+
+test('서버 확인 필요: 마지막 확인까지·직접 입력·기록 안 함이 서버 규칙으로 처리된다', async () => {
+  const mk = (extra) => bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 4 * 3600000, lastCheckAt: s.now() - 4 * 3600000 + 100 * MIN, status: 'NEEDS_CONFIRM', ...extra });
+  });
+  {
+    const { srv, a } = await mk();
+    assert.equal(a.state().session.status, 'NEEDS_CONFIRM');
+    lamp(a);
+    a.click('#panel [data-act=confirmLast]');
+    await settle();
+    assert.deepEqual(calls(srv, 'POST', /\/confirm$/)[0].body, { until: 'LAST_CHECK' });
+    assert.equal(a.state().session, null);
+    assert.equal(a.state().sessions[0].minutes, 100);
+    fin(a);
+  }
+  {
+    const { srv, a } = await mk();
+    lamp(a);
+    a.click('#panel [data-act=cmanual]');
+    val(a, 'cm', '45');
+    a.click('#panel [data-act=confirmManual]');
+    await settle();
+    assert.deepEqual(calls(srv, 'POST', /\/confirm$/)[0].body, { until: 'MINUTES', minutes: 45 });
+    assert.equal(a.state().sessions[0].minutes, 45);
+    fin(a);
+  }
+  {
+    const { srv, a } = await mk();
+    lamp(a);
+    a.click('#panel [data-act=discard]');
+    await settle();
+    assert.deepEqual(calls(srv, 'POST', /\/confirm$/)[0].body, { discard: true });
+    assert.equal(a.state().session, null);
+    assert.equal(a.state().sessions.length, 0);
+    fin(a);
+  }
+});
+
+test('서버 직접 기록: 오늘·어제 분을 서버에 보내고 서버가 만든 기록을 넣는다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  lamp(a);
+  a.click('#panel [data-act=manual]');
+  a.click('#panel [data-act=mday][data-d="1"]');
+  val(a, 'mm', '25');
+  a.click('#panel [data-act=manualSave]');
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /\/sessions\/manual$/)[0].body, { minutes: 25, daysAgo: 1 });
+  assert.equal(a.state().sessions.length, 1);
+  assert.equal(a.state().sessions[0].source, 'MANUAL');
+  assert.equal(a.state().sessions[0].minutes, 25);
+  fin(a);
+});
+
+test('서버 오늘 읽은 시간: 로그인하면 서버가 센 오늘 분이 더해진다', async () => {
+  const { a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 90 * MIN, endedAt: s.now() - 30 * MIN, status: 'DONE', endedBy: 'LAMP' });
+  });
+  assert.equal(a.ev('todayMin()'), 60);
   fin(a);
 });

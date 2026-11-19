@@ -69,7 +69,9 @@ function lampPanel() {
   const r = S.reading,
     ses = S.session,
     v = panelView;
-  const tools = `<details style="margin-top:14px"><summary class="muted" style="cursor:pointer">테스트 도구 (시간 앞당기기)</summary><div class="row wrap" style="margin-top:8px"><button data-act="ff" data-m="10">+10분</button><button data-act="ff" data-m="60">+60분 · 확인 알림</button><button data-act="ff" data-m="185">+3시간 · 깜빡함</button></div><p class="muted">실제로는 서버의 시작 시각을 기준으로 계산해요. 여기서는 시작 시각을 과거로 옮겨서 흉내 내요. 알림은 5초 안에 와요.</p></details>`;
+  const tools = API.enabled
+    ? '' // 시간 앞당기기는 화면 시계만 바꾸므로 서버 연결 모드에서는 쓰지 않는다
+    : `<details style="margin-top:14px"><summary class="muted" style="cursor:pointer">테스트 도구 (시간 앞당기기)</summary><div class="row wrap" style="margin-top:8px"><button data-act="ff" data-m="10">+10분</button><button data-act="ff" data-m="60">+60분 · 확인 알림</button><button data-act="ff" data-m="185">+3시간 · 깜빡함</button></div><p class="muted">실제로는 서버의 시작 시각을 기준으로 계산해요. 여기서는 시작 시각을 과거로 옮겨서 흉내 내요. 알림은 5초 안에 와요.</p></details>`;
   if (ses && ses.status === 'NEEDS_CONFIRM') {
     const lastOk = ses.lastCheckAt - ses.startedAt >= 60000;
     const lm = Math.floor((ses.lastCheckAt - ses.startedAt) / 60000);
@@ -107,7 +109,7 @@ function lampPanel() {
       `<div class="card" style="text-align:center"><div class="muted">『${esc(r.title)}』 읽는 중</div><div id="timerBig" style="font-size:40px;letter-spacing:1px;margin:4px 0">${fmtHMS(elapsed())}</div><div class="muted">${fmtClock(ses.startedAt)}에 켰어요 · 이 책 누적 ${bookMin}분</div></div>
    <p class="muted">화면을 꺼도, 앱을 닫아도 계속 기록돼요. 다시 열면 켠 시각부터 다시 계산해요.</p>${notifyRow()}
    <div class="row"><button class="primary grow" data-act="stopAsk">💡 스탠드 끄기</button>${pipOK() ? `<button class="grow" data-act="pip">바탕화면에 띄우기</button>` : ''}</div>${pipOK() ? '' : '<p class="muted" style="margin-top:6px">바탕화면 띄우기는 데스크톱 크롬·엣지·파이어폭스 151 이상에서 돼요.</p>'}
-   <button class="ghost" style="width:100%;margin-top:6px;color:var(--danger)" data-act="discard">기록 안 하고 끄기</button>${tools}`
+   ${API.enabled ? '' : '<button class="ghost" style="width:100%;margin-top:6px;color:var(--danger)" data-act="discard">기록 안 하고 끄기</button>'}${tools}`
     );
   }
   if (v.mode === 'manual')

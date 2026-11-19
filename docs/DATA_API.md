@@ -72,7 +72,7 @@
 
 | 테이블 | 컬럼 | 수명 |
 |---|---|---|
-| `shared_room` | id, created_by, kind(`SAME`/`OWN`), isbn, title, visibility(`INVITE`/`PUBLIC`), max_participants, invite_code, open_at, close_at, status(`SCHEDULED`/`OPEN`/`CLOSED`), closed_at | 종료 후 7일. `isbn`은 `SAME`에서 필수, `OWN`은 비움. invite_code unique(8자리, 헷갈리는 글자 `I O 0 1` 제외). max_participants 2~10 |
+| `shared_room` | id, created_by, kind(`SAME`/`OWN`), isbn, title, visibility(`INVITE`/`PUBLIC`), max_participants, invite_code, open_at, close_at, status(`SCHEDULED`/`OPEN`/`CLOSED`), closed_at, open_notified_at | 종료 후 7일. `open_notified_at`: 개방 알림을 보냈음(선점)을 표시하는 시각 — 즉시 열린 방은 개설 때 채운다(결정 #64). `status`는 보조값이고 화면·API는 시각으로 계산한다. `isbn`은 `SAME`에서 필수, `OWN`은 비움. invite_code unique(8자리, 헷갈리는 글자 `I O 0 1` 제외). max_participants 2~10 |
 | `room_participant` | room_id, user_id, book_id, joined_at, agreed_at(보관 동의), last_read_at, left_at | 종료 후 7일. unique(room_id, user_id). `book_id`는 이 방에서 내가 읽는 책 (`SAME`은 방의 책과 같은 ISBN, `OWN`은 내가 고른 책, 없을 수 있음). 가져오기는 `book_id`의 책에 붙인다 |
 | `room_message` | id, room_id, user_id, content(최대 300자), page(같은 책 방, 1~9999, 없을 수 있음), created_at | 종료 후 7일. 보낸 글은 삭제·수정하지 않는다(#53). 나간 사람의 글은 남긴다 (결정 #38). 방이 지워지면 함께 지워진다(`ON DELETE CASCADE`). DB도 내용 1~300자(공백만은 안 됨)·`page` 1~9999를 지킨다. 인덱스 `(room_id, id)`, `(user_id, created_at)` |
 | `room_open_log` | id, user_id, room_id(외래키 없음), opened_at | 영구(사용자와 함께 삭제). 개설할 때마다 한 줄. 예정 방을 취소하면 `shared_room` 행이 지워지므로, "하루(한국 시간) 3번, 취소해도 센다"(#53)를 세려면 방과 따로 남긴 이 기록이 필요하다. 동시 2개는 이 기록이 아니라 `shared_room`을 시각으로 센다 (결정 #59) |
@@ -218,8 +218,8 @@
 |---|---|
 | 1분 | `status='RUNNING' AND last_check_at + 60분 < now()` 이고 아직 안 보낸 세션 → 60분 확인 푸시 |
 | 1분 | `status='NEEDS_CONFIRM'`으로 막 바뀐 세션 → 확인 필요 푸시 |
-| 1분 | `shared_room.open_at <= now()` 이고 아직 안 보낸 방 → `room_alarm` 사용자에게 개방 푸시. 상태는 `SCHEDULED`→`OPEN`. 개설자는 `room_alarm` 없이도 받는다 |
-| 1분 | `status='OPEN' AND close_at <= now()` → `CLOSED`, `closed_at = now()` (이때부터 7일 보관) |
+| 1분 | `shared_room.open_at <= now()` 이고 `open_notified_at is null`인 방을 선점(`open_notified_at = now`) → `room_alarm` 사용자 + 개설자에게 개방 푸시. 상태는 `SCHEDULED`→`OPEN`. 열린 지 30분이 넘었거나 이미 끝난 방은 표시만 하고 알리지 않는다. **구현(`RoomOpenService`·`RoomOpenBatch`, 결정 #64)**: 대상 선정까지, 푸시 전송은 로그만(다음 단계) |
+| 1분 | `status<>'CLOSED' AND closed_at is null AND close_at <= now()` → `status='CLOSED'`. **`closed_at`은 채우지 않는다**(일찍 끝낸 방만 가지며 보관 7일은 `closed_at` 없으면 `close_at` 기준). 구현됨(결정 #64) |
 | 10분 | `status='RUNNING' AND started_at + 3h < now()` → `NEEDS_CONFIRM` |
 | 매일 새벽 | `closed_at + 7일 < now()` 공유방 하드 삭제 (일찍 끝낸 방도 끝낸 날부터 7일. 예정 종료일 `close_at` 기준이 아니다) (메시지 → 참여자 → 방) |
 | 1시간 | `plaza_message.created_at + 24h < now()` 하드 삭제 |
@@ -245,9 +245,9 @@ sync();
 
 ## 공유방 남은 일 메모 (2026-11-18)
 
-공유방 서버는 개설·입장·대화·읽음·알림 켜기·가져오기까지 `room` 패키지에 구현됐다(결정 #59·#60·#63). 아래는 남은 일이다.
+공유방 서버는 개설·입장·대화·읽음·알림 켜기·가져오기·개방/종료 배치(대상 선정)까지 `room` 패키지에 구현됐다(결정 #59·#60·#63·#64). 아래는 남은 일이다.
 
-- **개방·종료 배치(1분)**: `SCHEDULED`→`OPEN`으로 `status` 열 갱신과 개방 푸시(`room_alarm` 사용자와 개설자, 테이블·켜기 API는 있다). 지금은 화면·API 모두 시각으로 상태를 계산하므로 배치가 늦거나 없어도 동작은 맞고, `status` 열은 보조값이다. `close_at`이 지난 방의 `status`를 `CLOSED`로 맞추는 것도 같은 배치에서 한다(일찍 끝낸 방은 `closed_at`이 이미 있다).
+- **개방·종료 배치(1분)**: 대상 선정까지 구현했다(`RoomOpenService`·`RoomOpenBatch`, 결정 #64). `open_notified_at`으로 한 번만 선점하고, `status`를 `OPEN`·`CLOSED`로 맞춘다. **남은 것은 실제 푸시 전송**이다(`PushSender`의 메시지 모양을 방 개방용으로 일반화 → VAPID 실발송). 지금은 알릴 대상 목록을 만들고 로그만 남긴다.
 - **가져오기 마감 D-1 알림 / 자동 가져오기 옵션**(SPEC "마감 알림"): 아직 없다.
 - **하드 삭제(매일 새벽)**: `closed_at`(없으면 `close_at`) + 7일이 지난 방을 지운다. 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워진다. `room_open_log`는 방을 지워도 남겨야 하고(하루 3번 제한), `book_room_archive`는 영구라 지우지 않는다(`room_id`에 외래키가 없어 방이 지워져도 남는다).
 - **모닥불 머문 시간**(`reading_session`, `source=CAMP`, `room_id`, 종료 시각까지만 센다, 오늘 읽은 시간·달력에 합산)은 별도 작업이다.

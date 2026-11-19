@@ -3,6 +3,7 @@ package kr.readingroom.app.room;
 import java.time.Instant;
 import org.jooq.DSLContext;
 import org.jooq.Record;
+import org.jooq.Result;
 import org.springframework.stereotype.Repository;
 
 /** SQL 실행만 담당한다. 한도·권한·상태 규칙은 RoomService에서 한다. */
@@ -53,10 +54,39 @@ public class RoomRepository {
 
     /** 초대 코드가 겹치면 아무것도 넣지 않고 null을 돌려준다(서비스가 새 코드로 다시 시도). */
     public Long insertRoom(long userId, String kind, String isbn, String title, int max, String code, Instant open, Instant close, String status, Instant now) {
-        Record r = dsl.fetchOne("insert into shared_room(created_by, kind, isbn, title, visibility, max_participants, invite_code, open_at, close_at, status, created_at) "
-                + "values (?, ?, ?, ?, 'INVITE', ?, ?, ?::timestamptz, ?::timestamptz, ?, ?::timestamptz) "
-                + "on conflict (invite_code) do nothing returning id", userId, kind, isbn, title, max, code, open.toString(), close.toString(), status, now.toString());
+        // 지금 바로 열리는 방은 개설자가 이미 알고 있으니 개방 알림 대상이 아니다: 개설 시각으로 미리 표시한다
+        String notified = open.isAfter(now) ? null : now.toString();
+        Record r = dsl.fetchOne("insert into shared_room(created_by, kind, isbn, title, visibility, max_participants, invite_code, open_at, close_at, status, created_at, open_notified_at) "
+                + "values (?, ?, ?, ?, 'INVITE', ?, ?, ?::timestamptz, ?::timestamptz, ?, ?::timestamptz, ?::timestamptz) "
+                + "on conflict (invite_code) do nothing returning id", userId, kind, isbn, title, max, code, open.toString(), close.toString(), status, now.toString(), notified);
         return r == null ? null : r.get("id", Long.class);
+    }
+
+    /**
+     * 개방 시각이 지난 방을 선점(open_notified_at 채움)하고 알릴 대상을 돌려준다. 같은 SQL이라 배치가 겹쳐도 한 방은 한 번만 잡힌다.
+     * 알림 대상은 아직 열려 있고(일찍 끝내지 않았고 종료 전) 열린 지 {@code staleBefore} 이후인 방의 알림 켠 사람 + 개설자.
+     * 끝났거나 너무 오래된 방은 표시만 하고 대상에서 뺀다. 상태는 끝난 방을 OPEN으로 되돌리지 않게 열려 있는 방만 바꾼다.
+     */
+    public Result<Record> claimOpened(Instant now, Instant staleBefore) {
+        return dsl.fetch("""
+                with c as (
+                    update shared_room r set open_notified_at = ?::timestamptz,
+                        status = case when r.closed_at is null and r.close_at > ?::timestamptz then 'OPEN' else r.status end
+                    where r.open_notified_at is null and r.open_at <= ?::timestamptz
+                    returning r.id, r.title, r.created_by,
+                        (r.closed_at is null and r.close_at > ?::timestamptz and r.open_at > ?::timestamptz) as announce
+                )
+                select c.id as room_id, c.title, c.created_by as user_id from c where c.announce
+                union
+                select c.id, c.title, a.user_id from c
+                  join room_alarm a on a.room_id = c.id
+                  join room_participant p on p.room_id = c.id and p.user_id = a.user_id and p.left_at is null
+                where c.announce""", now.toString(), now.toString(), now.toString(), now.toString(), staleBefore.toString());
+    }
+
+    /** 종료 시각이 지났는데 status가 아직 CLOSED가 아닌 방을 CLOSED로 맞춘다. closed_at은 일찍 끝낸 방만 가지므로 건드리지 않는다. */
+    public int markExpiredClosed(Instant now) {
+        return dsl.execute("update shared_room set status = 'CLOSED' where status <> 'CLOSED' and closed_at is null and close_at <= ?::timestamptz", now.toString());
     }
 
     public void insertParticipant(long roomId, long userId, Long bookId, Instant now) {

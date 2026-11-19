@@ -27,7 +27,7 @@
 | 세션 | `RUNNING`뿐 아니라 **`NEEDS_CONFIRM`도 사용자당 1개 인덱스에 포함**해(확인 필요 상태도 켜진 것), 그 사이 새로 켤 수 없다(409 + 기존 세션). 컬럼 추가: `memo`, `needs_confirm_at`(전환 시각), `check_notified_for`·`confirm_notified_at`(푸시 중복 방지). 켠 지 3시간이 넘은 `RUNNING`은 10분 배치를 기다리지 않고 **요청 시점에도** `NEEDS_CONFIRM`으로 바꾼다(`check`·`stop`·`GET /sessions/current` 등. 3시간 확인 우회 방지) |
 | stop / confirm | `stop` 본문 `{endPage?, totalPages?(모르던 책만), memo?, endedBy?(LAMP/PIP/NOTIFICATION)}`. 메모는 세션과 책의 `MEMO` 노트로 남는다. `NEEDS_CONFIRM`에서 `stop`하면 `last_check_at`까지만 기록한다(1분 미만이면 `DISCARDED`). `confirm` 본문 `{until: LAST_CHECK \| MINUTES, minutes?, discard?}`: `LAST_CHECK`는 '계속'을 한 번도 안 눌렀으면 1시간으로 기록(프로토타입 [1시간 읽은 걸로 기록]), `MINUTES`는 1~600분이고 켠 뒤 지난 시간 안 |
 | 직접 기록 | 본문 `{minutes(1~600), daysAgo(0·1) 또는 date(YYYY-MM-DD), endPage?, memo?}`. 선택한 한국 날짜 정오에 저장. 미래 날짜는 400. 소파에 `READING` 책이 있어야 한다 |
-| 모닥불 시간 | 공유방 장면에 머문 시간은 `reading_session`(`source=CAMP`, `room_id`)으로 저장해 오늘 읽은 시간·달력에 더한다. 스탠드 기록과 겹치는 구간은 한 번만 센다. 방의 종료 시각까지만 센다 (결정 #53). 1분 미만은 저장하지 않는다 |
+| 모닥불 시간 | 공유방 장면에 머문 시간은 **`camp_stay`**(user_id, room_id(외래키 없음), entered_at, left_at)에 서버 시각으로 저장한다(결정 #65, `reading_session`에 넣지 않는다). 사용자당 열린 입장(left_at 없음)은 하나. 오늘 읽은 시간(`GET /me/reading-time`)과 달력에 더하고, 스탠드 기록과 겹치는 구간은 구간 합집합으로 한 번만 센다. 방의 종료 시각까지만 센다 (결정 #53). 1분 미만은 저장하지 않는다 |
 | 완독·포기 | `READING` 책만 가능(이미 처리된 책이면 같은 결과로 200, `LATER`는 409). 켜진 스탠드는 같이 끄고(1분 미만은 `DISCARDED`), `NEEDS_CONFIRM`이면 409 `NEEDS_CONFIRM`. 별점 0은 해제, 한줄평 500자까지 |
 | 달력 | `streak`는 **이번 달 조회에서만 숫자**이고 지난 달은 `null`. 이번 달보다 뒤의 `month`는 400. `days`는 그 달 날짜만, `streak`는 전체 기록으로 계산. 확인용 **`GET /me/goal`**을 더했다(첫 조회 때 기본 1권 행 생성). `PUT /me/goal`이 같은 값이면 변경 기록을 늘리지 않는다. `changes`의 `at`은 한국 날짜(`YYYY-MM-DD`), 새 사용자의 첫 변경은 기본 1권에서 시작한다(`1→N`). `app_user.monthly_goal` 컬럼은 서버에 없었으므로 이관은 필요 없다 |
 | 푸시 구독 | `POST` 본문은 브라우저 `PushSubscription` 그대로(`{endpoint, keys:{p256dh, auth}}`, 평평한 모양도 허용), endpoint는 `https://`. 다른 사용자가 같은 endpoint를 저장하면 그 기기의 주인이 바뀐다. `DELETE`는 `?endpoint=` 또는 본문 `{endpoint}`로 내 구독만 지우고 없어도 204 |
@@ -96,6 +96,7 @@
 |---|---|---|
 | `push_subscription` | id, user_id, endpoint, p256dh, auth, user_agent, created_at | unique(endpoint). 기기마다 한 행. 전송이 404·410이면 삭제 |
 | `room_alarm` | user_id, room_id, created_at | unique(user_id, room_id). 창문 [알림 받기]를 켜면 생성, 끄면 삭제. 방이 지워지거나(취소·7일 삭제) 사용자가 방을 나가면 함께 지워진다 |
+| `camp_stay` | id, user_id(사용자와 함께 삭제), room_id(외래키 없음: 방이 지워져도 남는다), entered_at, left_at | 모닥불에 머문 시간(결정 #65). 열린 입장(left_at 없음)은 사용자당 하나(부분 유니크). 저장된 입장은 1분 이상(CHECK). 영구 |
 
 웹 알림(Notification)은 페이지를 열어 둔 동안만 오기 때문에, 창을 닫은 뒤에도 받으려면 서버가 웹 푸시(VAPID)로 보낸다. iOS 웹은 홈 화면에 추가한 경우에만 받을 수 있다. 앱은 같은 내용을 로컬 알림과 푸시로 보낸다.
 
@@ -143,6 +144,7 @@
 | 메서드 | 경로 | 동작 |
 |---|---|---|
 | GET | `/me/calendar?month=YYYY-MM` | 생략하면 한국 시간 기준 이번 달. 지난 달도 조회할 수 있다. `{month, days, streak(이번 달만), finishedCount, goal(없으면 null), goalChanges, goalInherited, serverNow}` 반환 |
+| GET | `/me/reading-time?date=YYYY-MM-DD` | 한국 날짜 하루의 읽은 시간. 생략하면 오늘. `{date, minutes, serverNow}`. 끝난 스탠드·직접 기록(`TIMER`/`MANUAL`, `DONE`)과 저장된 모닥불 입장을 그 날(한국 0시~24시)로 잘라 **구간을 합쳐** 초를 더하고 분은 내린다. 진행 중인 스탠드·열린 입장은 넣지 않는다(화면이 실시간으로 더한다). 형식 오류는 400 `BAD_DATE`, 오늘보다 뒤는 400 `FUTURE`. 모닥불 입장이 저장되면 달력 `days`·`streak`에도 들어간다(`left_at`의 한국 날짜) |
 | PUT | `/me/goal` | body `{monthlyGoal}`. **이번 달 목표만** 바꾼다(지난 달은 바꿀 수 없다, 달 지정 없음). 1~99가 아니면 400. 같은 값을 다시 보내면 200 (멱등) |
 
 - **월별 목표 이력 (결정 #39)**: `monthly_goal(user_id, year_month 'YYYY-MM', goal smallint 1~99, changes jsonb, updated_at)`, unique(`user_id`, `year_month`). `changes`는 `[{at, from, to}]`로 "목표를 바꿨어요" 표시에 쓴다. 같은 한국 날짜 안에서 여러 번 바꾸면 한 번의 변경으로 합치고, 처음 값으로 돌아오면 기록을 지운다.
@@ -181,6 +183,8 @@
 | POST | `/rooms` | 모닥불 피우기(개설). body `{kind, isbn?, title?, visibility(베타는 `INVITE`만, #41), maxParticipants(2~10), openAt (생략하면 지금), hours(1~7), bookId?}`. 개설자는 자동으로 참여자가 된다. 한 사용자가 동시에 열 수 있는 방(`SCHEDULED`·`OPEN`, 시각으로 계산)은 2개(`ROOM_LIMIT_LIVE`), 하루(한국 시간)에 개설할 수 있는 방은 3개(`ROOM_LIMIT_DAILY`, 취소해도 센다: `room_open_log`), 넘으면 409. **구현(`RoomController.create`)**: 201과 마을 게시판과 같은 방 한 줄(`inviteCode` 포함). `kind`는 `SAME`/`OWN`, `maxParticipants`·`hours`는 정수만(아니면 400), `visibility`는 생략 또는 `INVITE`(`PUBLIC`은 400), `OWN`이면 `isbn`은 무시하고 비운다. `bookId`는 내 책이어야 하고(없으면 404) `SAME`이면 그 책의 ISBN이 방의 `isbn`과 같아야 한다(400). 방 이름은 최대 100자이고 비우면 자동(`『책』 같이 읽기`는 `bookId` 책의 제목을 쓰고 없으면 `같이 읽기`, 각자 읽기는 `닉네임의 모닥불`). 초대 코드는 서버가 8자리(`I O 0 1` 제외)로 만든다 시간이 다 되면 서버가 방을 `CLOSED`로 바꾼다. `SAME`인데 `isbn`이 없으면 400. `openAt`이 지금보다 앞서면 400 |
 | GET | `/rooms/invite/{code}` | 초대 링크 미리보기 (방 이름, 종류, 책, 개설자 닉네임, 현재/최대 인원, 기간). 로그인 전에도 보여 준다. **구현**: `X-User-Id` 없이 열리고(`UserIdFilter` 예외, GET만) 코드는 대소문자를 가리지 않는다. 응답 `{title, kind, isbn, bookTitle, status, ownerNickname, participants, maxParticipants, openAt, closeAt, closedAt}`(방 id·초대 코드·참여자 목록은 없다). 종료된 방은 `status`가 `CLOSED`로 보이고, 없거나(취소 포함) 보관 7일이 지난 방은 404 |
 | POST | `/rooms/join` | body `{code, bookId?}`. 정원이 차면 409, 이미 참여 중이면 200 (멱등), 종료된 방이면 410. **구현**: 새로 들어오면 201, 응답은 방 한 줄(게시판과 같은 모양, `inviteCode`는 개설자에게만). 코드는 대소문자·앞뒤 공백을 가리지 않고, 없는(취소 포함) 코드는 404, 비어 있으면 400. 예정(`SCHEDULED`) 방도 들어올 수 있다. 정원 검사는 방 행을 잠가 동시에 와도 넘지 않는다(`ROOM_FULL`). 종료(일찍 끝냄·시간 지남)는 `ROOM_CLOSED` 410. `bookId`는 내 책이어야 하고(404) 같은 책 방이면 방의 `isbn`과 같아야 한다(400, 책은 없어도 된다). 나갔다 다시 들어오면 같은 행을 되살리고 `left_at`·`agreed_at`을 비운다(동의를 다시 받는다). 정원이 찼으면 다시 들어올 수 없다 |
+| POST | `/rooms/{id}/stay` | 모닥불(장면) 입장. **구현(결정 #65)**: 201 `{roomId, enteredAt}`(서버 시각). 참여 중(`NOT_PARTICIPANT` 403)이고 보관 동의를 했고(`AGREE_REQUIRED` 403) 열린 방이어야 한다(예정 409 `ROOM_NOT_OPEN`, 종료 410 `ROOM_CLOSED`, 없음 404). 이 사용자의 이전 열린 입장은 시간 없이 지운다(새로고침·다른 방 이동은 시간을 인정하지 않는다) |
+| POST | `/rooms/{id}/stay/leave` | 모닥불 퇴장. **구현**: 200 `{roomId, enteredAt, leftAt, minutes, credited}`. `leftAt`은 방 종료 시각(일찍 끝냈으면 그 시각)을 넘지 않는다. 60초 미만이면 행을 지우고 `credited:false, minutes:0`. 열린 입장이 없으면 404 `NO_OPEN_STAY` |
 | POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관. **구현**: 응답 `{id, result(CANCELED/CLOSED), closedAt}`. 개설자가 아니면 403(`NOT_OWNER`), 없으면 404, 이미 끝난 방(일찍 끝냄·시간 지남)은 409(`ROOM_ALREADY_CLOSED`). 취소해도 `room_open_log`는 남는다 |
 | DELETE | `/rooms/{id}/participants/me` | 방 나가기. 내 글은 남고 익명("나간 참여자")으로 내려간다. 개설자는 나갈 수 없다(409). **구현**: 204, 개설자 `OWNER_CANNOT_LEAVE` 409, 방이 없거나 참여 중이 아니면(이미 나간 경우 포함) 404. 행은 지우지 않고 `left_at`만 기록한다 |
 | POST | `/rooms/{id}/agree` | 보관 동의 기록(`agreed_at`). 동의 전에는 글 목록을 내려주지 않는다 (403). **구현**: 응답 `{roomId, agreedAt}`. 참여 중인 사람만(아니면 403, 나간 사람 포함), 방이 없으면 404, 다시 눌러도 처음 동의한 시각을 그대로 돌려준다 |
@@ -250,7 +254,7 @@ sync();
 - **개방·종료 배치(1분)**: 대상 선정까지 구현했다(`RoomOpenService`·`RoomOpenBatch`, 결정 #64). `open_notified_at`으로 한 번만 선점하고, `status`를 `OPEN`·`CLOSED`로 맞춘다. **남은 것은 실제 푸시 전송**이다(`PushSender`의 메시지 모양을 방 개방용으로 일반화 → VAPID 실발송). 지금은 알릴 대상 목록을 만들고 로그만 남긴다.
 - **가져오기 마감 D-1 알림 / 자동 가져오기 옵션**(SPEC "마감 알림"): 아직 없다.
 - **하드 삭제(매일 새벽)**: `closed_at`(없으면 `close_at`) + 7일이 지난 방을 지운다. 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워진다. `room_open_log`는 방을 지워도 남겨야 하고(하루 3번 제한), `book_room_archive`는 영구라 지우지 않는다(`room_id`에 외래키가 없어 방이 지워져도 남는다).
-- **모닥불 머문 시간**(`reading_session`, `source=CAMP`, `room_id`, 종료 시각까지만 센다, 오늘 읽은 시간·달력에 합산)은 별도 작업이다.
+- **모닥불 머문 시간**: 구현했다(`CampStayService`, `V14__camp_stay.sql`, `GET /me/reading-time`, 결정 #65). 남은 것: 퇴장을 못 부른 열린 입장 행은 다음 입장 때 지워질 뿐 따로 청소하지 않는다(사용자당 하나라 쌓이지 않는다). 진행 중인 스탠드와 겹치는 열린 입장은 퇴장 뒤 합산에서 정리된다.
 - **광장 접속 인원 `GET /plaza/presence`**: 연결(SSE/WebSocket) 수로 세는데 연결 방식·경로가 문서에 정해져 있지 않아 만들지 않았다. 정원 100명이 차면 마을 입장 연결이 409를 받는 규칙까지 포함해 연결 방식을 먼저 정해야 한다.
 - **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`로 함께 지워진다). 재입장하면 보관 동의를 다시 받으므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다. 가져온 기록을 지우는 API(가져오기 취소)는 없다.
 - **테스트 요령**: `ApiTestBase`가 `TestClock`(기준 `2026-11-17T03:00:00Z`)과 `truncate app_user ... cascade`를 쓰므로 `app_user`에서 외래키로 이어진 새 테이블은 자동으로 비워진다. 방은 `RoomOpenTest`·`RoomJoinTest`·`RoomChatTest`·`RoomImportTest`의 `open(...)`·`roomWith(...)`처럼 API로 열면 규칙이 그대로 지켜진다. 글은 도배 제한(3초 3건) 때문에 `clock.advance`로 시각을 옮겨 가며 보낸다.

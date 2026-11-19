@@ -43,7 +43,8 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 - **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(끝남): 대화 `GET·POST /rooms/{id}/messages`(300자, 3초 3건·같은 글 30초 연속 금지(#61), 삭제·수정 없음)·읽음 `POST /rooms/{id}/read`·게시판 `unread`(`V10__room_message.sql`, 결정 #60).
 - 공유방 4단계(끝남): 알림 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·`GET /books/{id}/rooms`(`V12__room_alarm_archive.sql`, 결정 #63).
 - 공유방 5단계(끝남): 개방·종료 배치 `RoomOpenService`·`RoomOpenBatch`(`open_notified_at` 선점, 30분 기준, `V13__room_open_notify.sql`, 결정 #64). 대상 선정까지이고 푸시는 로그만 남긴다. 설계: `docs/superpowers/specs/2026-11-19-room-open-batch-design.md`.
-- **다음 작업(순서 정함): ① 모닥불 머문 시간 합산(`reading_session.source=CAMP`, 시작·끝 신호와 스탠드 이중 계산 규칙을 먼저 정한다) ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ④ 광장 접속 인원 `GET /plaza/presence`(연결 방식은 SSE로 정했다).** 그 밖에 7일 지난 방 삭제 배치, 가져오기 마감 D-1 알림이 남았다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64 를 따른다.
+- 공유방 6단계(끝남): 모닥불 머문 시간 `CampStayService`(`POST /rooms/{id}/stay`·`stay/leave`)·합산 `GET /me/reading-time`·달력 반영(`camp_stay`, `V14__camp_stay.sql`, 결정 #65). 설계: `docs/superpowers/specs/2026-11-19-camp-stay-design.md`.
+- **다음 작업(순서 정함, ①은 끝남): ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ④ 광장 접속 인원 `GET /plaza/presence`(연결 방식은 SSE로 정했다).** (앞 번호는 원래 순서다.) 그 밖에 7일 지난 방 삭제 배치, 가져오기 마감 D-1 알림이 남았다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64·#65 를 따른다.
 - 한 번에 한 기능씩 만들고, 기능마다 통합 테스트를 추가한다.
 
 ## 작업 방식

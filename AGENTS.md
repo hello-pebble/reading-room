@@ -1,6 +1,6 @@
 # 독서 공유방 작업 지침 (AI 에이전트용)
 
-독서 기록·공유 웹서비스. 폴더는 `frontend/`(화면: `index.html`, `js/`, `css/`, `vendor/`), `backend/`(서버), `docs/`(기획·결정·API 문서), `tests/`(검사)다. 화면에서 `index.html`은 화면 뼈대, `js/room.js`는 내 방, `village.js`는 마을, `shared-room.js`는 공유방, `neighbor.js`는 이웃집 방문·책 추천 기능이다. `scene.js`는 공용 3D, `app.js`는 공용 상태·저장·모달과 시작 순서다. CSS는 `common.css`(공용), `room.css`(내 방), `village.css`(마을), `shared-room.css`(공유방), `neighbor.css`(이웃집)로 나뉜다. 수정 위치는 `frontend/EDITING.md`를 본다. 설명과 결정은 한국어 문서에 있다.
+독서 기록·공유 웹서비스. 폴더는 `frontend/`(화면: `index.html`, `js/`, `css/`, `vendor/`), `backend/`(서버), `docs/`(기획·결정·API 문서), `tests/`(검사)다. 화면에서 `index.html`은 화면 뼈대, `js/room.js`는 내 방, `village.js`는 마을, `shared-room.js`는 공유방, `neighbor.js`는 이웃집 방문·책 추천 기능이다. `scene.js`는 공용 3D, 공용 상태·저장·모달·시작 순서는 `base·state·stage·render·panel·app.js`다. 큰 파일은 구역별로 나뉘어 있다(`room*.js`, `shared-*.js`). 순서는 `index.html`의 스크립트 태그를 따른다. CSS는 `common.css`(공용), `room.css`(내 방), `village.css`(마을), `shared-room.css`(공유방), `neighbor.css`(이웃집)로 나뉜다. 수정 위치는 `frontend/EDITING.md`를 본다. 설명과 결정은 한국어 문서에 있다.
 
 ## 검사 — 코드를 바꾸면 반드시 돌린다
 

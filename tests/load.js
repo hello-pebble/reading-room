@@ -12,7 +12,8 @@ const noopCtx = () => new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => ({ w
 const opened = [];
 const closeAll = () => { for (const w of opened.splice(0)) { try { w.close(); } catch (e) {} } };
 
-function load({ state, touch } = {}) {
+// api: fakeServer()를 주면 주소에 ?api=가 붙은 서버 연결 모드로 열고, 페이지의 fetch를 그 가짜 서버로 바꾼다. local: 열기 전에 localStorage에 미리 넣을 값
+function load({ state, touch, api, local } = {}) {
   const html = fs.readFileSync(FILE, 'utf8')
     .replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
       if (src.startsWith('vendor/') || /^https?:/.test(src)) return ''; // 3D 라이브러리 제외
@@ -24,9 +25,11 @@ function load({ state, touch } = {}) {
   vc.on('jsdomError', e => errors.push(String((e && e.stack) || e)));
   vc.on('error', m => errors.push('console.error: ' + m));
   const dom = new JSDOM(html, {
-    url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+    url: 'http://localhost/' + (api ? '?api=http://api.test' : ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       if (state) w.localStorage.setItem(KEY, JSON.stringify(state));
+      if (local) for (const [k, v] of Object.entries(local)) w.localStorage.setItem(k, v);
+      if (api) w.fetch = (url, init) => api.fetch(url, init);
       w.matchMedia = q => ({ matches: /hover: hover/.test(q) && !touch, media: q, addEventListener() {}, removeEventListener() {} });
       w.ResizeObserver = class { observe() {} disconnect() {} };
       w.HTMLCanvasElement.prototype.getContext = () => noopCtx();
@@ -48,4 +51,171 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 한국 시간 기준 오늘 (앱의 달력·완독일과 같은 기준)
 const kstToday = () => { const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }).split('-').map(Number); return { y, m, d }; };
 
-module.exports = { load, closeAll, sleep, kstToday, KEY };
+// 서버를 흉내 낸다. 화면이 서버 응답을 어떻게 다루는지만 본다(진짜 규칙은 백엔드 테스트가 본다). 닉네임 규칙은 서버와 같은 문구를 돌려준다.
+const API_BASE = 'http://api.test';
+const NICK_RULE = /^[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9]{1,5}$/;
+function fakeServer() {
+  const users = {}, tokens = {}, calls = [];
+  let seq = 0;
+  const res = (status, data) => ({ ok: status < 400, status, json: async () => { if (data === undefined) throw new Error('본문 없음'); return data; } });
+  const mk = (label, nickname) => {
+    const u = { id: ++seq, publicId: '00000000-0000-4000-8000-' + String(seq).padStart(12, '0'), nickname: nickname || '손님', needsNickname: !nickname };
+    return (users[label] = u);
+  };
+  const issue = (u) => { const t = 'tok-' + ++seq; tokens[t] = u; return t; };
+  // 책·메모 (서버 규칙을 화면 테스트에 필요한 만큼만 흉내 낸다: 소파는 한 권, 제목 필수, 쪽수는 올라가기만 한다)
+  const pct = (b) => (b.totalPages ? Math.min(100, Math.floor((b.currentPage / b.totalPages) * 100)) : null);
+  const bookView = (b) => { const { notes, ...rest } = b; return { ...rest, percent: pct(b) }; };
+  const mkBook = (u, o) => {
+    const b = { id: ++seq, isbn: o.isbn || null, title: o.title, author: o.author || null, coverUrl: o.coverUrl || null, totalPages: o.totalPages || null,
+      currentPage: o.currentPage || 0, status: o.status || 'READING', rating: o.rating || null, oneLineReview: o.oneLineReview || null,
+      startedAt: o.startedAt || '2026-11-17T03:00:00Z', finishedAt: o.finishedAt || null, notes: [] };
+    (u.books = u.books || []).push(b);
+    return b;
+  };
+  const raise = (b, page) => { if (page != null && page > b.currentPage) b.currentPage = b.totalPages ? Math.min(page, b.totalPages) : page; };
+  const srv = {
+    calls, users, tokens, down: false,
+    skew: 0, // 서버 시계가 화면 시계보다 앞선 만큼(ms)
+    now() { return Date.now() + srv.skew; },
+    // 그 계정의 스탠드 세션을 미리 만들어 둔다. startedAt·lastCheckAt·endedAt은 서버 시각(ms), 책은 그 계정의 읽는 책
+    seedSession(label, o) {
+      const u = users[label], b = (u.books || []).find((x) => x.status === 'READING');
+      const s = { id: ++seq, bookId: b.id, status: 'RUNNING', lastCheckAt: o.startedAt, ...o };
+      (u.sess = u.sess || []).push(s);
+      return s;
+    },
+    // 이미 가입한 계정과 그 토큰을 만들어 둔다 (재방문·토큰 만료 시나리오용)
+    seed(label, nickname) { return issue(mk(label, nickname)); },
+    // 그 계정에 책을 미리 만들어 둔다. notes: [{type, content, page}] (오래된 것부터)
+    seedBook(label, o) {
+      const b = mkBook(users[label], o);
+      let n = 0;
+      for (const m of o.notes || []) b.notes.push({ id: ++seq, bookId: b.id, type: m.type || 'MEMO', content: m.content, page: m.page == null ? null : m.page, createdAt: '2026-11-17T0' + (n++ % 10) + ':00:00Z' });
+      return b;
+    },
+    async fetch(url, init = {}) {
+      const method = init.method || 'GET', path = url.replace(API_BASE, '');
+      const body = init.body ? JSON.parse(init.body) : {};
+      const auth = (init.headers || {}).Authorization;
+      calls.push({ method, path, body: init.body ? body : undefined, auth });
+      if (srv.down) throw new TypeError('Failed to fetch');
+      if (method === 'POST' && path === '/dev/login') {
+        const label = String(body.label == null ? '' : body.label).trim();
+        if (!label || label.length > 40) return res(400, { error: 'BAD_LABEL', message: '이름은 1~40자로 적어 주세요' });
+        const created = !users[label], u = users[label] || mk(label);
+        return res(200, { token: issue(u), expiresAt: '2099-01-01T00:00:00Z', newUser: created, user: { ...u } });
+      }
+      const user = auth && tokens[auth.replace('Bearer ', '')];
+      if (!user) return res(401, { error: 'UNAUTHORIZED', message: '로그인이 필요해요' });
+      if (method === 'GET' && path === '/me') return res(200, { ...user });
+      if (method === 'PUT' && path === '/me/nickname') {
+        if (!NICK_RULE.test(body.nickname == null ? '' : body.nickname))
+          return res(400, { error: 'BAD_NICKNAME', message: '닉네임은 한글·영문·숫자로 1~5자예요. 이모티콘·특수문자·공백은 쓸 수 없어요' });
+        user.nickname = body.nickname; user.needsNickname = false;
+        return res(200, { ...user });
+      }
+      if (method === 'POST' && path === '/auth/logout') { delete tokens[auth.replace('Bearer ', '')]; return res(204); }
+      const books = user.books || [];
+      let m;
+      if (method === 'GET' && (m = path.match(/^\/books\?status=(\w+)$/))) return res(200, books.filter((b) => b.status === m[1]).map(bookView));
+      if (method === 'POST' && path === '/books') {
+        const title = String(body.title == null ? '' : body.title).trim();
+        if (!title || title.length > 200) return res(400, { error: 'BAD_TITLE', message: '제목은 1~200자로 적어 주세요' });
+        if (books.some((b) => b.status === 'READING')) return res(409, { error: 'ALREADY_READING', message: '소파에 이미 읽는 책이 있어요. 먼저 완독하거나 포기해 주세요' });
+        return res(201, bookView(mkBook(user, { ...body, title })));
+      }
+      // 스탠드 세션 (서버 시각 srv.now()를 기준으로, 3시간 규칙·1분 미만 버림만 흉내 낸다)
+      const ss = (user.sess = user.sess || []);
+      const iso = (t) => (t == null ? null : new Date(t).toISOString());
+      const sv = (s) => ({ id: s.id, bookId: s.bookId, status: s.status, source: s.source || 'TIMER', startedAt: iso(s.startedAt), endedAt: iso(s.endedAt),
+        lastCheckAt: iso(s.lastCheckAt), endedBy: s.endedBy || null, endPage: s.endPage == null ? null : s.endPage, memo: s.memo || null,
+        minutes: s.endedAt == null ? null : Math.floor((s.endedAt - s.startedAt) / 60000) });
+      const live = () => { const s = ss.find((x) => x.status === 'RUNNING' || x.status === 'NEEDS_CONFIRM'); if (s && s.status === 'RUNNING' && srv.now() - s.startedAt > 3 * 3600000) s.status = 'NEEDS_CONFIRM'; return s; };
+      const closeS = (s, end, by, b) => {
+        s.endedAt = end; s.endedBy = by; s.status = end - s.startedAt < 60000 ? 'DISCARDED' : 'DONE';
+        const bk = books.find((x) => x.id === s.bookId);
+        if (b && b.totalPages && !bk.totalPages) bk.totalPages = b.totalPages;
+        if (b && b.endPage != null) { s.endPage = b.endPage; raise(bk, b.endPage); }
+        if (b && b.memo) { s.memo = b.memo; bk.notes.push({ id: ++seq, bookId: bk.id, type: 'MEMO', content: b.memo, page: null, createdAt: iso(end) }); }
+        return res(200, sv(s));
+      };
+      if (method === 'GET' && path === '/sessions/current') { const s = live(); return res(200, { session: s ? sv(s) : null, serverNow: iso(srv.now()) }); }
+      if (method === 'GET' && path === '/me/reading-time') {
+        const day = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+        const min = ss.filter((s) => s.status === 'DONE' && day(s.endedAt) === day(srv.now())).reduce((a, s) => a + Math.floor((s.endedAt - s.startedAt) / 60000), 0);
+        return res(200, { date: day(srv.now()), minutes: min, serverNow: iso(srv.now()) });
+      }
+      if (method === 'POST' && path === '/sessions/start') {
+        const bk = books.find((x) => x.status === 'READING');
+        if (!bk) return res(400, { error: 'NO_READING_BOOK', message: '소파에 책을 먼저 올려 주세요' });
+        const cur = live();
+        if (cur) return res(409, { error: 'ALREADY_RUNNING', message: '이미 스탠드가 켜져 있어요', session: sv(cur), serverNow: iso(srv.now()) });
+        const s = { id: ++seq, bookId: bk.id, status: 'RUNNING', startedAt: srv.now(), lastCheckAt: srv.now() };
+        ss.push(s);
+        return res(201, sv(s));
+      }
+      if (method === 'POST' && path === '/sessions/manual') {
+        const bk = books.find((x) => x.status === 'READING');
+        if (!bk) return res(400, { error: 'NO_READING_BOOK', message: '소파에 책을 먼저 올려 주세요' });
+        if (!(body.minutes >= 1 && body.minutes <= 600)) return res(400, { error: 'BAD_MINUTES', message: '1~600분 사이로 입력해 주세요' });
+        const start = srv.now() - (body.daysAgo || 0) * 86400000;
+        const s = { id: ++seq, bookId: bk.id, status: 'DONE', source: 'MANUAL', startedAt: start, endedAt: start + body.minutes * 60000, endedBy: 'MANUAL' };
+        ss.push(s);
+        return res(201, sv(s));
+      }
+      if ((m = path.match(/^\/sessions\/(\d+)\/(stop|check|confirm)$/))) {
+        const s = ss.find((x) => x.id === +m[1]);
+        if (!s) return res(404, { error: 'NOT_FOUND', message: '기록을 찾을 수 없어요' });
+        live();
+        if (m[2] === 'stop') return s.endedAt ? res(200, sv(s)) : closeS(s, s.status === 'NEEDS_CONFIRM' ? s.lastCheckAt : srv.now(), body.endedBy || 'LAMP', body);
+        if (m[2] === 'check') {
+          if (s.status !== 'RUNNING') return res(409, { error: 'NOT_RUNNING', message: '켜져 있는 스탠드에서만 [계속]을 누를 수 있어요' });
+          s.lastCheckAt = srv.now();
+          return res(200, sv(s));
+        }
+        if (s.status !== 'NEEDS_CONFIRM') return res(409, { error: 'NOT_NEEDS_CONFIRM', message: '확인이 필요한 스탠드가 아니에요' });
+        if (body.discard) { s.status = 'DISCARDED'; s.endedAt = srv.now(); return res(200, sv(s)); }
+        if (body.until === 'LAST_CHECK') return closeS(s, s.lastCheckAt - s.startedAt >= 60000 ? s.lastCheckAt : s.startedAt + 3600000, 'CONFIRM');
+        if (body.until === 'MINUTES') return closeS(s, s.startedAt + body.minutes * 60000, 'CONFIRM');
+        return res(400, { error: 'BAD_UNTIL', message: 'until은 LAST_CHECK 또는 MINUTES예요' });
+      }
+      if ((m = path.match(/^\/books\/(\d+)(\/.*)?$/))) {
+        const b = books.find((x) => x.id === +m[1]);
+        if (!b) return res(404, { error: 'NOT_FOUND', message: '책을 찾을 수 없어요' });
+        const sub = m[2] || '';
+        if (method === 'PATCH' && !sub) {
+          if (body.totalPages !== undefined) b.totalPages = body.totalPages >= 1 ? Math.min(9999, body.totalPages) : null;
+          if (body.currentPage !== undefined) b.currentPage = Math.max(0, body.currentPage || 0);
+          return res(200, bookView(b));
+        }
+        if (method === 'GET' && sub === '/notes') return res(200, b.notes.slice().reverse());
+        if (method === 'POST' && sub === '/notes') {
+          const content = String(body.content == null ? '' : body.content);
+          if (!content.trim()) return res(400, { error: 'BAD_CONTENT', message: '내용은 1~2000자로 적어 주세요' });
+          const n = { id: ++seq, bookId: b.id, type: body.type || 'MEMO', content, page: body.page == null ? null : body.page, createdAt: '2026-11-17T03:00:00Z' };
+          b.notes.push(n);
+          raise(b, n.page);
+          return res(201, { ...n, currentPage: b.currentPage, percent: pct(b) });
+        }
+        if (method === 'DELETE' && (m = sub.match(/^\/notes\/(\d+)$/))) {
+          const i = b.notes.findIndex((n) => n.id === +m[1]);
+          if (i < 0) return res(404, { error: 'NOTE_NOT_FOUND', message: '메모를 찾을 수 없어요' });
+          b.notes.splice(i, 1);
+          return res(204);
+        }
+        if (method === 'POST' && (sub === '/finish' || sub === '/drop')) {
+          if (b.status !== 'READING') return res(409, { error: 'NOT_READING', message: '읽는 중인 책이 아니에요' });
+          b.status = sub === '/finish' ? 'DONE' : 'DROPPED';
+          b.finishedAt = '2026-11-17T03:00:00Z';
+          if (sub === '/finish') { b.rating = body.rating || null; b.oneLineReview = body.oneLineReview || null; }
+          return res(200, bookView(b));
+        }
+      }
+      return res(404, { error: 'NOT_FOUND', message: '없는 주소예요' });
+    },
+  };
+  return srv;
+}
+
+module.exports = { load, closeAll, sleep, kstToday, fakeServer, KEY };

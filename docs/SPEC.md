@@ -1,6 +1,6 @@
 # 기능 명세
 
-프로토타입의 기능은 `frontend/js/room.js`(내 방)·`village.js`(마을)·`shared-room.js`(공유방)로 나눈다. 스타일은 `common.css`(공용)·`room.css`·`village.css`·`shared-room.css`로 나눈다. 3D는 `scene.js`, 공용 상태·저장·모달과 각 기능의 시작 순서는 `app.js`에 둔다. 기능 규칙과 저장 형식은 유지한다. 직접 수정할 위치는 [수정 안내](../frontend/EDITING.md)를 본다.
+프로토타입의 기능은 `frontend/js/room.js`(내 방)·`village.js`(마을)·`shared-room.js`(공유방)로 나눈다(내 방과 공유방, 공용 코드는 구역별 파일로 더 나뉜다: 결정 #70). 스타일은 `common.css`(공용)·`room.css`·`village.css`·`shared-room.css`로 나눈다. 3D는 `scene.js`, 공용 상태·저장·모달과 각 기능의 시작 순서는 `app.js`에 둔다. 기능 규칙과 저장 형식은 유지한다. 직접 수정할 위치는 [수정 안내](../frontend/EDITING.md)를 본다.
 
 ## 1. 내 방
 

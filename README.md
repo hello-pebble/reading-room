@@ -22,12 +22,12 @@
 | `frontend/css/room.css` | 내 방 전용 스타일: 책·메모·별점·책장·달력·거울 |
 | `frontend/css/village.css` | 마을 전용 스타일: 광장 채팅·미니맵·접속 표시 |
 | `frontend/css/shared-room.css` | 공유방 전용 스타일: 모닥불·대화·참여자·방 정보·초대 |
-| `frontend/js/room.js` | 내 방 화면 문구·입력·버튼 동작·독서 기록·타이머·바탕화면 창 |
+| `frontend/js/room.js`, `room-search.js`, `room-panels.js`, `room-actions.js`, `room-timer.js` | 내 방: 공용(월 목표·달력 데이터·창밖 풍경)·책 찾기·화면 문구·입력과 버튼 동작·독서 타이머와 바탕화면 창 |
 | `frontend/js/village.js` | 마을 구역·이웃·이동·미니맵·게시판·광장 대화 |
-| `frontend/js/shared-room.js` | 공유방 개설·초대·대화·참여자·방 정보·기록 가져오기 |
+| `frontend/js/shared-room.js`, `shared-chat.js`, `shared-chat-actions.js`, `shared-create.js`, `shared-actions.js` | 공유방: 모닥불 장면·카드, 대화·참여자·방 정보·기록 가져오기, 개설·초대, 버튼 동작과 시간 되면 열고 닫기 |
 | `frontend/js/neighbor.js`, `neighbor.css` | 이웃집 방문·추천 조건·한 집 한 권·집 주인 확인·추천 화면 스타일 |
 | `frontend/js/scene.js` | 방·마을·공유방 3D와 캐릭터. `createScene()`으로 시작 |
-| `frontend/js/app.js` | 공용 상태·저장·모달·장면 전환과 각 기능의 시작 순서 |
+| `frontend/js/base.js`, `state.js`, `stage.js`, `render.js`, `panel.js`, `app.js` | 공용: 그리기 도우미·상태와 저장·방 배치와 캐릭터 움직임·화면 그리기·모달·각 기능의 시작 순서 |
 | `frontend/EDITING.md` | 직접 수정할 때 보는 파일·함수 안내와 확인 방법 |
 | `frontend/vendor/three.min.js` | 3D 라이브러리 three.js r149 (MIT, 약 0.6MB). 오프라인용으로 함께 둠 |
 | `frontend/index-voxel.html` | 이전 복셀 캐릭터 버전 (SVG, 외부 의존성 없음). 되돌릴 때 사용 |
@@ -54,7 +54,7 @@
 |---|---|---|
 | 내 방 기획 | ✅ 확정 | 가구 6개 + 문, 퀵바 없음, 가운데 모달 (예외: 마을 광장 채팅창, #40) |
 | 내 방 프로토타입 | ✅ 동작 | `frontend/index.html`. 2026-11-18 내 방 기능·3D·공용/전용 CSS 분리. 저장 방식은 기존 localStorage 유지, 백엔드 API 연결은 아직 |
-| 프론트 코드 구성 | ✅ 분리 완료 (2026-11-18) | 내 방 `room.js/css`, 마을 `village.js/css`, 공유방 `shared-room.js/css`. 공용 상태·모달은 `app.js`, 공용 스타일은 `common.css`, 3D는 `scene.js`. 수정 위치는 `frontend/EDITING.md` |
+| 프론트 코드 구성 | ✅ 분리 완료 (2026-11-18) | 내 방 `room*.js`/`room.css`, 마을 `village.js/css`, 공유방 `shared-*.js`/`shared-room.css`. 공용 상태·모달은 `base·state·stage·render·panel·app.js`, 공용 스타일은 `common.css`, 3D는 `scene.js`. 긴 줄은 Prettier로 나눴고 큰 파일은 구역별로 쪼갰다(결정 #70). 수정 위치는 `frontend/EDITING.md` |
 | 스탠드 타이머 | ✅ 프로토타입 | 서버 시각 기준 계산, 확인 알림(브라우저 알림), 깜빡함 처리, 직접 기록 |
 | 알림 | ✅ 프로토타입 | 60분 확인, 3시간 초과, 공유방 개방 알림. 페이지를 열어 둔 동안만 옴. 창을 닫은 뒤에는 서버 푸시 필요 (설계만) |
 | 바탕화면 띄우기 | ✅ 프로토타입 | Document Picture-in-Picture, 스탠드를 눌러 끄기 |
@@ -77,6 +77,7 @@
 | 이웃집 책 추천 | ✅ 프로토타입 (2026-11-18) | 체크무늬 벽지 배경의 책장·캐릭터 방문 화면→책장→책 꽂기. 읽는 중·완독만, 집마다 미확인 한 권, 하단 추가 모션, 확인 후 재추천. **서버 API 구현(2026-11-18, 결정 #62, `backend/`의 `neighbor` 패키지)**, 화면은 아직 연결 안 됨 |
 | 마을 추가 기능 | 💡 아이디어 | 이웃 쪽지, 실제 불 켜진 창문 등 (아래 "마을 확장 후보") |
 | 백엔드 | ✅ 내 방 API + 마을 게시판 읽기·광장 채팅 구현 (공유방 개설·대화 제외) | `backend/`. 책·메모·스탠드(시작·끄기·확인·직접 기록)·완독/포기·거울·달력/월 목표·푸시 구독과 알림 대상 선정. 마을 게시판(`GET /rooms`)과 광장 채팅(`/plaza/messages`, `village` 패키지). 테스트 96개(`cd backend && ./gradlew test`). 임시 로그인(`X-User-Id`), 실제 푸시 전송·공유방 개설·대화·구글 로그인은 아직. 설계와 다른 점은 `docs/DATA_API.md` "구현 상태와 차이" |
+| 화면의 서버 연결 | 🔶 1·2단계 구현 (2026-11-19) | 주소 끝 `?api=http://localhost:8080`으로 켜는 서버 연결 모드. 개발용 로그인(서버 `POST /dev/login`, dev 프로파일 전용)·닉네임 정하기·바꾸기·로그아웃·내 정보(`GET /me`)와 토큰 유지·만료 처리 (`api.js`·`account.js`, 결정 #71), 책 불러오기·추가·쪽수·메모 추가/삭제·완독/포기 (`books.js`, 결정 #72), 스탠드 켜기·끄기·계속·3시간 확인·직접 기록·오늘 읽은 시간 (`sessions.js`, 결정 #73). 주소가 없으면 기존 프로토타입 그대로. 다음: 달력·읽은 시간 → 마을·광장 → 공유방·이웃집 → 구글 로그인 |
 | 모바일 방 구도 | ✅ 프로토타입 | 폭 760px 이하에서 7×6.5칸 방 + 세운 카메라 (결정 #22) |
 
 ## 다음 할 일 (후보)

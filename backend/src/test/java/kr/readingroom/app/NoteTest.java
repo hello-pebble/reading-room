@@ -34,6 +34,22 @@ class NoteTest extends ApiTestBase {
     }
 
     @Test
+    void deletingANoteRemovesOnlyThatNoteAndNeverLowersTheCurrentPage() throws Exception {
+        long u = newUser("alice"), o = newUser("bobby");
+        long id = book(u, Map.of("title", "책", "totalPages", 200)), ob = book(o, Map.of("title", "밥의 책"));
+        long n1 = body(mvc.perform(POST(u, "/books/" + id + "/notes", Map.of("content", "첫째", "page", 80))).andReturn()).get("id").asLong();
+        long n2 = body(mvc.perform(POST(u, "/books/" + id + "/notes", Map.of("content", "둘째"))).andReturn()).get("id").asLong();
+        mvc.perform(DELETE(o, "/books/" + id + "/notes/" + n1)).andExpect(status().isNotFound());            // 남의 책의 메모는 못 지운다
+        mvc.perform(DELETE(o, "/books/" + ob + "/notes/" + n1)).andExpect(status().isNotFound());            // 내 책 경로로 남의 메모를 지울 수도 없다
+        mvc.perform(DELETE(u, "/books/" + id + "/notes/9999")).andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/books/" + id + "/notes/" + n1)).andExpect(status().isUnauthorized());
+        mvc.perform(DELETE(u, "/books/" + id + "/notes/" + n1)).andExpect(status().isNoContent());
+        mvc.perform(DELETE(u, "/books/" + id + "/notes/" + n1)).andExpect(status().isNotFound());            // 이미 지웠다
+        mvc.perform(GET(u, "/books/" + id + "/notes")).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].id").value(n2));
+        assertThat(body(mvc.perform(GET(u, "/books/" + id)).andReturn()).get("currentPage").asInt()).isEqualTo(80);   // 읽은 쪽은 줄지 않는다
+    }
+
+    @Test
     void validationAndOrdering() throws Exception {
         long u = newUser("alice");
         long id = book(u, Map.of("title", "책"));

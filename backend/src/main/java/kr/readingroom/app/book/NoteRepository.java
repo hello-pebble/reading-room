@@ -22,6 +22,11 @@ public class NoteRepository {
         return dsl.fetchOne("insert into book_note(book_id, type, content, page, created_at) values (?, ?, ?, ?, ?::timestamptz) returning *", bookId, type, content, page, createdAt);
     }
 
+    /** 그 책의 메모만 지운다(책 번호와 메모 번호가 맞아야 한다). 지운 행 수를 돌려준다. */
+    public int deleteInBook(long bookId, long noteId) {
+        return dsl.execute("delete from book_note where id = ? and book_id = ?", noteId, bookId);
+    }
+
     public int insertMemo(long bookId, String memo, String createdAt) {
         return dsl.execute("insert into book_note(book_id, type, content, page, created_at) values (?, 'MEMO', ?, null, ?::timestamptz)", bookId, memo, createdAt);
     }

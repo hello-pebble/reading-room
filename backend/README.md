@@ -41,3 +41,10 @@ API 경로·JSON 필드·DB 스키마는 이번 역할 분리에서 변경하지
 3. 서버가 뜨면 `curl "http://localhost:8080/books/search?q=소년이 온다"`로 확인한다. 키가 없으면 503이다.
 4. 화면은 `frontend` 폴더를 `.claude/serve-nocache.py`(8765 포트)로 열고, 처음 한 번만 주소 끝에 `?searchApi=http://localhost:8080/books/search`를 붙여 연다 (저장된다). 다른 주소에서 열면 `CORS_ORIGINS`에 그 주소를 넣는다.
 - `GET /books/search`는 로그인(Bearer 토큰) 없이 열려 있다. 구글 로그인을 붙일 때 로그인 필요 + 호출 제한으로 바꾼다.
+
+## 화면과 함께 실행 (개발용 로그인, 서버 연결 1단계)
+1. PostgreSQL을 띄운다(위 "책 검색을 화면에서 써 보기"의 1번과 같다).
+2. 서버를 **dev 프로파일**로 띄운다. 화면 주소를 CORS에 넣는다(기본값은 `http://localhost:8765`): `CORS_ORIGINS=http://localhost:4173 ./gradlew bootRun --args=--spring.profiles.active=dev` (DB 주소·계정은 `DATABASE_URL`·`DATABASE_USER`·`DATABASE_PASSWORD`). dev 프로파일에서만 `POST /dev/login`(이름으로 로그인, 진짜 Bearer 토큰)과 `POST /dev/users`가 열린다.
+3. 화면은 저장소 루트에서 `node tests/serve.js`(4173 포트)로 연다. 처음 한 번 주소 끝에 `?api=http://localhost:8080`을 붙여 열면 서버 주소가 저장되고 서버 연결 모드가 된다(`?api=`로 비우면 해제, 결정 #71).
+4. 로그인 창에 이름을 넣으면 계정이 만들어지고 닉네임 정하기로 이어진다. 같은 이름으로 다시 들어오면 같은 계정이다. 확인: `select * from auth_identity`에 `provider='dev'`가 생긴다.
+- dev 프로파일이 아니면 이 로그인은 등록되지 않는다(운영 안전). 구글 로그인(`GOOGLE_CLIENT_ID`)으로 바꿀 때는 화면의 로그인 호출만 바꾼다.

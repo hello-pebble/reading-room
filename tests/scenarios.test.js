@@ -3,7 +3,7 @@
 // 실행: npm test   (npm install 뒤)
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load, closeAll, sleep, kstToday } = require('./load');
+const { load, closeAll, sleep, kstToday, fakeServer } = require('./load');
 test.after(closeAll);
 
 // 페이지에서 오류가 났는지 확인하고 닫는다
@@ -545,5 +545,502 @@ test('키보드: 창을 열면 포커스가 창 제목으로 가고, 닫으면 �
 
 test('동작 줄이기: prefers-reduced-motion 규칙이 애니메이션과 전환을 끈다', () => {
   const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'frontend', 'css', 'common.css'), 'utf8');
-  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none!important[^}]*transition:none!important/);
+  // 공백·줄바꿈이 있어도 같은 규칙이다 (코드 모양을 정리한 뒤에도 깨지지 않게)
+  assert.match(
+    css,
+    /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*animation:\s*none\s*!important[^}]*transition:\s*none\s*!important/,
+  );
+});
+
+// ---- 서버 연결 1단계 (주소 끝 ?api=): 로그인·닉네임·내 정보. 서버는 fakeServer()로 흉내 낸다 ----
+const settle = () => sleep(40); // 화면의 비동기 서버 호출이 끝나길 기다린다
+const val = (a, id, v) => (a.ev(`document.getElementById('${id}').value=${JSON.stringify(v)}`), 0);
+const text = (a, id) => a.doc.getElementById(id).textContent;
+const TOKEN = 'myroom-token';
+
+test('서버 연결: ?api가 없으면 서버를 부르지 않고 프로토타입 그대로 동작한다', async () => {
+  const a = load();
+  await settle();
+  assert.equal(a.ev('API.enabled'), false);
+  assert.equal(a.ev('panelOpen'), null);
+  assert.equal(a.doc.getElementById('nickBtn').hidden, true);
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, true);
+  assert.match(text(a, 'hdrStats'), /^@pebble · 읽은 책/, '프로토타입은 핸들 표시 그대로');
+  fin(a);
+});
+
+test('서버 연결: 토큰이 없으면 로그인 창이 뜨고, 새 계정은 닉네임 정하기로 이어진다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  assert.equal(a.ev('API.enabled'), true);
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.deepEqual(srv.calls, [], '로그인 전에는 서버를 부르지 않아요');
+  val(a, 'loginLabel', 'alice');
+  a.click('#panel [data-act=login]');
+  await settle();
+  assert.equal(srv.calls[0].path, '/dev/login', '처음 부르는 곳은 로그인이에요(이어서 책을 불러와요)');
+  assert.equal(srv.calls[0].auth, undefined, '로그인 요청에는 토큰이 없어요');
+  assert.ok(a.w.localStorage.getItem(TOKEN), '토큰이 저장돼요');
+  assert.equal(a.ev('panelOpen'), 'nickname', '새 계정이라 닉네임부터 정해요');
+  assert.match(text(a, 'panel'), /한글·영문·숫자 1~5자/);
+  fin(a);
+});
+
+test('닉네임 정하기: 규칙에 안 맞으면 서버 문구를 보여 주고 열려 있으며, 맞으면 헤더가 바뀌고 닫힌다', async () => {
+  const srv = fakeServer();
+  const b = load({ api: srv, local: { [TOKEN]: srv.seed('alice') } }); // 닉네임을 아직 안 정한 계정
+  await settle();
+  assert.equal(b.ev('panelOpen'), 'nickname');
+  for (const bad of ['😀', '여섯글자이름이', 'a b', '나무!']) {
+    val(b, 'nickInput', bad);
+    b.click('#panel [data-act=saveNick]');
+    await settle();
+    assert.equal(b.ev('panelOpen'), 'nickname', bad + ': 닫히면 안 돼요');
+    assert.match(text(b, 'acctErr'), /한글·영문·숫자로 1~5자예요/, '서버가 준 문구를 그대로 보여요');
+  }
+  assert.equal(srv.users.alice.nickname, '손님', '거절된 값은 저장되지 않아요');
+  val(b, 'nickInput', '나무');
+  b.click('#panel [data-act=saveNick]');
+  await settle();
+  assert.equal(b.ev('panelOpen'), null);
+  assert.equal(srv.users.alice.nickname, '나무');
+  assert.match(srv.calls.at(-1).auth, /^Bearer tok-/, '닉네임 저장에는 Bearer 토큰을 보내요');
+  assert.equal(b.ev('S.user.nickname'), '나무');
+  assert.equal(text(b, 'hdrName'), '나무의 방');
+  assert.doesNotMatch(text(b, 'hdrStats'), /undefined|@/, '서버 모드의 헤더에는 핸들이 없어요');
+  assert.equal(b.doc.getElementById('nickBtn').hidden, false);
+  assert.equal(b.doc.getElementById('logoutBtn').hidden, false);
+  fin(b);
+});
+
+test('로그인 창과 닉네임 정하기는 바깥 클릭·Esc로 닫히지 않는다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  const esc = () => a.w.document.dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Escape' }));
+  esc();
+  a.click('#backdrop');
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.equal(a.doc.querySelector('#panel [data-act=close]'), null, '닫기 버튼도 없어요');
+  val(a, 'loginLabel', 'bob');
+  a.w.document.getElementById('loginLabel').dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'nickname', 'Enter로도 로그인돼요');
+  esc();
+  a.click('#backdrop');
+  assert.equal(a.ev('panelOpen'), 'nickname');
+  assert.equal(a.doc.querySelector('#panel [data-act=close]'), null);
+  fin(a);
+});
+
+test('재방문: 저장된 토큰으로 바로 들어가고, 닉네임이 있으면 창이 뜨지 않는다', async () => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  const a = load({ api: srv, local: { [TOKEN]: token } });
+  await settle();
+  assert.equal(srv.calls[0].path, '/me', '내 정보를 먼저 불러와요(이어서 책을 불러와요)');
+  assert.equal(a.ev('panelOpen'), null);
+  assert.equal(text(a, 'hdrName'), '나무의 방');
+  assert.equal(a.ev('S.user.publicId'), srv.users.alice.publicId);
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, false);
+  fin(a);
+});
+
+test('토큰이 만료·무효면 토큰을 지우고 로그인 창으로 돌아간다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv, local: { [TOKEN]: 'tok-없는토큰' } });
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.equal(a.w.localStorage.getItem(TOKEN), null);
+  assert.match(text(a, 'acctErr'), /다시 로그인/);
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, true);
+  fin(a);
+});
+
+test('닉네임 바꾸기: 헤더 버튼으로 다시 열고(닫을 수 있다) 바꾸면 헤더에 바로 보인다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv, local: { [TOKEN]: srv.seed('alice', '나무') } });
+  await settle();
+  a.click('#nickBtn');
+  assert.equal(a.ev('panelOpen'), 'nickname');
+  assert.equal(a.doc.getElementById('nickInput').value, '나무', '지금 닉네임이 들어 있어요');
+  a.click('#panel [data-act=close]');
+  assert.equal(a.ev('panelOpen'), null, '이미 정한 뒤에는 닫을 수 있어요');
+  a.click('#nickBtn');
+  val(a, 'nickInput', '벚꽃');
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  assert.equal(srv.users.alice.nickname, '벚꽃');
+  assert.equal(text(a, 'hdrName'), '벚꽃의 방');
+  fin(a);
+});
+
+test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로 돌아간다', async () => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  const a = load({ api: srv, local: { [TOKEN]: token } });
+  await settle();
+  a.click('#logoutBtn');
+  await settle();
+  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time)/.test(p)), ['/me', '/auth/logout']);
+  assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
+  assert.equal(a.w.localStorage.getItem(TOKEN), null);
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.equal(a.doc.getElementById('nickBtn').hidden, true);
+  fin(a);
+});
+
+// ---- 서버 연결 2단계: 책·메모·완독/포기 (서버가 기준) ----
+const bookApp = async (setup) => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  if (setup) setup(srv);
+  const a = load({ api: srv, local: { [TOKEN]: token } });
+  a.ev('BOOK_SAVE_DELAY=20'); // 쪽수 저장 대기를 줄인다
+  await settle();
+  await settle();
+  return { srv, a };
+};
+const readingSeed = (srv, extra = {}) =>
+  srv.seedBook('alice', { title: '데미안', author: '헤세', totalPages: 200, currentPage: 50, ...extra });
+const sofa = (a) => a.ev("openF('sofa')");
+const calls = (srv, method, re) => srv.calls.filter((c) => c.method === method && re.test(c.path));
+
+test('서버 책 불러오기: 읽는 책·완독·포기와 메모를 서버에서 불러온다(데모 책은 사라진다)', async () => {
+  const { a } = await bookApp((srv) => {
+    readingSeed(srv, { notes: [{ content: '첫 메모' }, { type: 'QUOTE', content: '새는 알을 깨고', page: 50 }] });
+    srv.seedBook('alice', { title: '아몬드', author: '손원평', status: 'DONE', rating: 4, oneLineReview: '좋았다', finishedAt: '2026-10-12T03:00:00Z', notes: [{ content: '끝' }] });
+    srv.seedBook('alice', { title: '사피엔스', status: 'DONE', finishedAt: '2026-11-01T03:00:00Z' });
+    srv.seedBook('alice', { title: '포기한 책', status: 'DROPPED', finishedAt: '2026-11-05T03:00:00Z' });
+  });
+  const s = a.state();
+  assert.equal(s.reading.title, '데미안');
+  assert.equal(s.reading.page, 50);
+  assert.equal(s.reading.totalPages, 200);
+  assert.equal(s.reading.progress, 25);
+  assert.equal(s.reading.startedAt, '2026.11.17');
+  assert.deepEqual(s.reading.notes.map((n) => [n.type, n.content, n.page]), [['MEMO', '첫 메모', null], ['QUOTE', '새는 알을 깨고', 50]], '오래된 메모부터');
+  assert.deepEqual(s.finished.map((b) => b.title), ['아몬드', '사피엔스'], '완독일 순서');
+  assert.equal(s.finished[0].rating, 4);
+  assert.equal(s.finished[0].review, '좋았다');
+  assert.equal(s.finished[0].finishedAt, '2026.10.12');
+  assert.equal(s.finished[0].notes[0].content, '끝');
+  assert.deepEqual(s.dropped.map((b) => b.title), ['포기한 책']);
+  assert.ok(!s.finished.some((b) => b.title === '불편한 편의점'), '데모 책은 사라져요');
+  assert.match(text(a, 'hdrStats'), /읽은 책 2권/);
+  sofa(a);
+  assert.match(text(a, 'panel'), /새는 알을 깨고/);
+  fin(a);
+});
+
+test('책 올리기: 서버에 저장하고 서버 번호가 책 번호가 되며, 서버가 거절하면 상태를 바꾸지 않는다', async () => {
+  const { srv, a } = await bookApp();
+  assert.equal(a.state().reading, null);
+  sofa(a);
+  a.ev("panelView.t='데미안';panelView.a='헤세';panelView.tp='200'");
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  const post = calls(srv, 'POST', /^\/books$/)[0];
+  assert.deepEqual([post.body.title, post.body.author, post.body.totalPages, post.body.currentPage], ['데미안', '헤세', 200, 0]);
+  assert.equal(a.state().reading.id, srv.users.alice.books[0].id, '서버 번호를 써요');
+  assert.match(text(a, 'toast'), /소파에 『데미안』을 올렸어요/);
+  // 서버는 이미 읽는 책이 있다고 거절한다: 화면에는 없는 척하게 만들고 다시 올려 본다
+  a.ev('S.reading=null');
+  sofa(a);
+  a.ev("panelView.t='다른 책';panelView.a='저자'");
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  assert.equal(a.state().reading, null, '거절되면 화면 상태는 그대로예요');
+  assert.match(text(a, 'toast'), /소파에 이미 읽는 책이 있어요/);
+  assert.equal(srv.users.alice.books.length, 1);
+  fin(a);
+});
+
+test('쪽수 입력: 멈춘 뒤 한 번만 서버에 저장한다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s, { currentPage: 0 }));
+  sofa(a);
+  a.ev("(()=>{const i=document.getElementById('pg');for(const v of [10,20,30]){i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}))}})()");
+  assert.equal(calls(srv, 'PATCH', /^\/books\//).length, 0, '입력하는 동안에는 서버를 부르지 않아요');
+  await settle();
+  const patches = calls(srv, 'PATCH', /^\/books\//);
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0].body.currentPage, 30);
+  assert.equal(srv.users.alice.books[0].currentPage, 30);
+  assert.equal(a.state().reading.page, 30);
+  fin(a);
+});
+
+test('메모: 추가하면 서버 응답의 쪽수·퍼센트가 반영되고, 삭제하면 서버에서도 지운다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s, { currentPage: 10 }));
+  sofa(a);
+  a.ev("panelView.draft='좋았다'");
+  val(a, 'np', '80');
+  a.click('#panel [data-act=addNote]');
+  await settle();
+  const post = calls(srv, 'POST', /\/notes$/)[0];
+  assert.deepEqual([post.body.type, post.body.content, post.body.page], ['MEMO', '좋았다', 80]);
+  const s = a.state();
+  assert.equal(s.reading.page, 80);
+  assert.equal(s.reading.progress, 40);
+  assert.equal(s.reading.notes.length, 1);
+  assert.ok(s.reading.notes[0].id, '서버가 준 번호가 있어요');
+  assert.match(text(a, 'panel'), /좋았다/);
+  a.click('#panel [data-act=delNote]');
+  await settle();
+  assert.equal(calls(srv, 'DELETE', /\/notes\/\d+$/).length, 1);
+  assert.equal(srv.users.alice.books[0].notes.length, 0, '서버에서도 지워져요');
+  assert.equal(a.state().reading.notes.length, 0);
+  assert.equal(a.state().reading.page, 80, '읽은 쪽은 줄지 않아요');
+  fin(a);
+});
+
+test('완독·포기: 서버에 별점과 한줄평을 보내고 책장으로 옮긴다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s, { notes: [{ content: '메모' }] }));
+  sofa(a);
+  a.click('#panel [data-act=finish]');
+  a.ev("panelView.rating=4;panelView.review='오래 남을 책'");
+  a.click('#panel [data-act=doFinish]');
+  await settle();
+  const post = calls(srv, 'POST', /\/finish$/)[0];
+  assert.deepEqual([post.body.rating, post.body.oneLineReview], [4, '오래 남을 책']);
+  const s = a.state();
+  assert.equal(s.reading, null);
+  assert.equal(s.finished.length, 1);
+  assert.deepEqual([s.finished[0].title, s.finished[0].rating, s.finished[0].review, s.finished[0].notes.length], ['데미안', 4, '오래 남을 책', 1]);
+  assert.equal(srv.users.alice.books[0].status, 'DONE');
+  assert.match(text(a, 'hdrStats'), /읽은 책 1권/);
+  // 다음 책을 올리고 포기한다
+  sofa(a);
+  a.ev("panelView.t='포기할 책';panelView.a='저자'");
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  a.click('#panel [data-act=drop]');
+  a.click('#panel [data-act=doDrop]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/drop$/).length, 1);
+  assert.deepEqual(a.state().dropped.map((b) => b.title), ['포기할 책']);
+  assert.equal(a.state().reading, null);
+  fin(a);
+});
+
+test('완독을 서버가 거절하면 책은 소파에 그대로 있고 서버 문구가 나온다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  srv.users.alice.books[0].status = 'DONE'; // 다른 기기에서 이미 끝낸 책
+  sofa(a);
+  a.click('#panel [data-act=finish]');
+  a.click('#panel [data-act=doFinish]');
+  await settle();
+  assert.equal(a.state().reading.title, '데미안');
+  assert.equal(a.state().finished.length, 0);
+  assert.match(text(a, 'toast'), /읽는 중인 책이 아니에요/);
+  fin(a);
+});
+
+test('다른 계정으로 로그인하면 그 계정의 책으로 바뀐다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seed('bob', '밥');
+  });
+  assert.equal(a.state().reading.title, '데미안');
+  a.click('#logoutBtn');
+  await settle();
+  val(a, 'loginLabel', 'bob');
+  a.click('#panel [data-act=login]');
+  await settle();
+  await settle();
+  assert.equal(a.state().reading, null, '밥에게는 읽는 책이 없어요');
+  assert.equal(a.state().finished.length, 0);
+  assert.equal(text(a, 'hdrName'), '밥의 방');
+  fin(a);
+});
+
+test('서버에 닿지 않으면 로그인 창에 안내가 나온다', async () => {
+  const srv = fakeServer();
+  srv.down = true;
+  const a = load({ api: srv });
+  await settle();
+  val(a, 'loginLabel', 'alice');
+  a.click('#panel [data-act=login]');
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.match(text(a, 'acctErr'), /서버에 연결할 수 없어요/);
+  srv.down = false;
+  a.click('#panel [data-act=login]');
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'nickname', '다시 누르면 이어져요');
+  fin(a);
+});
+
+// ---- 서버 연결 2‑2단계: 스탠드 타이머·직접 기록 (서버 시각이 기준) ----
+const MIN = 60000;
+const lamp = (a) => a.ev("openF('lamp')");
+
+test('서버 스탠드 복원: 켜져 있던 스탠드를 서버에서 불러오고 서버 시계가 달라도 경과 시간이 맞다', async () => {
+  const { a } = await bookApp((srv) => {
+    readingSeed(srv);
+    srv.skew = 5 * MIN; // 서버 시계가 5분 앞서 있다
+    srv.seedSession('alice', { startedAt: srv.now() - 20 * MIN });
+  });
+  const s = a.state().session;
+  assert.equal(s.status, 'RUNNING');
+  assert.ok(s.id > 0);
+  const el = a.ev('elapsed()');
+  assert.ok(el > 19.9 * MIN && el < 20.5 * MIN, '경과 시간은 약 20분이에요: ' + el);
+  fin(a);
+});
+
+test('서버 스탠드 켜기: 서버가 만든 기록 번호로 켜지고, 이미 켜져 있으면 그 스탠드를 이어받는다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  assert.equal(a.state().session, null);
+  a.ev('startTimer()');
+  await settle();
+  assert.equal(calls(srv, 'POST', /^\/sessions\/start$/).length, 1);
+  const id = a.state().session.id;
+  assert.equal(id, srv.users.alice.sess[0].id);
+  // 다른 기기에서 켜 둔 상태로 다시 켜려 하면 이어받는다
+  a.ev('S.session = null');
+  a.ev('startTimer()');
+  await settle();
+  assert.equal(a.state().session.id, id);
+  fin(a);
+});
+
+test('서버 스탠드 켜기 실패: 책이 없으면 서버 문구가 나오고 켜지지 않는다', async () => {
+  const { a } = await bookApp();
+  a.ev('S.reading = {id: 1, title: "x", notes: [], page: 0, progress: 0}'); // 화면만 어긋난 상태
+  a.ev('startTimer()');
+  await settle();
+  assert.equal(a.state().session, null);
+  assert.match(text(a, 'toast'), /소파에 책을 먼저 올려 주세요/);
+  fin(a);
+});
+
+test('서버 스탠드 끄기: 쪽수·메모와 함께 서버에 보내고, 서버가 센 분을 기록에 넣는다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 30 * MIN });
+  });
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  val(a, 'sp', '90');
+  a.ev("panelView.memo = '좋은 장면'");
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  const c = calls(srv, 'POST', /\/sessions\/\d+\/stop$/);
+  assert.equal(c.length, 1);
+  assert.equal(c[0].body.endPage, 90);
+  assert.equal(c[0].body.memo, '좋은 장면');
+  assert.equal(c[0].body.endedBy, 'LAMP');
+  assert.equal(calls(srv, 'POST', /\/notes$/).length, 0, '메모는 스탠드 끄기에 실려 가고 따로 보내지 않아요');
+  const st = a.state();
+  assert.equal(st.session, null);
+  assert.equal(st.sessions.length, 1);
+  assert.equal(st.sessions[0].minutes, 30);
+  assert.equal(st.reading.page, 90);
+  assert.equal(st.reading.notes.at(-1).content, '좋은 장면');
+  assert.equal(srv.users.alice.books[0].currentPage, 90);
+  fin(a);
+});
+
+test('서버 스탠드 끄기 실패: 서버 문구를 보이고 스탠드는 그대로 켜져 있다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 30 * MIN });
+  });
+  srv.users.alice.sess[0].status = 'DONE'; // 다른 기기에서 먼저 끈 경우도 서버는 200이라 화면은 끝으로 맞춘다
+  srv.users.alice.sess[0].endedAt = srv.now();
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  assert.equal(a.state().session, null);
+  srv.down = true;
+  a.ev('S.session = {id: 999, bookId: 1, startedAt: Date.now() - 600000, lastCheckAt: Date.now(), status: "RUNNING"}');
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  assert.notEqual(a.state().session, null, '서버에 닿지 않으면 끄지 않아요');
+  assert.match(text(a, 'toast'), /서버에 연결할 수 없어요/);
+  fin(a);
+});
+
+test('서버 [계속]: 서버가 받은 확인 시각으로 알림 줄이 사라진다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 70 * MIN });
+  });
+  a.ev('renderNotice()');
+  assert.match(a.doc.getElementById('notice').textContent, /아직 읽고 있어요/);
+  a.click('#notice [data-n=cont]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/check$/).length, 1);
+  assert.ok(Date.now() - a.state().session.lastCheckAt < 5000);
+  a.ev('renderNotice()');
+  assert.equal(a.doc.getElementById('notice').style.display, 'none');
+  fin(a);
+});
+
+test('서버 확인 필요: 마지막 확인까지·직접 입력·기록 안 함이 서버 규칙으로 처리된다', async () => {
+  const mk = (extra) => bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 4 * 3600000, lastCheckAt: s.now() - 4 * 3600000 + 100 * MIN, status: 'NEEDS_CONFIRM', ...extra });
+  });
+  {
+    const { srv, a } = await mk();
+    assert.equal(a.state().session.status, 'NEEDS_CONFIRM');
+    lamp(a);
+    a.click('#panel [data-act=confirmLast]');
+    await settle();
+    assert.deepEqual(calls(srv, 'POST', /\/confirm$/)[0].body, { until: 'LAST_CHECK' });
+    assert.equal(a.state().session, null);
+    assert.equal(a.state().sessions[0].minutes, 100);
+    fin(a);
+  }
+  {
+    const { srv, a } = await mk();
+    lamp(a);
+    a.click('#panel [data-act=cmanual]');
+    val(a, 'cm', '45');
+    a.click('#panel [data-act=confirmManual]');
+    await settle();
+    assert.deepEqual(calls(srv, 'POST', /\/confirm$/)[0].body, { until: 'MINUTES', minutes: 45 });
+    assert.equal(a.state().sessions[0].minutes, 45);
+    fin(a);
+  }
+  {
+    const { srv, a } = await mk();
+    lamp(a);
+    a.click('#panel [data-act=discard]');
+    await settle();
+    assert.deepEqual(calls(srv, 'POST', /\/confirm$/)[0].body, { discard: true });
+    assert.equal(a.state().session, null);
+    assert.equal(a.state().sessions.length, 0);
+    fin(a);
+  }
+});
+
+test('서버 직접 기록: 오늘·어제 분을 서버에 보내고 서버가 만든 기록을 넣는다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  lamp(a);
+  a.click('#panel [data-act=manual]');
+  a.click('#panel [data-act=mday][data-d="1"]');
+  val(a, 'mm', '25');
+  a.click('#panel [data-act=manualSave]');
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /\/sessions\/manual$/)[0].body, { minutes: 25, daysAgo: 1 });
+  assert.equal(a.state().sessions.length, 1);
+  assert.equal(a.state().sessions[0].source, 'MANUAL');
+  assert.equal(a.state().sessions[0].minutes, 25);
+  fin(a);
+});
+
+test('서버 오늘 읽은 시간: 로그인하면 서버가 센 오늘 분이 더해진다', async () => {
+  const { a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 90 * MIN, endedAt: s.now() - 30 * MIN, status: 'DONE', endedBy: 'LAMP' });
+  });
+  assert.equal(a.ev('todayMin()'), 60);
+  fin(a);
 });

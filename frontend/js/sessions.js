@@ -20,6 +20,17 @@ const recordFromServer = (s) => ({
   source: s.source,
   endedBy: s.endedBy,
 });
+// 화면에 있는 오늘 기록의 합. 서버가 센 오늘 분에서 빼서 todayBase에 넣으면, 화면 기록과 겹쳐 두 번 세지 않는다
+function sesLocalToday() {
+  const k = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }),
+    t = k(Date.now());
+  return S.sessions.filter((x) => k(x.endedAt || x.startedAt) === t).reduce((a, x) => a + x.minutes, 0);
+}
+// 오늘 읽은 시간만 서버에서 다시 받는다 (모닥불에서 나온 뒤처럼 서버가 센 시간이 늘었을 때)
+async function refreshToday() {
+  SES.todayBase = (await API.get('/me/reading-time')).minutes - sesLocalToday();
+  render();
+}
 function sesRefresh() {
   calRefresh(); // 독서한 날·연속일이 바뀐다 (calendar.js)
   save();

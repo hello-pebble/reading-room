@@ -683,7 +683,7 @@ test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로
   await settle();
   a.click('#logoutBtn');
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time|me\/calendar|rooms)/.test(p)), ['/me', '/auth/logout']);
+  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time|me\/calendar|me\/recommendation|plaza|rooms)/.test(p)), ['/me', '/auth/logout']);
   assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
   assert.equal(a.w.localStorage.getItem(TOKEN), null);
   assert.equal(a.ev('panelOpen'), 'login');
@@ -1173,7 +1173,7 @@ test('서버 광장: 들어가면 서버의 최근 글을 불러오고 내 글�
   assert.match(pzLog(a).textContent, /밥.*안녕하세요/);
   assert.equal(pzLog(a).querySelectorAll('.msg.me').length, 1);
   assert.match(pzLog(a).querySelector('.msg.me').textContent, /반가워요/);
-  assert.equal(calls(srv, 'GET', /^\/plaza\/messages$/).length, 1);
+  assert.ok(calls(srv, 'GET', /^\/plaza\/messages$/).length >= 1, '광장에 들어서면 받아 와요(로그인 때 이웃집 주인을 뽑으며 한 번 더 부른다)');
   assert.ok(!a.state().plaza.some((m) => /^@/.test(m.who)), '가짜 이웃의 말은 서버 연결 모드에 없어요');
   assert.doesNotMatch(a.doc.getElementById('pzHead').textContent, /\d\d\/100/, '서버에 접속 인원 API가 아직 없어요');
   fin(a);
@@ -1580,5 +1580,166 @@ test('서버 가져오기: 내 책에 없으면 나중에 읽을 책으로 담�
   assert.equal(a.state().later.length, 1);
   assert.equal(a.state().later[0].title, '모모');
   assert.equal(a.state().finished.length, 0, '나중에 읽을 책은 완독으로 세지 않아요');
+  fin(a);
+});
+
+// ---- 서버 연결 5‑4단계: 모닥불 머문 시간 (서버가 입장·퇴장 시각으로 센다) ----
+test('서버 모닥불 머문 시간: 들어갈 때 서버에 알리고, 나가면 서버가 센 분이 오늘 읽은 시간·달력에 더해진다(화면이 따로 더하지 않는다)', async () => {
+  const { srv, a } = await chatApp((s) => chatRoom(s));
+  await openChat(a, newsOf(a)[0]);
+  assert.equal(calls(srv, 'POST', /\/stay$/).length, 1);
+  assert.equal(a.ev('VIEW'), 'shared');
+  const cal = calCalls(srv).length;
+  srv.skew += 20 * MIN; // 서버 시계로 20분이 지났다
+  a.ev('leaveCamp()');
+  await settle();
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/stay\/leave$/).length, 1);
+  assert.equal(a.ev('VIEW'), 'village');
+  assert.equal(a.ev('todayMin()'), 20);
+  assert.match(text(a, 'toast'), /20분을 읽은 시간에 더했어요/);
+  assert.equal(a.state().sessions.filter((x) => x.source === 'CAMP').length, 0, '화면이 머문 시간을 따로 기록하지 않아요');
+  assert.ok(calCalls(srv).length > cal, '달력도 다시 불러와요');
+  fin(a);
+});
+
+test('서버 모닥불 머문 시간: 1분 미만은 더해지지 않고, 스탠드 기록과 겹쳐 두 번 세지 않는다', async () => {
+  const { srv, a } = await chatApp((s) => {
+    chatRoom(s);
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 30 * MIN, endedAt: s.now(), status: 'DONE', endedBy: 'LAMP' }); // 오늘 30분 읽었다
+  });
+  assert.equal(a.ev('todayMin()'), 30);
+  await openChat(a, newsOf(a)[0]);
+  a.ev('leaveCamp()');
+  await settle();
+  await settle();
+  assert.equal(a.ev('todayMin()'), 30, '1분 미만은 더하지 않아요');
+  assert.doesNotMatch(text(a, 'toast'), /읽은 시간에 더했어요/);
+  await openChat(a, newsOf(a)[0]);
+  srv.skew += 15 * MIN;
+  a.ev('leaveCamp()');
+  await settle();
+  await settle();
+  assert.equal(a.ev('todayMin()'), 45, '서버가 센 값에서 화면에 있는 기록을 빼고 더해요');
+  fin(a);
+});
+
+test('서버 모닥불 머문 시간: 방을 일찍 끄면 장면에서 광장으로 돌아가며 머문 시간이 서버에 기록된다', async () => {
+  const { srv, a } = await chatApp((s) => {
+    const r = chatRoom(s);
+    r.parts[0] = { uid: s.users.alice.id, agreed: Date.now(), left: false }; // 내가 연 방
+    r.parts.splice(1, 1); // 중복 참여 제거
+  });
+  await openChat(a, newsOf(a)[0]);
+  srv.skew += 10 * MIN;
+  a.ev(`sharedRoomAction('closeRoom', { dataset: { id: S.news[0].id } })`);
+  await settle();
+  await settle();
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/stay\/leave$/).length, 1);
+  assert.equal(a.ev('VIEW'), 'village');
+  assert.equal(a.ev('todayMin()'), 10);
+  fin(a);
+});
+
+test('서버 모닥불 입장: 서버가 거절하면(이미 끝난 방) 서버 문구가 나온다', async () => {
+  const { srv, a } = await chatApp((s) => chatRoom(s));
+  await toVillage(a);
+  srv.rooms[0].closedAt = Date.now() - 1000; // 화면은 아직 모르는 사이에 끝났다
+  a.ev(`openV('room:${newsOf(a)[0].id}')`);
+  await settle();
+  assert.match(text(a, 'toast'), /이미 끝난 모닥불이에요/);
+  fin(a);
+});
+
+// ---- 서버 연결 6단계: 이웃집 책 추천 (마을의 집은 최근 광장에서 말한 사람이 무작위로 산다) ----
+const nbApp = async (setup) => {
+  const r = await bookApp((s) => {
+    s.seed('bob', '밥');
+    s.seed('carol', '다람');
+    readingSeed(s, { isbn: '9788937460777' });
+    s.seedBook('carol', { title: '모모', author: '엔데', isbn: '9788937462788', status: 'DONE' });
+    s.seedPlaza('bob', '안녕', 3000);
+    s.seedPlaza('carol', '반가워요', 2000);
+    s.seedPlaza('alice', '나도 말했어요', 1000);
+    if (setup) setup(s);
+  });
+  return r;
+};
+const houseOf = (a, name) => a.ev(`NEIGHBORS.findIndex((n) => n.name === '${name}')`);
+const visit = async (a, i) => {
+  a.ev(`visitNeighbor('neighbor-${i}')`);
+  await settle();
+  await settle();
+};
+
+test('서버 이웃집 배정: 최근 광장에서 말한 사람(나 제외)이 집에 살고 나머지 집은 빈 집이다', async () => {
+  const { a } = await nbApp();
+  await toVillage(a);
+  const names = JSON.parse(a.ev(`JSON.stringify(NEIGHBORS.map((n) => n.name))`));
+  assert.equal(names.filter((n) => n === '밥').length, 1);
+  assert.equal(names.filter((n) => n === '다람').length, 1);
+  assert.equal(names.filter((n) => n === '나무' || n === '달빛' || n === '구름').length, 0, '체험판 가짜 이웃 이름은 없어요');
+  assert.equal(names.filter((n) => n === '빈 집').length, 6);
+  assert.equal(names.includes('나무'), false, '나(나무)는 내 집이라 이웃집에 살지 않아요');
+  fin(a);
+});
+
+test('서버 이웃집 방문·추천: 사는 사람이 있는 집은 서버에서 정보를 받아 들어가고, 책을 꽂으면 서버가 받는다', async () => {
+  const { srv, a } = await nbApp();
+  await toVillage(a);
+  const i = houseOf(a, '밥');
+  await visit(a, i);
+  assert.equal(a.ev('VIEW'), 'neighbor');
+  assert.equal(calls(srv, 'GET', /^\/neighbors\//).length, 1);
+  assert.equal(text(a, 'hdrName'), '밥의 집');
+  a.ev(`openNeighbor('shelf')`);
+  assert.match(a.doc.getElementById('panel').textContent, /데미안/);
+  assert.doesNotMatch(a.doc.getElementById('panel').textContent, /테스트 도구/, '집 주인 확인 재현 도구는 체험판에만 있어요');
+  a.click('#panel [data-act=giftPut][data-key=reading]');
+  await settle();
+  const c = calls(srv, 'POST', /\/recommendation$/);
+  assert.equal(c.length, 1);
+  assert.deepEqual(c[0].body, { bookId: srv.users.alice.books[0].id });
+  assert.equal(a.ev(`S.recommendations['neighbor-${i}'].book.title`), '데미안');
+  a.ev(`openNeighbor('shelf')`);
+  assert.match(a.doc.getElementById('panel').textContent, /책장 아래 칸에 꽂아 두었어요/);
+  fin(a);
+});
+
+test('서버 이웃집 방문: 이미 다른 이웃의 책이 꽂힌 집은 새로 꽂을 수 없고, 빈 집·사라진 집은 서버 문구가 나온다', async () => {
+  const { srv, a } = await nbApp((s) => s.seedRecommendation('carol', 'bob', '모모'));
+  await toVillage(a);
+  await visit(a, houseOf(a, '밥'));
+  assert.equal(a.ev('VIEW'), 'neighbor');
+  a.ev(`openNeighbor('shelf')`);
+  assert.match(a.doc.getElementById('panel').textContent, /집 주인이 확인하면 다시 추천할 수 있어요/);
+  assert.equal(a.doc.querySelector('#panel [data-act=giftPut]'), null);
+  a.ev(`leaveNeighbor()`);
+  await settle();
+  const empty = a.ev(`NEIGHBORS.findIndex((n) => n.name === '빈 집')`);
+  await visit(a, empty);
+  assert.equal(a.ev('VIEW'), 'village', '빈 집에는 들어가지 않아요');
+  assert.match(text(a, 'toast'), /아직 이웃이 살지 않는 집이에요/);
+  const i = houseOf(a, '다람');
+  srv.users.carol.publicId = '99999999-9999-4999-8999-999999999999'; // 그 사이 사라진 집
+  await visit(a, i);
+  assert.equal(a.ev('VIEW'), 'village');
+  assert.match(text(a, 'toast'), /그 집을 찾을 수 없어요/);
+  fin(a);
+});
+
+test('서버 내 집에 온 추천: 로그인하면 보낸 사람 닉네임과 함께 보이고, 확인하면 서버에 알리고 사라진다', async () => {
+  const { srv, a } = await nbApp((s) => s.seedRecommendation('carol', 'alice', '모모'));
+  assert.equal(a.ev(`S.recommendations.me.from`), '다람');
+  assert.equal(a.ev(`S.recommendations.me.book.title`), '모모');
+  assert.match(a.ev('incomingGiftHtml()'), /다람/);
+  a.ev(`openF('shelf')`);
+  a.click('#panel [data-act=giftRead][data-house=me]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /\/me\/recommendation\/confirm$/).length, 1);
+  assert.equal(a.ev(`S.recommendations.me === undefined`), true);
+  assert.equal(a.ev('incomingGiftHtml()'), '');
   fin(a);
 });

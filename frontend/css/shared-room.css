@@ -3,92 +3,502 @@
 /* 마을·공유방 전용: 광장 채팅·모닥불·참여자·방 정보 */
 
 /* 공유방 대화: 창은 고정하고 대화 목록만 스크롤한다 (제목·탭·입력창은 그대로) */
-aside.panel.rcchat{display:flex;flex-direction:column;overflow:hidden}
-aside.panel.rcchat>*{flex:none}
+aside.panel.rcchat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+aside.panel.rcchat > * {
+  flex: none;
+}
 /* 모닥불 장면의 참여자·방 정보 모달: 대화창과 따로 떠서, ✕가 모닥불을 나가는 게 아니라 이 창만 닫는다 */
-.cm-backdrop{display:none;position:absolute;inset:0;z-index:8;background:rgba(20,30,40,.4);align-items:center;justify-content:center;padding:16px}
-.cm-backdrop.open{display:flex;animation:fade .15s ease}
-.cm-panel{max-height:100%;display:flex;flex-direction:column;overflow:hidden}
+.cm-backdrop {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: rgba(20, 30, 40, 0.4);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.cm-backdrop.open {
+  display: flex;
+  animation: fade 0.15s ease;
+}
+.cm-panel {
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 /* 제목·아래 버튼은 고정, 가운데(.cm-body)만 스크롤 */
-.cm-panel>*{flex:none}
-.cm-panel>.cm-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:14px}
-.cm-panel::after{height:0}
-.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-bottom:8px}
+.cm-panel > * {
+  flex: none;
+}
+.cm-panel > .cm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 14px;
+}
+.cm-panel::after {
+  height: 0;
+}
+.rgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
 /* 참여자 바둑판 */
-.rmem{margin:0;padding:6px 2px;min-width:0}
+.rmem {
+  margin: 0;
+  padding: 6px 2px;
+  min-width: 0;
+}
 /* 박스 없이 글자만: 눌러지는 것처럼 보이지 않게 */
-.rmem .row{gap:6px;flex-wrap:nowrap;align-items:center}
-.rmem b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
-.crown{flex:none;width:14px;height:14px;vertical-align:-2px}
-.rbk{margin-top:4px;font-size:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-@media(max-width:760px){.cm-panel{max-height:72%}}
-aside.panel.rcchat>.rlog{flex:1 1 auto;min-height:60px;max-height:none}
-.backdrop:not(.camp) aside.panel.rcchat{height:min(84vh,720px)}
-@media(max-width:760px){.backdrop.camp .panel.rcchat{height:min(54dvh,460px);max-height:none}.backdrop.camp .panel.rcchat .rsub{display:none}
- /* 폰: 제목·탭·입력줄을 줄여 대화 영역을 넓힌다 */
- .backdrop.camp .panel.rcchat .panel-head{padding:8px 14px 2px}.backdrop.camp .panel.rcchat h2{font-size:15px}
- .backdrop.camp .panel.rcchat .rtabs{margin:2px 0 6px}.backdrop.camp .panel.rcchat .rtabs button{padding:5px 0}
- .backdrop.camp .panel.rcchat .foot{padding:6px 14px 8px}.backdrop.camp .panel.rcchat #rc{min-height:38px;height:38px}.backdrop.camp .panel.rcchat .rhint{display:none}
- .backdrop.camp .panel.rcchat::after{height:0}}
-#rcE:empty{display:none}
+.rmem .row {
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.rmem b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.crown {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+.rbk {
+  margin-top: 4px;
+  font-size: 12px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+@media (max-width: 760px) {
+  .cm-panel {
+    max-height: 72%;
+  }
+}
+aside.panel.rcchat > .rlog {
+  flex: 1 1 auto;
+  min-height: 60px;
+  max-height: none;
+}
+.backdrop:not(.camp) aside.panel.rcchat {
+  height: min(84vh, 720px);
+}
+@media (max-width: 760px) {
+  .backdrop.camp .panel.rcchat {
+    height: min(54dvh, 460px);
+    max-height: none;
+  }
+  .backdrop.camp .panel.rcchat .rsub {
+    display: none;
+  }
+  /* 폰: 제목·탭·입력줄을 줄여 대화 영역을 넓힌다 */
+  .backdrop.camp .panel.rcchat .panel-head {
+    padding: 8px 14px 2px;
+  }
+  .backdrop.camp .panel.rcchat h2 {
+    font-size: 15px;
+  }
+  .backdrop.camp .panel.rcchat .rtabs {
+    margin: 2px 0 6px;
+  }
+  .backdrop.camp .panel.rcchat .rtabs button {
+    padding: 5px 0;
+  }
+  .backdrop.camp .panel.rcchat .foot {
+    padding: 6px 14px 8px;
+  }
+  .backdrop.camp .panel.rcchat #rc {
+    min-height: 38px;
+    height: 38px;
+  }
+  .backdrop.camp .panel.rcchat .rhint {
+    display: none;
+  }
+  .backdrop.camp .panel.rcchat::after {
+    height: 0;
+  }
+}
+#rcE:empty {
+  display: none;
+}
 /* 공유방 대화 (RC) */
-.rsub{font-size:13px;color:var(--muted);margin:0 0 6px}
-.rtabs{margin:6px 0 8px}
-.rlog{position:relative;max-height:min(38vh,330px);min-height:110px;overflow-y:auto;margin:6px 0}
-.rd{text-align:center;font-size:11px;color:var(--muted);margin:10px 0 6px}
-.rnew{text-align:center;font-size:12px;color:#8a5a00;border-top:1px solid #e8c96a;margin:10px 0 6px;padding-top:3px}
-.rm{background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 10px;margin:6px 26px 6px 0;overflow-wrap:anywhere}
-.rm.me{background:#fff4c9;border-color:#e8c96a;margin:6px 0 6px 26px}
-.rm.del{background:none;border-style:dashed;color:var(--muted);font-size:13px}
-.rm-h{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
-.rm-h i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
-.rm-h b{font-weight:normal;color:var(--ink)}
-.rm-h small{font-size:10px;background:#eee8dc;border-radius:999px;padding:0 6px}
-.rm-h .pg{background:#e4efe2;color:#2f5a3a;border-radius:999px;padding:0 7px;font-size:11px}
-.rm-h time{margin-left:auto}
-.rm-x{border:0;background:none;padding:0 4px;color:var(--muted);min-height:0}
-.rm-t{font-size:14px;margin-top:3px;white-space:pre-wrap}
-.rspoil{font-size:12px;color:#8a5a00;background:#fff4c9;border-radius:8px;padding:6px 8px;margin:6px 0}
-.rspoil.bar{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:4px 8px}
-.rspoil.bar button{padding:2px 8px;font-size:12px;white-space:nowrap}
-.rband{display:flex;gap:10px;align-items:center;background:#fbe7d6;border-radius:12px;padding:8px 10px;margin:6px 0}
-.rband.hot{background:#f9d3c4}
-.backdrop.camp{position:absolute;inset:0;z-index:4;background:none;justify-content:flex-end;align-items:stretch;pointer-events:none;padding:12px}
-.backdrop.camp .panel{pointer-events:auto;width:320px;max-height:100%;background:rgba(255,250,240,.76);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border-color:rgba(217,207,184,.9);box-shadow:0 4px 14px rgba(60,40,20,.18)}
-.backdrop.camp .panel-head,.backdrop.camp .foot{background:transparent}
-.backdrop.camp .rm{background:rgba(255,255,255,.7)}
-.backdrop.camp .rlog{max-height:calc(100% - 220px);min-height:60px}
-.backdrop.camp.min .panel{display:none}
-.camp-top{position:absolute;top:12px;left:12px;z-index:5;display:none;gap:8px;align-items:center}
-.stage-wrap.camp .camp-top{display:flex}
-.camp-side{position:absolute;z-index:5;display:none;flex-direction:column;gap:10px;top:12px;right:342px}
+.rsub {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.rtabs {
+  margin: 6px 0 8px;
+}
+.rlog {
+  position: relative;
+  max-height: min(38vh, 330px);
+  min-height: 110px;
+  overflow-y: auto;
+  margin: 6px 0;
+}
+.rd {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 10px 0 6px;
+}
+.rnew {
+  text-align: center;
+  font-size: 12px;
+  color: #8a5a00;
+  border-top: 1px solid #e8c96a;
+  margin: 10px 0 6px;
+  padding-top: 3px;
+}
+.rm {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 7px 10px;
+  margin: 6px 26px 6px 0;
+  overflow-wrap: anywhere;
+}
+.rm.me {
+  background: #fff4c9;
+  border-color: #e8c96a;
+  margin: 6px 0 6px 26px;
+}
+.rm.del {
+  background: none;
+  border-style: dashed;
+  color: var(--muted);
+  font-size: 13px;
+}
+.rm-h {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rm-h i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.rm-h b {
+  font-weight: normal;
+  color: var(--ink);
+}
+.rm-h small {
+  font-size: 10px;
+  background: #eee8dc;
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.rm-h .pg {
+  background: #e4efe2;
+  color: #2f5a3a;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+.rm-h time {
+  margin-left: auto;
+}
+.rm-x {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  color: var(--muted);
+  min-height: 0;
+}
+.rm-t {
+  font-size: 14px;
+  margin-top: 3px;
+  white-space: pre-wrap;
+}
+.rspoil {
+  font-size: 12px;
+  color: #8a5a00;
+  background: #fff4c9;
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin: 6px 0;
+}
+.rspoil.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 4px 8px;
+}
+.rspoil.bar button {
+  padding: 2px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rband {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #fbe7d6;
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 6px 0;
+}
+.rband.hot {
+  background: #f9d3c4;
+}
+.backdrop.camp {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: none;
+  justify-content: flex-end;
+  align-items: stretch;
+  pointer-events: none;
+  padding: 12px;
+}
+.backdrop.camp .panel {
+  pointer-events: auto;
+  width: 320px;
+  max-height: 100%;
+  background: rgba(255, 250, 240, 0.76);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border-color: rgba(217, 207, 184, 0.9);
+  box-shadow: 0 4px 14px rgba(60, 40, 20, 0.18);
+}
+.backdrop.camp .panel-head,
+.backdrop.camp .foot {
+  background: transparent;
+}
+.backdrop.camp .rm {
+  background: rgba(255, 255, 255, 0.7);
+}
+.backdrop.camp .rlog {
+  max-height: calc(100% - 220px);
+  min-height: 60px;
+}
+.backdrop.camp.min .panel {
+  display: none;
+}
+.camp-top {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: none;
+  gap: 8px;
+  align-items: center;
+}
+.stage-wrap.camp .camp-top {
+  display: flex;
+}
+.camp-side {
+  position: absolute;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  top: 12px;
+  right: 342px;
+}
 /* 대화창(폭 320 + 여백 12) 바로 왼쪽 위에 동그란 아이콘 버튼 두 개 */
-.stage-wrap.camp .camp-side{display:flex}
-.stage-wrap.camp.min .camp-side{right:12px}
-.camp-side button{width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.4);padding:0;cursor:pointer;display:grid;place-items:center;box-shadow:0 3px 10px rgba(10,20,40,.3);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
-.camp-side button{background:rgba(255,250,240,.76);border-color:#d9cfb8;box-shadow:0 4px 14px rgba(60,40,20,.18)}
-.camp-side button svg{width:28px;height:28px}
-.camp-side button.on{outline:2px solid #fff;outline-offset:2px}
-.camp-exit{background:rgba(255,250,240,.94);border:1px solid #d9cfb8;border-radius:10px;padding:9px 12px;color:#3b3226;cursor:pointer}
-.camp-chat-toggle{position:absolute;bottom:12px;right:12px;z-index:5;display:none;background:rgba(255,250,240,.76);backdrop-filter:blur(5px);border-color:#d9cfb8;box-shadow:0 4px 14px rgba(60,40,20,.18)}
-.stage-wrap.camp.min .camp-chat-toggle{display:block}
-.camp-collapse{display:none;white-space:nowrap;font-size:12px;padding:5px 8px}
-.backdrop.camp .camp-collapse{display:block}
-@media(max-width:760px){.backdrop.camp{align-items:flex-end;padding:0}.backdrop.camp .panel{width:100%;height:310px;max-height:55%;border-radius:14px 14px 0 0}.backdrop.camp .rlog{max-height:100px}.stage-wrap.camp .camp-top{top:8px;left:8px;gap:6px}.camp-exit{padding:7px 10px;font-size:13px}.camp-side{flex-direction:row;top:auto;right:10px;bottom:calc(min(54dvh,460px) + 10px + var(--kb,0px))}.stage-wrap.camp.min .camp-side{bottom:64px}.camp-side button{width:42px;height:42px}.stage-wrap.camp #stage{height:55dvh;min-height:0}.camp-chat-toggle{left:8px;right:8px;text-align:left}}
-.rchip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:#fff;font-size:13px;min-height:0}
+.stage-wrap.camp .camp-side {
+  display: flex;
+}
+.stage-wrap.camp.min .camp-side {
+  right: 12px;
+}
+.camp-side button {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 3px 10px rgba(10, 20, 40, 0.3);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.camp-side button {
+  background: rgba(255, 250, 240, 0.76);
+  border-color: #d9cfb8;
+  box-shadow: 0 4px 14px rgba(60, 40, 20, 0.18);
+}
+.camp-side button svg {
+  width: 28px;
+  height: 28px;
+}
+.camp-side button.on {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.camp-exit {
+  background: rgba(255, 250, 240, 0.94);
+  border: 1px solid #d9cfb8;
+  border-radius: 10px;
+  padding: 9px 12px;
+  color: #3b3226;
+  cursor: pointer;
+}
+.camp-chat-toggle {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 5;
+  display: none;
+  background: rgba(255, 250, 240, 0.76);
+  backdrop-filter: blur(5px);
+  border-color: #d9cfb8;
+  box-shadow: 0 4px 14px rgba(60, 40, 20, 0.18);
+}
+.stage-wrap.camp.min .camp-chat-toggle {
+  display: block;
+}
+.camp-collapse {
+  display: none;
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.backdrop.camp .camp-collapse {
+  display: block;
+}
+@media (max-width: 760px) {
+  .backdrop.camp {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .backdrop.camp .panel {
+    width: 100%;
+    height: 310px;
+    max-height: 55%;
+    border-radius: 14px 14px 0 0;
+  }
+  .backdrop.camp .rlog {
+    max-height: 100px;
+  }
+  .stage-wrap.camp .camp-top {
+    top: 8px;
+    left: 8px;
+    gap: 6px;
+  }
+  .camp-exit {
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+  .camp-side {
+    flex-direction: row;
+    top: auto;
+    right: 10px;
+    bottom: calc(min(54dvh, 460px) + 10px + var(--kb, 0px));
+  }
+  .stage-wrap.camp.min .camp-side {
+    bottom: 64px;
+  }
+  .camp-side button {
+    width: 42px;
+    height: 42px;
+  }
+  .stage-wrap.camp #stage {
+    height: 55dvh;
+    min-height: 0;
+  }
+  .camp-chat-toggle {
+    left: 8px;
+    right: 8px;
+    text-align: left;
+  }
+}
+.rchip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #fff;
+  font-size: 13px;
+  min-height: 0;
+}
 /* 별 점멸·모달·토스트 연출을 끈다. 걷기 같은 기능 이동은 JS라 그대로 */
-@media(max-width:760px){.backdrop.camp{padding-bottom:var(--kb,0px)}}
+@media (max-width: 760px) {
+  .backdrop.camp {
+    padding-bottom: var(--kb, 0px);
+  }
+}
 /* 폰 키보드가 올라오면 공유방 대화창도 그 위로 올린다 (광장 채팅창과 같은 방식) */
 
 /* 초대 링크(복사 아이콘 버튼)와 방 정보의 이름-값 목록: 상자 없이 글자 중심, 참여자 창과 같은 결 */
-.rkv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:6px 0 16px;font-size:14px;align-items:baseline}
-.rkv span{color:var(--muted);font-size:13px}
-.rkv b{font-weight:normal;min-width:0;overflow-wrap:anywhere}
-.rinv{margin:4px 0 10px}
-.rlbl{font-size:13px;color:var(--muted);margin-bottom:6px}
-.rcopy{display:flex;gap:8px;align-items:center}
-.rcopy input{flex:1;min-width:0;margin:0}
-.ibtn{flex:none;width:42px;height:42px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
-.ibtn svg{width:22px;height:22px}
-.ibtn:hover{background:#f6efdf}
-.ibtn.done{color:var(--accent);border-color:var(--accent)}
+.rkv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 6px 0 16px;
+  font-size: 14px;
+  align-items: baseline;
+}
+.rkv span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.rkv b {
+  font-weight: normal;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rinv {
+  margin: 4px 0 10px;
+}
+.rlbl {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.rcopy {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.rcopy input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.ibtn {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ibtn svg {
+  width: 22px;
+  height: 22px;
+}
+.ibtn:hover {
+  background: #f6efdf;
+}
+.ibtn.done {
+  color: var(--accent);
+  border-color: var(--accent);
+}

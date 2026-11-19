@@ -42,4 +42,5 @@ CSS는 `common.css` → `room.css` → `village.css` → `shared-room.css` → `
 - 화면의 `id`, `data-act`는 기능 연결에 사용한다. 문구만 바꿀 때는 그대로 둔다.
 - 스크립트는 `room.js` → `village.js` → `shared-room.js` → `neighbor.js` → `scene.js` → `app.js` 순서로 읽는다. 앞의 파일들은 기능을 정의하고, `app.js`가 상태를 불러온 뒤 각 `bind*` 함수를 한 번씩 호출해 이벤트와 타이머를 시작한다. 빌드 도구나 서버 없이 열 수 있도록 기존 일반 스크립트 방식을 유지한다.
 - 현재 프론트 저장소는 `localStorage`의 `myroom-proto-v1`이다. 백엔드 API는 구현돼 있지만 이 화면에 연결하는 작업은 별도다.
+- 코드 모양은 한 줄이 120자를 넘지 않게 Prettier로 정리해 둔 상태다. 고친 뒤 모양이 흐트러졌으면 저장소 루트에서 `npx prettier@3 --single-quote --print-width 120 --write "frontend/js/*.js" "frontend/css/*.css"`로 다시 정리한다(저장소에 설치하지 않고 그때그때 내려받아 쓴다). 긴 문자열·HTML 조각은 그대로 길 수 있다.
 - 수정 후 저장소 루트에서 `npm run verify`를 실행한다. 화면 모양도 바꿨다면 `npm run e2e`와 브라우저에서 PC·폰 폭을 확인한다.

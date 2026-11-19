@@ -84,6 +84,14 @@ public class RoomRepository {
                 where c.announce""", now.toString(), now.toString(), now.toString(), now.toString(), staleBefore.toString());
     }
 
+    /**
+     * 끝난 지 보관 기간이 지난 방을 지운다: 일찍 끝낸 방은 closed_at, 아니면 close_at이 {@code endedBefore} 이전(같은 시각 포함)인 방.
+     * 글·참여자·알림은 외래키(ON DELETE CASCADE)로 함께 지워진다. 개설 기록(room_open_log)·가져온 기록(book_room_archive)·머문 시간(camp_stay)은 남는다.
+     */
+    public int deleteEndedBefore(Instant endedBefore) {
+        return dsl.execute("delete from shared_room where coalesce(closed_at, close_at) <= ?::timestamptz", endedBefore.toString());
+    }
+
     /** 종료 시각이 지났는데 status가 아직 CLOSED가 아닌 방을 CLOSED로 맞춘다. closed_at은 일찍 끝낸 방만 가지므로 건드리지 않는다. */
     public int markExpiredClosed(Instant now) {
         return dsl.execute("update shared_room set status = 'CLOSED' where status <> 'CLOSED' and closed_at is null and close_at <= ?::timestamptz", now.toString());

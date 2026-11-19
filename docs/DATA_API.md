@@ -225,9 +225,8 @@
 | 1분 | `shared_room.open_at <= now()` 이고 `open_notified_at is null`인 방을 선점(`open_notified_at = now`) → `room_alarm` 사용자 + 개설자에게 개방 푸시. 상태는 `SCHEDULED`→`OPEN`. 열린 지 30분이 넘었거나 이미 끝난 방은 표시만 하고 알리지 않는다. **구현(`RoomOpenService`·`RoomOpenBatch`, 결정 #64)**: 대상 선정까지, 푸시 전송은 로그만(다음 단계) |
 | 1분 | `status<>'CLOSED' AND closed_at is null AND close_at <= now()` → `status='CLOSED'`. **`closed_at`은 채우지 않는다**(일찍 끝낸 방만 가지며 보관 7일은 `closed_at` 없으면 `close_at` 기준). 구현됨(결정 #64) |
 | 10분 | `status='RUNNING' AND started_at + 3h < now()` → `NEEDS_CONFIRM` |
-| 매일 새벽 | `closed_at + 7일 < now()` 공유방 하드 삭제 (일찍 끝낸 방도 끝낸 날부터 7일. 예정 종료일 `close_at` 기준이 아니다) (메시지 → 참여자 → 방) |
+| 매일 04:00(한국) | `coalesce(closed_at, close_at) + 7일 <= now()` 공유방 하드 삭제 (일찍 끝낸 방도 끝낸 날부터 7일. 예정 종료일 `close_at` 기준이 아니다). 글·참여자·알림은 외래키로 함께 지워지고 개설 기록·가져온 기록·머문 시간은 남는다. **구현(`RoomPurgeService`·`RoomPurgeBatch`, 결정 #66)** |
 | 1시간 | `plaza_message.created_at + 24h < now()` 하드 삭제 |
-| 매일 | 가져오기 마감 D-1 알림 |
 
 ## 클라이언트 타이머 표시 (웹)
 
@@ -253,7 +252,7 @@ sync();
 
 - **개방·종료 배치(1분)**: 대상 선정까지 구현했다(`RoomOpenService`·`RoomOpenBatch`, 결정 #64). `open_notified_at`으로 한 번만 선점하고, `status`를 `OPEN`·`CLOSED`로 맞춘다. **남은 것은 실제 푸시 전송**이다(`PushSender`의 메시지 모양을 방 개방용으로 일반화 → VAPID 실발송). 지금은 알릴 대상 목록을 만들고 로그만 남긴다.
 - **가져오기 마감 D-1 알림 / 자동 가져오기 옵션**(SPEC "마감 알림"): 아직 없다.
-- **하드 삭제(매일 새벽)**: `closed_at`(없으면 `close_at`) + 7일이 지난 방을 지운다. 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워진다. `room_open_log`는 방을 지워도 남겨야 하고(하루 3번 제한), `book_room_archive`는 영구라 지우지 않는다(`room_id`에 외래키가 없어 방이 지워져도 남는다).
+- **하드 삭제(매일 새벽)**: 구현했다(`RoomPurgeService`·`RoomPurgeBatch`, 매일 04:00 한국 시간, 결정 #66). 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워지고, `room_open_log`·`book_room_archive`·`camp_stay`는 방 외래키가 없어 남는다.
 - **모닥불 머문 시간**: 구현했다(`CampStayService`, `V14__camp_stay.sql`, `GET /me/reading-time`, 결정 #65). 남은 것: 퇴장을 못 부른 열린 입장 행은 다음 입장 때 지워질 뿐 따로 청소하지 않는다(사용자당 하나라 쌓이지 않는다). 진행 중인 스탠드와 겹치는 열린 입장은 퇴장 뒤 합산에서 정리된다.
 - **광장 접속 인원 `GET /plaza/presence`**: 연결(SSE/WebSocket) 수로 세는데 연결 방식·경로가 문서에 정해져 있지 않아 만들지 않았다. 정원 100명이 차면 마을 입장 연결이 409를 받는 규칙까지 포함해 연결 방식을 먼저 정해야 한다.
 - **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`로 함께 지워진다). 재입장하면 보관 동의를 다시 받으므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다. 가져온 기록을 지우는 API(가져오기 취소)는 없다.

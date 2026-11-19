@@ -146,6 +146,37 @@ function fakeServer() {
         const min = ss.filter((s) => s.status === 'DONE' && day(s.endedAt) === day(srv.now())).reduce((a, s) => a + Math.floor((s.endedAt - s.startedAt) / 60000), 0);
         return res(200, { date: day(srv.now()), minutes: min, serverNow: iso(srv.now()) });
       }
+      // 달력·월 목표 (독서한 날 = 끝난 스탠드·직접 기록과 완독한 날, 한국 날짜. 목표는 달별, 없으면 앞선 달에서 이어받음)
+      const kd = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+      const goals = (user.goals = user.goals || {});
+      const nowYm = kd(srv.now()).slice(0, 7);
+      const goalOf = (ym) => {
+        if (goals[ym]) return { goal: goals[ym].goal, changes: goals[ym].changes, inherited: false };
+        const ks = Object.keys(goals).filter((k) => k < ym).sort();
+        return ks.length ? { goal: goals[ks.pop()].goal, changes: [], inherited: true } : { goal: null, changes: [], inherited: false };
+      };
+      if (method === 'GET' && (m = path.match(/^\/me\/calendar(?:\?month=(\d{4}-\d{2}))?$/))) {
+        const ym = m[1] || nowYm;
+        if (ym > nowYm) return res(400, { error: 'FUTURE', message: '이번 달보다 뒤는 볼 수 없어요' });
+        const all = new Set([...ss.filter((s) => s.status === 'DONE').map((s) => kd(s.endedAt)), ...books.filter((b) => b.status === 'DONE').map((b) => kd(b.finishedAt))]);
+        let streak = null;
+        if (ym === nowYm) {
+          streak = 0;
+          const d = new Date(kd(srv.now()) + 'T00:00:00Z');
+          if (!all.has(kd(srv.now()))) d.setUTCDate(d.getUTCDate() - 1);
+          while (all.has(d.toISOString().slice(0, 10))) { streak++; d.setUTCDate(d.getUTCDate() - 1); }
+        }
+        const g = goalOf(ym);
+        return res(200, { month: ym, days: [...all].filter((x) => x.startsWith(ym)).sort(), streak, finishedCount: books.filter((b) => b.status === 'DONE' && kd(b.finishedAt).startsWith(ym)).length,
+          goal: g.goal, goalChanges: g.changes, goalInherited: g.inherited, serverNow: iso(srv.now()) });
+      }
+      if (method === 'PUT' && path === '/me/goal') {
+        const v = body.monthlyGoal;
+        if (!Number.isInteger(v) || v < 1 || v > 99) return res(400, { error: 'BAD_GOAL', message: '목표는 1~99권으로 정해 주세요' });
+        const cur = goalOf(nowYm), e = goals[nowYm] || (goals[nowYm] = { goal: cur.goal == null ? 1 : cur.goal, changes: [] });
+        if (e.goal !== v) { e.changes.push({ at: kd(srv.now()), from: e.goal, to: v }); e.goal = v; }
+        return res(200, { month: nowYm, goal: e.goal, goalChanges: e.changes, goalInherited: false });
+      }
       if (method === 'POST' && path === '/sessions/start') {
         const bk = books.find((x) => x.status === 'READING');
         if (!bk) return res(400, { error: 'NO_READING_BOOK', message: '소파에 책을 먼저 올려 주세요' });

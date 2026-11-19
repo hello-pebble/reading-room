@@ -14,6 +14,7 @@ function goalFor(ym) {
   return { goal: ks.length ? S.goals[ks[ks.length - 1]].goal : null, changes: [], set: false };
 }
 function setGoal(v) {
+  if (API.enabled) return serverSetGoal(v); // 서버가 받아들인 뒤에 바뀐다 (calendar.js)
   const ym = curYM(),
     prev = goalFor(ym);
   v = Math.min(99, Math.max(1, Math.round(+v) || 1));
@@ -32,6 +33,7 @@ function setGoal(v) {
 }
 // 달력: 한국 시간 기준. 독서등을 끄며 저장한 날과 완독한 날을 독서한 날로 센다. off는 이번 달 기준으로 몇 달 전인지(0=이번 달, -1=지난 달).
 function calData(off = 0) {
+  if (API.enabled) return calDataServer(off); // 서버가 센 독서한 날·연속일·완독 수 (calendar.js)
   const kst = (ts) => new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
   const todayS = kst(Date.now()),
     [ty, tm, td] = todayS.split('-').map(Number),

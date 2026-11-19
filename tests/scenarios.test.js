@@ -683,7 +683,7 @@ test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로
   await settle();
   a.click('#logoutBtn');
   await settle();
-  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time)/.test(p)), ['/me', '/auth/logout']);
+  assert.deepEqual(srv.calls.map((c) => c.path).filter((p) => !/^\/(books|sessions|me\/reading-time|me\/calendar)/.test(p)), ['/me', '/auth/logout']);
   assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
   assert.equal(a.w.localStorage.getItem(TOKEN), null);
   assert.equal(a.ev('panelOpen'), 'login');
@@ -1042,5 +1042,103 @@ test('서버 오늘 읽은 시간: 로그인하면 서버가 센 오늘 분이 �
     s.seedSession('alice', { startedAt: s.now() - 90 * MIN, endedAt: s.now() - 30 * MIN, status: 'DONE', endedBy: 'LAMP' });
   });
   assert.equal(a.ev('todayMin()'), 60);
+  fin(a);
+});
+
+// ---- 서버 연결 3단계: 달력·월 목표 (서버가 독서한 날·연속일·목표를 센다) ----
+const kdOf = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+const calCalls = (srv) => calls(srv, 'GET', /^\/me\/calendar/);
+const goalInput = (a) => a.doc.getElementById('goal');
+const doneToday = (s, minutes = 30) =>
+  s.seedSession('alice', { startedAt: s.now() - minutes * MIN - MIN, endedAt: s.now() - MIN, status: 'DONE', endedBy: 'LAMP' });
+
+test('서버 달력: 이번 달 독서한 날·연속일·완독 수를 서버에서 불러와 보여 준다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    doneToday(s);
+    s.seedBook('alice', { title: '끝낸 책', totalPages: 100, status: 'DONE', finishedAt: new Date().toISOString() });
+  });
+  assert.equal(calCalls(srv).length, 1, '로그인 때 이번 달을 한 번 불러와요');
+  assert.match(a.ev('hdrText()'), /1일 연속 기록/);
+  lamp(a);
+  a.ev(`openF('calendar')`);
+  const today = +kdOf(Date.now()).slice(8);
+  const on = [...a.doc.querySelectorAll('#panel .cal i.on')].map((i) => +i.textContent);
+  assert.deepEqual(on, [today]);
+  assert.match(a.doc.getElementById('panel').textContent, /1일/);
+  assert.equal(goalInput(a).value, '1');
+  assert.match(text(a, 'goalStat'), /1/);
+  fin(a);
+});
+
+test('서버 달력: 지난 달로 가면 그 달을 서버에서 불러온다(연속일은 이번 달만)', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 40 * 86400000, endedAt: s.now() - 40 * 86400000 + 30 * MIN, status: 'DONE', endedBy: 'LAMP' });
+  });
+  a.ev(`openF('calendar')`);
+  a.click('#panel [data-act=calPrev]');
+  await settle();
+  const prev = calCalls(srv).map((c) => c.path).find((p) => /month=/.test(p));
+  assert.ok(prev, '지난 달을 요청해요');
+  assert.equal(a.ev('panelView.calOff'), -1);
+  assert.ok(a.doc.querySelectorAll('#panel .cal i').length >= 28);
+  fin(a);
+});
+
+test('서버 월 목표: 칸을 벗어나면 1~99로 맞춰 서버에 보내고, 서버가 준 변경 기록을 보여 준다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  a.ev(`openF('calendar')`);
+  a.change('#goal', '5');
+  await settle();
+  assert.deepEqual(calls(srv, 'PUT', /^\/me\/goal$/)[0].body, { monthlyGoal: 5 });
+  assert.equal(goalInput(a).value, '5');
+  assert.match(text(a, 'goalNote'), /목표를 바꿨어요 · 1→5권/);
+  a.change('#goal', '500');
+  await settle();
+  assert.equal(calls(srv, 'PUT', /^\/me\/goal$/).at(-1).body.monthlyGoal, 99);
+  assert.equal(goalInput(a).value, '99');
+  const n = calls(srv, 'PUT', /^\/me\/goal$/).length;
+  a.change('#goal', '');
+  await settle();
+  assert.equal(calls(srv, 'PUT', /^\/me\/goal$/).length, n, '빈 값은 보내지 않아요');
+  a.click('#panel [data-act=goalDec]');
+  await settle();
+  assert.equal(calls(srv, 'PUT', /^\/me\/goal$/).at(-1).body.monthlyGoal, 98);
+  assert.equal(goalInput(a).value, '98');
+  fin(a);
+});
+
+test('서버 월 목표 실패: 서버 문구를 보이고 목표는 그대로다', async () => {
+  const { srv, a } = await bookApp((s) => readingSeed(s));
+  a.ev(`openF('calendar')`);
+  srv.down = true;
+  a.change('#goal', '7');
+  await settle();
+  assert.match(text(a, 'toast'), /서버에 연결할 수 없어요/);
+  assert.equal(goalInput(a).value, '1');
+  fin(a);
+});
+
+test('서버 달력 새로고침: 스탠드를 끄거나 완독하면 이번 달을 다시 불러와 연속일·완독 수가 바뀐다', async () => {
+  const { srv, a } = await bookApp((s) => {
+    readingSeed(s);
+    s.seedSession('alice', { startedAt: s.now() - 30 * MIN });
+  });
+  assert.equal(a.ev('calData().streak'), 0);
+  const before = calCalls(srv).length;
+  lamp(a);
+  a.click('#panel [data-act=stopAsk]');
+  a.click('#panel [data-act=stopSave]');
+  await settle();
+  await settle();
+  assert.ok(calCalls(srv).length > before, '끈 뒤 다시 불러와요');
+  assert.equal(a.ev('calData().streak'), 1);
+  sofa(a);
+  a.click('#panel [data-act=finish]');
+  a.click('#panel [data-act=doFinish]');
+  await settle();
+  await settle();
+  assert.equal(a.ev('calData().done'), 1);
   fin(a);
 });

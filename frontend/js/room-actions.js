@@ -6,6 +6,7 @@ function bindRoomEvents() {
     if (e.target.id === 'goal') {
       const s = e.target.value;
       if (s !== '') setGoal(+s);
+      if (API.enabled) return; // 서버 응답이 오면 칸을 맞춘다
       save();
       renderPanel();
       render();
@@ -17,6 +18,7 @@ function bindRoomEvents() {
       if (!(v >= 1)) return;
       v = Math.min(99, v);
       if (v !== +e.target.value) e.target.value = v;
+      if (API.enabled) return; // 서버 연결 모드는 칸을 벗어날 때 한 번만 보낸다
       setGoal(v);
       const c = calData(),
         bar = document.getElementById('goalBar'),

@@ -88,8 +88,9 @@ function render() {
       'aria-label',
       visiting ? '이웃집 책장' : VIEW === 'shared' ? '공유방 모닥불' : VIEW === 'village' ? '마을' : '내 방',
     );
-  document.getElementById('online').textContent =
-    '접속 (' + String(NPCS.length + 1).padStart(2, '0') + '/' + VMAX + ')'; // 마을 접속 인원/정원. 체험판은 보이는 이웃 수 + 나
+  document.getElementById('online').textContent = API.enabled
+    ? ''
+    : '접속 (' + String(NPCS.length + 1).padStart(2, '0') + '/' + VMAX + ')'; // 마을 접속 인원/정원. 체험판은 보이는 이웃 수 + 나
   document.getElementById('hdrStats').textContent = hdrText(lampOn ? ' · ⏱ ' + fmtHMS(elapsed()) : '');
   renderNotice();
   document.getElementById('hdrAvatar').innerHTML = G3

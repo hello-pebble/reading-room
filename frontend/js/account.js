@@ -58,6 +58,7 @@ function applyUser(u) {
 
 // 로그인한 직후와 새로고침 때: 서버의 책·메모(books.js)와 켜진 스탠드·오늘 읽은 시간(sessions.js)을 불러온다
 const afterSignIn = () => {
+  plazaReset(); // 다른 계정의 광장 글 표시가 남지 않게 (plaza.js)
   calReset(); // 다른 계정의 달력이 남지 않게. 이번 달은 다음 화면 그리기 때 서버에서 받는다 (calendar.js)
   return Promise.all([loadBooks(), loadSession()]).catch((e) => toast(e.message));
 };

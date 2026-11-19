@@ -76,6 +76,14 @@ function fakeServer() {
   const raise = (b, page) => { if (page != null && page > b.currentPage) b.currentPage = b.totalPages ? Math.min(page, b.totalPages) : page; };
   const srv = {
     calls, users, tokens, down: false,
+    plaza: [], // 광장 글 (오래된 것부터)
+    // 그 계정이 쓴 광장 글을 미리 만들어 둔다. agoMs: 몇 ms 전에 썼는지
+    seedPlaza(label, content, agoMs = 0) {
+      const u = users[label];
+      const msg = { id: ++seq, publicId: u.publicId, nickname: u.nickname, avatar: {}, content, createdAt: new Date(Date.now() + srv.skew - agoMs).toISOString() };
+      srv.plaza.push(msg);
+      return msg;
+    },
     skew: 0, // 서버 시계가 화면 시계보다 앞선 만큼(ms)
     now() { return Date.now() + srv.skew; },
     // 그 계정의 스탠드 세션을 미리 만들어 둔다. startedAt·lastCheckAt·endedAt은 서버 시각(ms), 책은 그 계정의 읽는 책
@@ -145,6 +153,23 @@ function fakeServer() {
         const day = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
         const min = ss.filter((s) => s.status === 'DONE' && day(s.endedAt) === day(srv.now())).reduce((a, s) => a + Math.floor((s.endedAt - s.startedAt) / 60000), 0);
         return res(200, { date: day(srv.now()), minutes: min, serverNow: iso(srv.now()) });
+      }
+      // 마을 광장 대화 (모든 계정이 한 줄을 나눠 쓴다. 40자·같은 글 연속 금지·3초 3건만 흉내 낸다)
+      if (method === 'GET' && (m = path.match(/^\/plaza\/messages(?:\?since=(.+))?$/))) {
+        const since = m[1] ? Date.parse(decodeURIComponent(m[1])) : null;
+        const out = since == null ? srv.plaza.slice(-30) : srv.plaza.filter((x) => Date.parse(x.createdAt) >= since).slice(0, 30);
+        return res(200, out);
+      }
+      if (method === 'POST' && path === '/plaza/messages') {
+        const content = String(body.content == null ? '' : body.content).trim();
+        if (!content || [...content].length > 40) return res(400, { error: 'BAD_CONTENT', message: '한 줄은 1~40자로 적어 주세요' });
+        const mine = srv.plaza.filter((x) => x.publicId === user.publicId), t = srv.now();
+        if (mine.filter((x) => t - Date.parse(x.createdAt) < 3000).length >= 3) return res(429, { error: 'TOO_FAST', message: '조금 뒤에 보내 주세요' });
+        const last = mine[mine.length - 1];
+        if (last && last.content === content && t - Date.parse(last.createdAt) < 30000) return res(409, { error: 'DUPLICATE_MESSAGE', message: '같은 말을 연달아 보낼 수 없어요' });
+        const msg = { id: ++seq, publicId: user.publicId, nickname: user.nickname, avatar: {}, content, createdAt: new Date(t).toISOString() };
+        srv.plaza.push(msg);
+        return res(201, msg);
       }
       // 달력·월 목표 (독서한 날 = 끝난 스탠드·직접 기록과 완독한 날, 한국 날짜. 목표는 달별, 없으면 앞선 달에서 이어받음)
       const kd = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });

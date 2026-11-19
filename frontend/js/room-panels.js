@@ -285,7 +285,7 @@ function windowPanel() {
       .join('') +
     '<p class="muted">공유방 기록은 종료 후 7일 동안만 보관돼요.</p>' +
     `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구 (창밖 풍경 바꿔 보기)</summary><div class="row wrap" style="margin-top:8px"><button data-act="sceneNext">다른 날씨 보기</button></div><p class="muted">실제로는 날짜마다 풍경이 바뀌어요. 여기서는 다음 날씨로 넘겨 봐요.</p></details>` +
-    (S.news.some((n) => n.kind === 'SOON')
+    (!API.enabled && S.news.some((n) => n.kind === 'SOON')
       ? `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구 (개방 시각 앞당기기)</summary><div class="row wrap" style="margin-top:8px">${S.news
           .filter((n) => n.kind === 'SOON')
           .map((n) => `<button data-act="openNow" data-id="${n.id}">${esc(n.title)} 지금 열기</button>`)

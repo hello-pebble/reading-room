@@ -65,7 +65,7 @@ const rcHash = (s) => {
   return h;
 };
 const rcColor = (s) => SPINE[rcHash(s) % SPINE.length];
-const rcEmpty = (n) => n.messages && !n.messages.some((m) => !m.del);
+const rcEmpty = (n) => n.messages && !(n.srv && !n.msgLoaded) && !n.messages.some((m) => !m.del); // 서버 방은 글을 열어 보기 전에는 비었다고 단정하지 않는다
 // 내 읽기 위치: 다 읽었거나 포기한 책이면 전부 열림(all), 읽는 중이면 현재 쪽, 아니면 쪽수 없음
 function myPos(n) {
   const b = rcKey(roomBook(n));
@@ -81,6 +81,7 @@ function rcSpoil(n) {
 }
 const rcLater = (n) => S.later.some((b) => rcKey(b.title) === rcKey(roomBook(n)));
 function rcUnread(n) {
+  if (n.srv) return !!n.unread; // 새 글 별은 서버가 센다 (rooms.js)
   return !!(n.agreed && n.kind === 'OPEN' && n.messages.some((m) => !m.del && !rcMine(m) && m.ts > (n.lastRead || 0)));
 }
 const rcPage = (n) => {
@@ -97,6 +98,7 @@ const rcMembersOf = (n, c) => {
 };
 // 옛 형식 방을 대화용 필드로 보정하고, 열린 남의 방에는 시연용 글을 몇 개 깔아 둔다
 function rcNorm(n) {
+  if (n.srv) return; // 서버의 방은 서버가 준 값 그대로 쓴다 (가짜 참여자·대화를 채우지 않는다)
   if (!n.rtype) n.rtype = 'SAME';
   if (!n.book) n.book = shortTitle(n);
   if (!n.max || n.max > RMAX) n.max = RMAX; // 방 최대 인원은 10명까지 (예전에 더 크게 만든 방도 맞춘다)
@@ -218,6 +220,7 @@ function rcRefresh(n, force) {
 function rcAfter(id) {
   const n = S.news.find((x) => x.id === id);
   if (!n || !n.agreed || (panelView.tab || 'chat') !== 'chat') return;
+  roomChatOpened(n); // 서버의 글을 받기 시작한다 (rooms-chat.js)
   const lg = document.getElementById('rcLog');
   if (lg) {
     const nw = document.getElementById('rcNew');
@@ -256,6 +259,7 @@ function rcFoot(n) {
   return `<div class="foot">${chip}<div class="row"><textarea id="rc" rows="2" maxlength="${MAXMSG}" placeholder="이야기를 남겨요" style="flex:1;resize:none">${esc(panelView.draft || '')}</textarea><button class="primary" data-act="rcSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="rcE" style="margin-top:4px"></div></div>`;
 }
 function rcSend(n) {
+  if (API.enabled) return serverRoomSend(n); // 글은 서버가 받는다 (rooms-chat.js)
   const ta = document.getElementById('rc'),
     e = document.getElementById('rcE'),
     t = ta.value.trim().slice(0, MAXMSG);
@@ -325,7 +329,7 @@ function rcInfoHtml(n, split) {
     tl = '';
   if (n.mine && n.kind !== 'CLOSED')
     a += `<button style="width:100%;margin-top:6px;color:var(--danger)" data-act="closeRoom" data-id="${n.id}">${n.kind === 'SOON' ? '모닥불 취소' : '일찍 끝내기'}</button>`;
-  if (n.kind === 'OPEN' && (n.agreed || n.mine))
+  if (n.kind === 'OPEN' && (n.agreed || n.mine) && !API.enabled)
     tl = `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">테스트 도구</summary><div class="row wrap" style="margin-top:8px">${n.agreed && n.rtype !== 'OWN' ? `<button data-act="rcTest" data-id="${n.id}" data-v="sofa">이 책을 소파에 올리기</button><button data-act="rcTest" data-id="${n.id}" data-v="page">내 쪽 +30쪽</button>` : ''}${n.agreed ? `<button data-act="rcTest" data-id="${n.id}" data-v="msg">새 글 도착시키기</button>` : ''}${n.mine ? `<button data-act="friendIn" data-id="${n.id}">친구 1명 들어오기</button>` : ''}</div><p class="muted">친구는 정원이 차면 더 들어올 수 없어요.</p></details>`;
   const tail = '<p class="muted" style="margin-top:10px">공유방 기록은 종료 후 7일 동안만 보관돼요.</p>';
   return split ? [h + tl + tail, a] : h + a + tl + tail;

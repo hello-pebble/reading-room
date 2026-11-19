@@ -430,6 +430,7 @@ function roomAction(act, b) {
   }
   if (act === 'openBook') {
     panelView = { book: +b.dataset.id, drop: b.dataset.drop === '1', list: panelView.list };
+    if (API.enabled) loadBookRooms(+b.dataset.id).catch((e) => toast(e.message)); // 가져온 공유방 기록 (rooms.js)
     renderPanel();
     return true;
   }

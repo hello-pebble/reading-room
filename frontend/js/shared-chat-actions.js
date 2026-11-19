@@ -54,6 +54,15 @@ function rcAct(act, b) {
   }
   if (act === 'rcAgree') {
     if (!n) return true;
+    if (API.enabled) {
+      serverRoomAct(n, 'agree', (m) => {
+        if (!m) return;
+        panelView.readAt = m.lastRead || 0;
+        renderPanel();
+        enterCamp(m);
+      });
+      return true;
+    }
     if (n.left && n.people >= n.max) {
       toast('정원이 가득 찼어요 (' + n.people + '/' + n.max + '명)');
       return true;
@@ -119,6 +128,13 @@ function rcAct(act, b) {
   }
   if (act === 'rcLeave') {
     if (!n) return true;
+    if (API.enabled) {
+      serverRoomAct(n, 'leave', () => {
+        closePanel();
+        toast('방에서 나왔어요. 내 글은 "나간 참여자"로 남아요');
+      });
+      return true;
+    }
     n.messages.forEach((m) => {
       if (m.who === '나') m.left = true;
     });

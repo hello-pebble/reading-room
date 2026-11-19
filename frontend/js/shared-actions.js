@@ -9,6 +9,18 @@ function sharedRoomAction(act, b) {
   }
   if (act === 'alarm') {
     const n = S.news.find((x) => x.id === b.dataset.id);
+    if (API.enabled) {
+      serverRoomAct(n, 'alarm', (m) => {
+        if (!m || !m.alarm) return;
+        if (notifyState() === 'ask') askNotify();
+        toast(
+          notifyState() === 'off' || notifyState() === 'none'
+            ? '브라우저 알림이 꺼져 있어요. 열려 있을 때 화면으로만 알려드려요'
+            : '개방되면 알려드릴게요',
+        );
+      });
+      return true;
+    }
     n.alarm = !n.alarm;
     save();
     if (n.alarm && notifyState() === 'ask') askNotify();
@@ -128,6 +140,22 @@ function sharedRoomAction(act, b) {
   }
   if (act === 'import') {
     const n = S.news.find((x) => x.id === b.dataset.id);
+    if (API.enabled) {
+      serverRoomAct(n, 'import', (m, res) => {
+        if (!res) return;
+        const bk = [S.reading, ...S.finished, ...S.dropped, ...S.later].find((x) => x && x.id === res.bookId);
+        const t = bk ? bk.title : '책';
+        toast(
+          res.bookCreated
+            ? '『' + t + '』을 "나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요'
+            : res.bookStatus === 'READING'
+              ? '『' + t + '』을 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요'
+              : '『' + t + '』에 공유방 탭이 생겼어요',
+        );
+        if (bk) loadBookRooms(bk.id).catch(() => {});
+      });
+      return true;
+    }
     if (rcEmpty(n)) {
       toast('가져올 대화가 없어요');
       return true;

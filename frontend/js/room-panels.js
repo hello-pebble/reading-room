@@ -280,7 +280,6 @@ function windowPanel() {
             : rcEmpty(n)
               ? `<span class="muted">가져올 대화가 없어요</span>`
               : `<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
-        if (API.enabled && n.kind !== 'OPEN') act = ''; // 알림·가져오기는 5‑3단계에서 서버와 잇는다
         return `<div class="card"><div class="row"><span class="badge ${c}">${l}</span>${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}<b class="grow" style="font-weight:normal">${esc(n.title)}</b></div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}</div>${act}</div>`;
       })
       .join('') +

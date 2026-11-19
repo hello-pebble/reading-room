@@ -1386,3 +1386,199 @@ test('서버 초대 링크: #join= 코드로 열면 로그인이 끝난 뒤에 �
   assert.equal(a.ev('PENDING_JOIN'), '', '한 번만 들어가요');
   fin(a);
 });
+
+// ---- 서버 연결 5‑2단계: 공유방 대화·읽음 (서버의 글을 보고, 보내고, 읽음을 알린다) ----
+// 밥의 열린 방에 나(alice)가 보관 동의까지 하고 들어가 있다. 글: 밥(12쪽) · 나 · 나간 사람(다람)
+const chatRoom = (s, o = {}) => {
+  s.seed('carol', '다람');
+  const r = s.seedRoom('bob', { title: '『데미안』 같이 읽기', ...o });
+  joinSeeded(s, r, true);
+  r.parts.push({ uid: s.users.carol.id, agreed: Date.now(), left: true });
+  s.seedRoomMsg(r, 'bob', '안녕하세요', { page: 12, agoMs: 9000 });
+  s.seedRoomMsg(r, 'alice', '반가워요', { agoMs: 8000 });
+  s.seedRoomMsg(r, 'carol', '저는 나갈게요', { agoMs: 7000 });
+  return r;
+};
+const chatApp = async (setup) => {
+  const r = await roomApp(setup);
+  r.a.ev('ROOM_POLL = 30'); // 새 글 확인 간격을 줄인다
+  return r;
+};
+const openChat = async (a, n) => {
+  await toVillage(a);
+  a.ev(`openV('room:${n.id}')`); // 열린 방에 동의했으면 모닥불 장면으로 들어가고 대화창이 뜬다
+  await settle();
+  await settle();
+};
+
+test('서버 공유방 대화: 방을 열면 서버의 글을 불러와 보여 준다(내 글은 나, 나간 사람은 "나간 참여자", 쪽수 표시)', async () => {
+  const { srv, a } = await chatApp((s) => chatRoom(s));
+  const n = newsOf(a)[0];
+  await openChat(a, n);
+  assert.equal(a.ev('VIEW'), 'shared');
+  const msgs = JSON.parse(a.ev(`JSON.stringify(S.news[0].messages.map((m) => [m.who, m.text, m.page, !!m.left]))`));
+  assert.deepEqual(msgs, [['밥', '안녕하세요', 12, false], ['나', '반가워요', null, false], ['나간 참여자', '저는 나갈게요', null, true]]);
+  const html = a.ev(`rcLogHtml(S.news[0])`);
+  assert.match(html, /밥/);
+  assert.match(html, /나간 참여자/);
+  assert.match(html, /12쪽/);
+  assert.ok(calls(srv, 'GET', /\/messages$/).length >= 1);
+  fin(a);
+});
+
+test('서버 공유방 대화: 열려 있는 동안 새 글만 받아 보고, 창을 닫으면 확인을 멈춘다', async () => {
+  const { srv, a } = await chatApp((s) => chatRoom(s));
+  await openChat(a, newsOf(a)[0]);
+  srv.seedRoomMsg(srv.rooms[0], 'bob', '새로 온 글');
+  await sleep(120);
+  const texts = JSON.parse(a.ev(`JSON.stringify(S.news[0].messages.map((m) => m.text))`));
+  assert.deepEqual(texts.filter((t) => t === '새로 온 글'), ['새로 온 글'], '한 번만 들어와요');
+  assert.ok(calls(srv, 'GET', /\/messages\?after=\d+$/).length >= 1, '그 뒤로는 마지막 글 번호(after)로 물어요');
+  a.ev('closePanel()');
+  await settle();
+  const n = srv.calls.length;
+  await sleep(120);
+  assert.equal(srv.calls.filter((c, i) => i >= n && /\/messages/.test(c.path)).length, 0, '창이 없으면 서버에 묻지 않아요');
+  fin(a);
+});
+
+test('서버 공유방 보내기: 서버가 만든 글이 보이고 칸이 비며, 서버가 거절하면 문구를 보이고 쓰던 글이 남는다', async () => {
+  const { srv, a } = await chatApp((s) => chatRoom(s));
+  await openChat(a, newsOf(a)[0]);
+  const ta = a.doc.getElementById('rc');
+  ta.value = '  오늘 읽었어요  ';
+  a.ev(`panelView.pg = 30; rcAct('rcSend', null)`);
+  await settle();
+  const c = calls(srv, 'POST', /\/messages$/);
+  assert.deepEqual(c[0].body, { content: '오늘 읽었어요', page: 30 });
+  assert.equal(a.ev(`S.news[0].messages.at(-1).text`), '오늘 읽었어요');
+  assert.equal(a.ev(`rcMine(S.news[0].messages.at(-1))`), true);
+  assert.equal(a.doc.getElementById('rc').value, '');
+  a.doc.getElementById('rc').value = '오늘 읽었어요';
+  a.ev(`rcAct('rcSend', null)`);
+  await settle();
+  assert.match(a.doc.getElementById('rcE').textContent, /같은 말을 연달아 보낼 수 없어요/);
+  assert.equal(a.doc.getElementById('rc').value, '오늘 읽었어요');
+  assert.equal(a.ev(`S.news[0].messages.filter((m) => m.text === '오늘 읽었어요').length`), 1);
+  fin(a);
+});
+
+test('서버 공유방 읽음: 다른 사람의 새 글이 있으면 별이 켜지고, 대화창을 열어 보면 읽음을 서버에 알려 꺼진다', async () => {
+  const { srv, a } = await chatApp((s) => {
+    const r = chatRoom(s);
+    r.parts.find((p) => p.uid === s.users.alice.id).lastRead = Date.now() - 8500; // 밥의 첫 글 뒤에 읽었다
+  });
+  const n = newsOf(a)[0];
+  assert.equal(n.unread, true);
+  assert.equal(a.ev(`rcUnread(S.news[0])`), true);
+  assert.match(a.ev(`roomCard(S.news[0])`), /새 글/);
+  await openChat(a, n);
+  assert.ok(calls(srv, 'POST', /\/read$/).length >= 1, '열어 보면 읽음을 알려요');
+  await settle();
+  assert.equal(a.ev(`rcUnread(S.news[0])`), false);
+  fin(a);
+});
+
+test('서버 종료된 공유방: 보관 동의한 방은 대화를 읽을 수 있고(보내기 칸은 없다), 열 때만 불러온다', async () => {
+  const { srv, a } = await chatApp((s) => chatRoom(s));
+  srv.rooms[0].closedAt = Date.now() - 1000; // 방이 끝났다
+  await srv.fetch('http://api.test/rooms', { headers: {} }).catch(() => {});
+  const { a: b } = { a };
+  b.ev('loadRooms()');
+  await settle();
+  const n = newsOf(b)[0];
+  assert.equal(n.kind, 'CLOSED');
+  await toVillage(b);
+  b.ev(`openV('room:${n.id}')`);
+  await settle();
+  await settle();
+  assert.equal(b.ev('VIEW'), 'village', '종료된 방은 모닥불에 들어가지 않고 창으로 읽어요');
+  assert.match(b.doc.getElementById('rcLog').textContent, /안녕하세요/);
+  assert.equal(b.doc.getElementById('rc'), null, '종료된 방에는 보내기 칸이 없어요');
+  fin(b);
+});
+
+// ---- 서버 연결 5‑3단계: 공유방 개방 알림·내 서재로 가져오기 (서버가 기록한다) ----
+const alarmApp = (setup) => roomApp((s) => joinSeeded(s, s.seedRoom('bob', { title: '『소년이 온다』 이야기방', openAt: Date.now() + 5 * HR }), false) || (setup && setup(s)));
+
+test('서버 개방 알림: 예정 방의 [알림 받기]가 서버에 켜고 끄며, 그 사이 열린 방이면 서버 문구가 나온다', async () => {
+  const { srv, a } = await alarmApp();
+  const n = () => newsOf(a)[0];
+  assert.equal(n().kind, 'SOON');
+  assert.match(a.ev(`roomCard(S.news[0])`), /알림 받기/, '서버 연결 모드에서도 알림 버튼이 보여요');
+  a.ev(`sharedRoomAction('alarm', { dataset: { id: S.news[0].id } })`);
+  await settle();
+  assert.equal(calls(srv, 'PUT', /\/alarm$/).length, 1);
+  assert.equal(n().alarm, true);
+  assert.match(a.ev(`roomCard(S.news[0])`), /알림 받는 중/);
+  a.ev(`sharedRoomAction('alarm', { dataset: { id: S.news[0].id } })`);
+  await settle();
+  assert.equal(calls(srv, 'DELETE', /\/alarm$/).length, 1);
+  assert.equal(n().alarm, false);
+  srv.rooms[0].openAt = Date.now() - 1000; // 그 사이 방이 열렸다
+  a.ev(`sharedRoomAction('alarm', { dataset: { id: S.news[0].id } })`);
+  await settle();
+  assert.match(text(a, 'toast'), /이미 열린 모닥불이에요/);
+  assert.equal(n().kind, 'OPEN', '서버 상태로 다시 맞춰요');
+  fin(a);
+});
+
+// 밥의 끝난 방: 밥(안녕)·나(반가워요), 나는 보관 동의까지 했다
+const closedRoom = (s, o = {}) => {
+  const r = s.seedRoom('bob', { title: '『데미안』 같이 읽기', isbn: '9788937460777', ...o });
+  r.closedAt = Date.now() - 1000;
+  joinSeeded(s, r, true);
+  if (!o.empty) {
+    s.seedRoomMsg(r, 'bob', '안녕하세요', { page: 12, agoMs: 9000 });
+    s.seedRoomMsg(r, 'alice', '반가워요', { agoMs: 8000 });
+  }
+  return r;
+};
+
+test('서버 가져오기: 같은 ISBN의 내 책에 붙고, 책의 공유방 탭에서 다른 참여자는 익명으로 보이며, 다시 열어도 가져옴 표시가 남는다', async () => {
+  const { srv, a } = await roomApp((s) => {
+    s.seedBook('alice', { title: '데미안', author: '헤세', isbn: '9788937460777', totalPages: 200, status: 'DONE', finishedAt: new Date().toISOString() });
+    closedRoom(s);
+  });
+  const n = newsOf(a)[0];
+  assert.equal(n.kind, 'CLOSED');
+  assert.equal(n.done, false);
+  assert.match(a.ev(`roomCard(S.news[0])`), /내 서재로 가져오기/, '글을 아직 안 불러왔어도 가져오기 버튼이 보여요');
+  a.ev(`sharedRoomAction('import', { dataset: { id: S.news[0].id } })`);
+  await settle();
+  await settle();
+  const c = calls(srv, 'POST', /\/import$/);
+  assert.equal(c.length, 1);
+  assert.equal(newsOf(a)[0].done, true);
+  assert.match(text(a, 'toast'), /『데미안』에 공유방 탭이 생겼어요/);
+  assert.match(a.ev(`roomCard(S.news[0])`), /내 서재로 가져옴/);
+  // 새로 불러와도(다른 화면에서 열어도) 가져옴 표시가 남는다
+  a.ev('loadRooms()');
+  await settle();
+  assert.equal(newsOf(a)[0].done, true);
+  // 책장에서 책을 열면 가져온 기록을 서버에서 불러온다
+  a.ev(`openF('shelf'); panelView = { book: S.finished[0].id, drop: false, list: 'finished' }; roomAction('openBook', { dataset: { id: String(S.finished[0].id), drop: '0' } })`);
+  await settle();
+  const rooms = JSON.parse(a.ev(`JSON.stringify(S.finished[0].rooms.map((r) => r.messages.map((m) => [m.who, m.text, m.page])))`));
+  assert.deepEqual(rooms, [[['참여자 A', '안녕하세요', 12], ['나', '반가워요', null]]]);
+  fin(a);
+});
+
+test('서버 가져오기: 내 책에 없으면 나중에 읽을 책으로 담기고, 대화가 없거나 책을 못 정하면 서버 문구가 나온다', async () => {
+  const { srv, a } = await roomApp((s) => {
+    closedRoom(s, { title: '『모모』 같이 읽기', isbn: '9788937462788' });
+    closedRoom(s, { title: '빈 방', empty: true });
+  });
+  const id = (t) => newsOf(a).find((n) => n.title === t).id;
+  a.ev(`sharedRoomAction('import', { dataset: { id: '${id('빈 방')}' } })`);
+  await settle();
+  assert.match(text(a, 'toast'), /가져올 대화가 없어요/);
+  a.ev(`sharedRoomAction('import', { dataset: { id: '${id('『모모』 같이 읽기')}' } })`);
+  await settle();
+  await settle();
+  assert.match(text(a, 'toast'), /"나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요/);
+  assert.equal(a.state().later.length, 1);
+  assert.equal(a.state().later[0].title, '모모');
+  assert.equal(a.state().finished.length, 0, '나중에 읽을 책은 완독으로 세지 않아요');
+  fin(a);
+});

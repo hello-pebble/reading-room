@@ -180,7 +180,7 @@ function roomCard(n, noAct, hideTitle) {
       : rcEmpty(n)
         ? `<span class="muted">가져올 대화가 없어요</span>`
         : `<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
-  if (noAct || (API.enabled && n.kind !== 'OPEN')) act = ''; // 알림·가져오기는 5‑3단계에서 서버와 잇는다
+  if (noAct) act = '';
   const tag = n.rtype ? `<span class="badge gray">${n.rtype === 'OWN' ? '각자 읽기' : '같은 책'}</span>` : '';
   return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}${hideTitle ? '' : `<b class="grow" style="font-weight:normal">${esc(n.title)}</b>`}</div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period ? ' · ' + esc(n.period) : ''}</div>${act}</div>`;
 }

@@ -65,7 +65,7 @@ const rcHash = (s) => {
   return h;
 };
 const rcColor = (s) => SPINE[rcHash(s) % SPINE.length];
-const rcEmpty = (n) => n.messages && !n.messages.some((m) => !m.del);
+const rcEmpty = (n) => n.messages && !(n.srv && !n.msgLoaded) && !n.messages.some((m) => !m.del); // 서버 방은 글을 열어 보기 전에는 비었다고 단정하지 않는다
 // 내 읽기 위치: 다 읽었거나 포기한 책이면 전부 열림(all), 읽는 중이면 현재 쪽, 아니면 쪽수 없음
 function myPos(n) {
   const b = rcKey(roomBook(n));
@@ -220,6 +220,7 @@ function rcRefresh(n, force) {
 function rcAfter(id) {
   const n = S.news.find((x) => x.id === id);
   if (!n || !n.agreed || (panelView.tab || 'chat') !== 'chat') return;
+  roomChatOpened(n); // 서버의 글을 받기 시작한다 (rooms-chat.js)
   const lg = document.getElementById('rcLog');
   if (lg) {
     const nw = document.getElementById('rcNew');
@@ -258,6 +259,7 @@ function rcFoot(n) {
   return `<div class="foot">${chip}<div class="row"><textarea id="rc" rows="2" maxlength="${MAXMSG}" placeholder="이야기를 남겨요" style="flex:1;resize:none">${esc(panelView.draft || '')}</textarea><button class="primary" data-act="rcSend" style="white-space:nowrap">보내기</button></div><div class="muted" id="rcE" style="margin-top:4px"></div></div>`;
 }
 function rcSend(n) {
+  if (API.enabled) return serverRoomSend(n); // 글은 서버가 받는다 (rooms-chat.js)
   const ta = document.getElementById('rc'),
     e = document.getElementById('rcE'),
     t = ta.value.trim().slice(0, MAXMSG);

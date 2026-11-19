@@ -85,6 +85,12 @@ function fakeServer() {
       srv.rooms.push(r);
       return r;
     },
+    // 그 방에 그 계정의 글을 미리 넣어 둔다 (보관 동의한 참여자여야 함). agoMs: 몇 ms 전
+    seedRoomMsg(room, label, content, o = {}) {
+      const u = users[label], msg = { id: ++seq, uid: u.id, content, page: o.page == null ? null : o.page, at: Date.now() + srv.skew - (o.agoMs || 0) };
+      (room.msgs = room.msgs || []).push(msg);
+      return msg;
+    },
     plaza: [], // 광장 글 (오래된 것부터)
     // 그 계정이 쓴 광장 글을 미리 만들어 둔다. agoMs: 몇 ms 전에 썼는지
     seedPlaza(label, content, agoMs = 0) {
@@ -170,10 +176,65 @@ function fakeServer() {
         const closed = r.closedAt || r.closeAt;
         return { id: r.id, kind: r.kind, title: r.title, isbn: r.isbn || null, status: roomStatus(r), openAt: iso(r.openAt), closeAt: iso(r.closeAt), closedAt: iso(r.closedAt),
           deleteAt: roomStatus(r) === 'CLOSED' ? iso(closed + 7 * 86400000) : null, participants: live.length, maxParticipants: r.max, mine: r.parts[0].uid === user.id,
-          joined: !!me && !me.left, agreed: !!me && !me.left && !!me.agreed, unread: false, alarm: false,
+          joined: !!me && !me.left, agreed: !!me && !me.left && !!me.agreed,
+          unread: !!me && !me.left && !!me.agreed && (r.msgs || []).some((x) => x.uid !== user.id && x.at > (me.lastRead || 0)), alarm: !!(me && !me.left && me.alarm),
           ownerNickname: Object.values(users).find((u) => u.id === r.parts[0].uid).nickname, inviteCode: r.parts[0].uid === user.id ? r.code : null };
       };
       const mineRooms = () => srv.rooms.filter((r) => { const p = r.parts.find((x) => x.uid === user.id); return p && !p.left; });
+      // 공유방 대화·읽음 (참여 중 + 보관 동의 뒤에만. 글은 번호 순, after는 마지막으로 본 글 번호)
+      if ((m = path.match(/^\/rooms\/(\d+)\/(messages|read)(?:\?after=(\d+))?$/))) {
+        const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);
+        if (!r) return res(404, { error: 'NOT_FOUND', message: '모닥불을 찾을 수 없어요' });
+        if (!me || me.left) return res(403, { error: 'NOT_PARTICIPANT', message: '참여 중인 모닥불이 아니에요' });
+        r.msgs = r.msgs || [];
+        if (m[2] === 'read' && method === 'POST') { me.lastRead = srv.now(); return res(200, { roomId: r.id, lastReadAt: iso(me.lastRead) }); }
+        if (!me.agreed) return res(403, { error: 'AGREE_REQUIRED', message: '보관 동의가 필요해요' });
+        if (method === 'GET') {
+          const view = (x) => { const who = r.parts.find((p) => p.uid === x.uid), left = !!who.left, u = Object.values(users).find((q) => q.id === x.uid);
+            return { id: x.id, publicId: left ? null : u.publicId, nickname: left ? '나간 참여자' : u.nickname, avatar: left ? null : {}, content: x.content, page: x.page, createdAt: iso(x.at), mine: x.uid === user.id, left }; };
+          const after = m[3] ? +m[3] : null;
+          return res(200, (after == null ? r.msgs.slice(-100) : r.msgs.filter((x) => x.id > after).slice(0, 100)).map(view));
+        }
+        if (method === 'POST') {
+          if (roomStatus(r) !== 'OPEN') return res(409, { error: 'ROOM_NOT_OPEN', message: '지금은 글을 보낼 수 없는 모닥불이에요' });
+          const content = String(body.content == null ? '' : body.content);
+          if (!content.trim() || [...content].length > 300) return res(400, { error: 'BAD_CONTENT', message: '글은 1~300자로 적어 주세요' });
+          if (body.page != null && r.kind === 'OWN') return res(400, { error: 'PAGE_NOT_ALLOWED', message: '각자 읽기 방에서는 쪽수를 적을 수 없어요' });
+          const t = srv.now(), mine = srv.rooms.flatMap((x) => x.msgs || []).filter((x) => x.uid === user.id);
+          if (mine.filter((x) => t - x.at < 3000).length >= 3) return res(429, { error: 'TOO_FAST', message: '조금 뒤에 보내 주세요' });
+          const last = mine[mine.length - 1];
+          if (last && last.content === content && t - last.at < 30000) return res(409, { error: 'DUPLICATE_MESSAGE', message: '같은 말을 연달아 보낼 수 없어요' });
+          const msg = { id: ++seq, uid: user.id, content, page: body.page == null ? null : body.page, at: t };
+          r.msgs.push(msg);
+          return res(201, { id: msg.id, publicId: user.publicId, nickname: user.nickname, avatar: {}, content, page: msg.page, createdAt: iso(t), mine: true, left: false });
+        }
+      }
+      // 개방 알림·내 서재로 가져오기
+      if ((m = path.match(/^\/rooms\/(\d+)\/(alarm|import)$/))) {
+        const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);
+        if (!r) return res(404, { error: 'NOT_FOUND', message: '모닥불을 찾을 수 없어요' });
+        if (m[2] === 'alarm' && method === 'DELETE') { (me || {}).alarm = false; return res(204); }
+        if (!me || me.left) return res(403, { error: 'NOT_PARTICIPANT', message: '참여 중인 모닥불이 아니에요' });
+        if (m[2] === 'alarm' && method === 'PUT') {
+          if (roomStatus(r) === 'OPEN') return res(409, { error: 'ROOM_ALREADY_OPEN', message: '이미 열린 모닥불이에요' });
+          if (roomStatus(r) === 'CLOSED') return res(410, { error: 'ROOM_CLOSED', message: '이미 끝난 모닥불이에요' });
+          const fresh = !me.alarm; me.alarm = true;
+          return res(fresh ? 201 : 200, { roomId: r.id, alarm: true });
+        }
+        if (m[2] === 'import' && method === 'POST') {
+          if (roomStatus(r) !== 'CLOSED') return res(409, { error: 'ROOM_NOT_CLOSED', message: '끝난 모닥불만 가져올 수 있어요' });
+          if (!me.agreed) return res(403, { error: 'AGREE_REQUIRED', message: '보관 동의가 필요해요' });
+          const imports = (user.imports = user.imports || []), done = imports.find((x) => x.roomId === r.id);
+          if (done) return res(200, done.view);
+          if (!(r.msgs || []).length) return res(409, { error: 'NOTHING_TO_IMPORT', message: '가져올 대화가 없어요' });
+          let bk = body.bookId ? books.find((x) => x.id === body.bookId) : books.filter((x) => r.isbn && x.isbn === r.isbn).sort((a, b) => (a.status === 'LATER') - (b.status === 'LATER'))[0], created = false;
+          if (!bk && r.kind === 'OWN') return res(400, { error: 'BOOK_REQUIRED', message: '붙일 책을 골라 주세요' });
+          if (!bk) { bk = mkBook(user, { title: r.title.replace(/[『』]| 같이 읽기/g, ''), isbn: r.isbn, status: 'LATER' }); created = true; }
+          const view = { id: ++seq, bookId: bk.id, bookStatus: bk.status, bookCreated: created, roomId: r.id, roomTitle: r.title, kind: r.kind, openedAt: iso(r.openAt), closedAt: iso(r.closedAt || r.closeAt), messageCount: r.msgs.length, importedAt: iso(srv.now()) };
+          imports.push({ roomId: r.id, bookId: bk.id, view, msgs: r.msgs.map((x) => ({ uid: x.uid, page: x.page, content: x.content, at: x.at })) });
+          return res(201, view);
+        }
+      }
       if (method === 'GET' && path === '/rooms') return res(200, mineRooms().map(roomRow));
       if (method === 'POST' && path === '/rooms') {
         if (body.kind !== 'SAME' && body.kind !== 'OWN') return res(400, { error: 'BAD_KIND', message: '방 종류를 골라 주세요' });
@@ -313,6 +374,11 @@ function fakeServer() {
           if (body.totalPages !== undefined) b.totalPages = body.totalPages >= 1 ? Math.min(9999, body.totalPages) : null;
           if (body.currentPage !== undefined) b.currentPage = Math.max(0, body.currentPage || 0);
           return res(200, bookView(b));
+        }
+        if (method === 'GET' && sub === '/rooms') {
+          let k = 0; const names = {};
+          return res(200, (user.imports || []).filter((x) => x.bookId === b.id).reverse().map((x) => ({ ...x.view, messages: x.msgs.map((g) => ({ mine: g.uid === user.id,
+            author: g.uid === user.id ? '나' : names[g.uid] || (names[g.uid] = '참여자 ' + String.fromCharCode(65 + k++)), page: g.page, content: g.content, createdAt: iso(g.at) })) })));
         }
         if (method === 'GET' && sub === '/notes') return res(200, b.notes.slice().reverse());
         if (method === 'POST' && sub === '/notes') {

@@ -107,9 +107,7 @@ function rcAct(act, b) {
     return true;
   }
   if (act === 'rcSend') {
-    if (API.enabled)
-      toast('공유방 대화는 아직 서버에 연결되지 않았어요'); // 5‑2단계
-    else if (n) rcSend(n);
+    if (n) rcSend(n);
     return true;
   }
   if (act === 'rcDown') {

@@ -4,6 +4,7 @@
 // 대화·읽음(5‑2), 알림·가져오기(5‑3), 모닥불 머문 시간(5‑4)은 아직 체험판 방식이라 서버 연결 모드에서는 버튼을 숨기거나 안내만 한다.
 
 // 서버의 방 한 줄 → 화면의 방(S.news의 한 항목). 체험판의 가짜 참여자·대화를 채우지 않는다(srv: true, rcNorm이 건드리지 않는다)
+const importKey = (id) => (S.user ? S.user.publicId : '') + ':' + id;
 function roomFromServer(r) {
   const opens = Date.parse(r.openAt),
     closes = Date.parse(r.closedAt || r.closeAt);
@@ -26,7 +27,7 @@ function roomFromServer(r) {
     opensAt: opens,
     closesAt: closes,
     alarm: !!r.alarm,
-    done: false,
+    done: !!(S.imported || {})[importKey(r.id)], // 가져온 방은 이 브라우저가 기억한다(서버 방 목록에는 표시가 없다)
     messages: [],
     members: [],
     owner: r.mine ? '나' : r.ownerNickname,
@@ -116,14 +117,50 @@ function serverRoomAct(n, name, ok) {
     agree: () => API.post('/rooms/' + n.sid + '/agree'),
     leave: () => API.del('/rooms/' + n.sid + '/participants/me'),
     close: () => API.post('/rooms/' + n.sid + '/close'),
+    alarm: () => (n.alarm ? API.del('/rooms/' + n.sid + '/alarm') : API.put('/rooms/' + n.sid + '/alarm')),
+    import: async () => {
+      const res = await API.post('/rooms/' + n.sid + '/import');
+      (S.imported = S.imported || {})[importKey(n.sid)] = true;
+      await loadBooks(); // 새로 담긴 나중에 읽을 책·바뀐 책 상태를 가져온다
+      return res;
+    },
   }[name];
   return call()
-    .then(() => loadRooms())
-    .then(() => ok && ok(S.news.find((x) => x.sid === n.sid)))
-    .catch((e) => toast(e.message))
+    .then(async (res) => {
+      await loadRooms();
+      return (
+        ok &&
+        ok(
+          S.news.find((x) => x.sid === n.sid),
+          res,
+        )
+      );
+    })
+    .catch((e) => {
+      toast(e.message);
+      if ([403, 404, 409, 410].includes(e.status)) roomsRefresh(); // 방 상태가 서버와 달랐다
+    })
     .finally(() => {
       ROOM_BUSY[key] = false;
     });
+}
+
+// 책의 [공유방] 탭: 가져온 기록은 책장에서 책을 열 때 서버에서 불러온다 (다른 참여자는 서버가 익명으로 준다)
+async function loadBookRooms(id) {
+  const b = [S.reading, ...S.finished, ...S.dropped, ...S.later].find((x) => x && x.id === id);
+  if (!b) return;
+  b.rooms = (await API.get('/books/' + id + '/rooms')).map((x) => ({
+    title: x.roomTitle,
+    period: timeRange(Date.parse(x.openedAt), Date.parse(x.closedAt)),
+    rtype: x.kind,
+    messages: x.messages.map((m) => ({
+      who: m.mine ? '나' : m.author,
+      text: m.content,
+      page: m.page == null ? null : m.page,
+    })),
+  }));
+  save();
+  if (panelOpen === 'shelf') renderPanel();
 }
 
 // 다른 기기에서 바뀐 방을 화면으로 돌아올 때 맞춘다

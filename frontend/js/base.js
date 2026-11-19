@@ -84,4 +84,3 @@ const PROP = [
 ];
 const defAvatar = () => ({ color: '#f6f3ff', expr: 'normal', face: 'none', head: 'none', prop: 'book' });
 const SPINE = ['#6d8f6b', '#b9654a', '#d7b45a', '#5f7aa0', '#8c5a7a', '#a8875a', '#4f6d6a', '#c98a6a'];
-

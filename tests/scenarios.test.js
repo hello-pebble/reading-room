@@ -3,7 +3,7 @@
 // 실행: npm test   (npm install 뒤)
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load, closeAll, sleep, kstToday } = require('./load');
+const { load, closeAll, sleep, kstToday, fakeServer } = require('./load');
 test.after(closeAll);
 
 // 페이지에서 오류가 났는지 확인하고 닫는다
@@ -550,4 +550,160 @@ test('동작 줄이기: prefers-reduced-motion 규칙이 애니메이션과 전�
     css,
     /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*animation:\s*none\s*!important[^}]*transition:\s*none\s*!important/,
   );
+});
+
+// ---- 서버 연결 1단계 (주소 끝 ?api=): 로그인·닉네임·내 정보. 서버는 fakeServer()로 흉내 낸다 ----
+const settle = () => sleep(40); // 화면의 비동기 서버 호출이 끝나길 기다린다
+const val = (a, id, v) => (a.ev(`document.getElementById('${id}').value=${JSON.stringify(v)}`), 0);
+const text = (a, id) => a.doc.getElementById(id).textContent;
+const TOKEN = 'myroom-token';
+
+test('서버 연결: ?api가 없으면 서버를 부르지 않고 프로토타입 그대로 동작한다', async () => {
+  const a = load();
+  await settle();
+  assert.equal(a.ev('API.enabled'), false);
+  assert.equal(a.ev('panelOpen'), null);
+  assert.equal(a.doc.getElementById('nickBtn').hidden, true);
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, true);
+  assert.match(text(a, 'hdrStats'), /^@pebble · 읽은 책/, '프로토타입은 핸들 표시 그대로');
+  fin(a);
+});
+
+test('서버 연결: 토큰이 없으면 로그인 창이 뜨고, 새 계정은 닉네임 정하기로 이어진다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  assert.equal(a.ev('API.enabled'), true);
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.deepEqual(srv.calls, [], '로그인 전에는 서버를 부르지 않아요');
+  val(a, 'loginLabel', 'alice');
+  a.click('#panel [data-act=login]');
+  await settle();
+  assert.deepEqual(srv.calls.map((c) => c.path), ['/dev/login']);
+  assert.equal(srv.calls[0].auth, undefined, '로그인 요청에는 토큰이 없어요');
+  assert.ok(a.w.localStorage.getItem(TOKEN), '토큰이 저장돼요');
+  assert.equal(a.ev('panelOpen'), 'nickname', '새 계정이라 닉네임부터 정해요');
+  assert.match(text(a, 'panel'), /한글·영문·숫자 1~5자/);
+  fin(a);
+});
+
+test('닉네임 정하기: 규칙에 안 맞으면 서버 문구를 보여 주고 열려 있으며, 맞으면 헤더가 바뀌고 닫힌다', async () => {
+  const srv = fakeServer();
+  const b = load({ api: srv, local: { [TOKEN]: srv.seed('alice') } }); // 닉네임을 아직 안 정한 계정
+  await settle();
+  assert.equal(b.ev('panelOpen'), 'nickname');
+  for (const bad of ['😀', '여섯글자이름이', 'a b', '나무!']) {
+    val(b, 'nickInput', bad);
+    b.click('#panel [data-act=saveNick]');
+    await settle();
+    assert.equal(b.ev('panelOpen'), 'nickname', bad + ': 닫히면 안 돼요');
+    assert.match(text(b, 'acctErr'), /한글·영문·숫자로 1~5자예요/, '서버가 준 문구를 그대로 보여요');
+  }
+  assert.equal(srv.users.alice.nickname, '손님', '거절된 값은 저장되지 않아요');
+  val(b, 'nickInput', '나무');
+  b.click('#panel [data-act=saveNick]');
+  await settle();
+  assert.equal(b.ev('panelOpen'), null);
+  assert.equal(srv.users.alice.nickname, '나무');
+  assert.match(srv.calls.at(-1).auth, /^Bearer tok-/, '닉네임 저장에는 Bearer 토큰을 보내요');
+  assert.equal(b.ev('S.user.nickname'), '나무');
+  assert.equal(text(b, 'hdrName'), '나무의 방');
+  assert.doesNotMatch(text(b, 'hdrStats'), /undefined|@/, '서버 모드의 헤더에는 핸들이 없어요');
+  assert.equal(b.doc.getElementById('nickBtn').hidden, false);
+  assert.equal(b.doc.getElementById('logoutBtn').hidden, false);
+  fin(b);
+});
+
+test('로그인 창과 닉네임 정하기는 바깥 클릭·Esc로 닫히지 않는다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  const esc = () => a.w.document.dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Escape' }));
+  esc();
+  a.click('#backdrop');
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.equal(a.doc.querySelector('#panel [data-act=close]'), null, '닫기 버튼도 없어요');
+  val(a, 'loginLabel', 'bob');
+  a.w.document.getElementById('loginLabel').dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'nickname', 'Enter로도 로그인돼요');
+  esc();
+  a.click('#backdrop');
+  assert.equal(a.ev('panelOpen'), 'nickname');
+  assert.equal(a.doc.querySelector('#panel [data-act=close]'), null);
+  fin(a);
+});
+
+test('재방문: 저장된 토큰으로 바로 들어가고, 닉네임이 있으면 창이 뜨지 않는다', async () => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  const a = load({ api: srv, local: { [TOKEN]: token } });
+  await settle();
+  assert.deepEqual(srv.calls.map((c) => c.path), ['/me']);
+  assert.equal(a.ev('panelOpen'), null);
+  assert.equal(text(a, 'hdrName'), '나무의 방');
+  assert.equal(a.ev('S.user.publicId'), srv.users.alice.publicId);
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, false);
+  fin(a);
+});
+
+test('토큰이 만료·무효면 토큰을 지우고 로그인 창으로 돌아간다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv, local: { [TOKEN]: 'tok-없는토큰' } });
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.equal(a.w.localStorage.getItem(TOKEN), null);
+  assert.match(text(a, 'acctErr'), /다시 로그인/);
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, true);
+  fin(a);
+});
+
+test('닉네임 바꾸기: 헤더 버튼으로 다시 열고(닫을 수 있다) 바꾸면 헤더에 바로 보인다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv, local: { [TOKEN]: srv.seed('alice', '나무') } });
+  await settle();
+  a.click('#nickBtn');
+  assert.equal(a.ev('panelOpen'), 'nickname');
+  assert.equal(a.doc.getElementById('nickInput').value, '나무', '지금 닉네임이 들어 있어요');
+  a.click('#panel [data-act=close]');
+  assert.equal(a.ev('panelOpen'), null, '이미 정한 뒤에는 닫을 수 있어요');
+  a.click('#nickBtn');
+  val(a, 'nickInput', '벚꽃');
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  assert.equal(srv.users.alice.nickname, '벚꽃');
+  assert.equal(text(a, 'hdrName'), '벚꽃의 방');
+  fin(a);
+});
+
+test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로 돌아간다', async () => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  const a = load({ api: srv, local: { [TOKEN]: token } });
+  await settle();
+  a.click('#logoutBtn');
+  await settle();
+  assert.deepEqual(srv.calls.map((c) => c.path), ['/me', '/auth/logout']);
+  assert.equal(srv.tokens[token], undefined, '서버의 토큰도 사라져요');
+  assert.equal(a.w.localStorage.getItem(TOKEN), null);
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.equal(a.doc.getElementById('nickBtn').hidden, true);
+  fin(a);
+});
+
+test('서버에 닿지 않으면 로그인 창에 안내가 나온다', async () => {
+  const srv = fakeServer();
+  srv.down = true;
+  const a = load({ api: srv });
+  await settle();
+  val(a, 'loginLabel', 'alice');
+  a.click('#panel [data-act=login]');
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'login');
+  assert.match(text(a, 'acctErr'), /서버에 연결할 수 없어요/);
+  srv.down = false;
+  a.click('#panel [data-act=login]');
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'nickname', '다시 누르면 이어져요');
+  fin(a);
 });

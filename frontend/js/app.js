@@ -93,3 +93,4 @@ render();
 renderPanel();
 entryFlash();
 checkSession(true);
+bootAccount(); // 서버 연결 모드(?api=)일 때만 로그인 창·내 정보를 연다

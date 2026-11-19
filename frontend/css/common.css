@@ -100,6 +100,19 @@ header.top {
   color: var(--muted);
   font-size: 13px;
 }
+[hidden] {
+  display: none !important;
+}
+/* 헤더의 작은 버튼들(닉네임 바꾸기·로그아웃·데모 초기화): 좁으면 이름 영역을 누르지 않고 자기들끼리 줄바꿈한다 */
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 6px;
+}
+.who {
+  flex: 1 1 92px;
+}
 .reset {
   font-size: 12px;
   color: var(--muted);
@@ -498,6 +511,10 @@ input[type='range'] {
     border-width: 0 0 1px 0;
     padding: 6px 12px;
     flex: none;
+  }
+  .top-actions .reset {
+    padding: 4px 8px;
+    font-size: 11px;
   }
   .main {
     display: block;

@@ -39,7 +39,7 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 
 ## 지금 상태와 다음 작업
 
-- **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 승인 대기), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치), 공유방 개설·입장·대화·읽음(`room`), 이웃집 책 추천(`neighbor`, 결정 #62). 화면은 아직 서버에 연결되지 않았고 `localStorage`로 동작한다(책 검색만 주소 끝 `?searchApi=`로 연결).
+- **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 승인 대기), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치), 공유방 개설·입장·대화·읽음(`room`), 이웃집 책 추천(`neighbor`, 결정 #62). 화면은 주소 끝 `?api=http://localhost:8080`으로 켜는 서버 연결 모드에서 **개발용 로그인·닉네임·내 정보까지** 연결했고(`api.js`·`account.js`, 서버 `POST /dev/login`, 결정 #71), 나머지 기능은 아직 `localStorage`로 동작한다(책 검색은 `?searchApi=`).
 - **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(끝남): 대화 `GET·POST /rooms/{id}/messages`(300자, 3초 3건·같은 글 30초 연속 금지(#61), 삭제·수정 없음)·읽음 `POST /rooms/{id}/read`·게시판 `unread`(`V10__room_message.sql`, 결정 #60).
 - 공유방 4단계(끝남): 알림 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·`GET /books/{id}/rooms`(`V12__room_alarm_archive.sql`, 결정 #63).
 - 공유방 5단계(끝남): 개방·종료 배치 `RoomOpenService`·`RoomOpenBatch`(`open_notified_at` 선점, 30분 기준, `V13__room_open_notify.sql`, 결정 #64). 대상 선정까지이고 푸시는 로그만 남긴다. 설계: `docs/superpowers/specs/2026-11-19-room-open-batch-design.md`.

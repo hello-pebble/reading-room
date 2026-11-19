@@ -12,7 +12,8 @@ const noopCtx = () => new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => ({ w
 const opened = [];
 const closeAll = () => { for (const w of opened.splice(0)) { try { w.close(); } catch (e) {} } };
 
-function load({ state, touch } = {}) {
+// api: fakeServer()를 주면 주소에 ?api=가 붙은 서버 연결 모드로 열고, 페이지의 fetch를 그 가짜 서버로 바꾼다. local: 열기 전에 localStorage에 미리 넣을 값
+function load({ state, touch, api, local } = {}) {
   const html = fs.readFileSync(FILE, 'utf8')
     .replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
       if (src.startsWith('vendor/') || /^https?:/.test(src)) return ''; // 3D 라이브러리 제외
@@ -24,9 +25,11 @@ function load({ state, touch } = {}) {
   vc.on('jsdomError', e => errors.push(String((e && e.stack) || e)));
   vc.on('error', m => errors.push('console.error: ' + m));
   const dom = new JSDOM(html, {
-    url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+    url: 'http://localhost/' + (api ? '?api=http://api.test' : ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       if (state) w.localStorage.setItem(KEY, JSON.stringify(state));
+      if (local) for (const [k, v] of Object.entries(local)) w.localStorage.setItem(k, v);
+      if (api) w.fetch = (url, init) => api.fetch(url, init);
       w.matchMedia = q => ({ matches: /hover: hover/.test(q) && !touch, media: q, addEventListener() {}, removeEventListener() {} });
       w.ResizeObserver = class { observe() {} disconnect() {} };
       w.HTMLCanvasElement.prototype.getContext = () => noopCtx();
@@ -48,4 +51,48 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 한국 시간 기준 오늘 (앱의 달력·완독일과 같은 기준)
 const kstToday = () => { const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }).split('-').map(Number); return { y, m, d }; };
 
-module.exports = { load, closeAll, sleep, kstToday, KEY };
+// 서버를 흉내 낸다. 화면이 서버 응답을 어떻게 다루는지만 본다(진짜 규칙은 백엔드 테스트가 본다). 닉네임 규칙은 서버와 같은 문구를 돌려준다.
+const API_BASE = 'http://api.test';
+const NICK_RULE = /^[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9]{1,5}$/;
+function fakeServer() {
+  const users = {}, tokens = {}, calls = [];
+  let seq = 0;
+  const res = (status, data) => ({ ok: status < 400, status, json: async () => { if (data === undefined) throw new Error('본문 없음'); return data; } });
+  const mk = (label, nickname) => {
+    const u = { id: ++seq, publicId: '00000000-0000-4000-8000-' + String(seq).padStart(12, '0'), nickname: nickname || '손님', needsNickname: !nickname };
+    return (users[label] = u);
+  };
+  const issue = (u) => { const t = 'tok-' + ++seq; tokens[t] = u; return t; };
+  const srv = {
+    calls, users, tokens, down: false,
+    // 이미 가입한 계정과 그 토큰을 만들어 둔다 (재방문·토큰 만료 시나리오용)
+    seed(label, nickname) { return issue(mk(label, nickname)); },
+    async fetch(url, init = {}) {
+      const method = init.method || 'GET', path = url.replace(API_BASE, '');
+      const body = init.body ? JSON.parse(init.body) : {};
+      const auth = (init.headers || {}).Authorization;
+      calls.push({ method, path, body: init.body ? body : undefined, auth });
+      if (srv.down) throw new TypeError('Failed to fetch');
+      if (method === 'POST' && path === '/dev/login') {
+        const label = String(body.label == null ? '' : body.label).trim();
+        if (!label || label.length > 40) return res(400, { error: 'BAD_LABEL', message: '이름은 1~40자로 적어 주세요' });
+        const created = !users[label], u = users[label] || mk(label);
+        return res(200, { token: issue(u), expiresAt: '2099-01-01T00:00:00Z', newUser: created, user: { ...u } });
+      }
+      const user = auth && tokens[auth.replace('Bearer ', '')];
+      if (!user) return res(401, { error: 'UNAUTHORIZED', message: '로그인이 필요해요' });
+      if (method === 'GET' && path === '/me') return res(200, { ...user });
+      if (method === 'PUT' && path === '/me/nickname') {
+        if (!NICK_RULE.test(body.nickname == null ? '' : body.nickname))
+          return res(400, { error: 'BAD_NICKNAME', message: '닉네임은 한글·영문·숫자로 1~5자예요. 이모티콘·특수문자·공백은 쓸 수 없어요' });
+        user.nickname = body.nickname; user.needsNickname = false;
+        return res(200, { ...user });
+      }
+      if (method === 'POST' && path === '/auth/logout') { delete tokens[auth.replace('Bearer ', '')]; return res(204); }
+      return res(404, { error: 'NOT_FOUND', message: '없는 주소예요' });
+    },
+  };
+  return srv;
+}
+
+module.exports = { load, closeAll, sleep, kstToday, fakeServer, KEY };

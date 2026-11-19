@@ -39,6 +39,7 @@ function focusPanel() {
   }
 }
 function closePanel() {
+  if (accountLocked()) return; // 로그인·처음 닉네임 정하기는 끝낼 때까지 닫지 않는다 (account.js)
   if (panelOpen === 'mirror') cancelMirror();
   panelOpen = null;
   backdrop.classList.remove('open');
@@ -87,6 +88,8 @@ function renderPanel() {
   if (f === 'mirror') h = mirrorPanel();
   if (f === 'window') h = windowPanel();
   if (f === 'neighborShelf') h = neighborShelfPanel();
+  if (f === 'login') h = loginPanel();
+  if (f === 'nickname') h = nicknamePanel();
   panel.classList.toggle('rcchat', h.includes('id="rcLog"'));
   panel.innerHTML = h;
   if (f.startsWith('room:')) rcAfter(f.slice(5));
@@ -106,7 +109,14 @@ const onPanelClick = (e) => {
     askNotify();
     return;
   }
-  if (neighborAction(act, b) || roomAction(act, b) || villageAction(act, b) || sharedRoomAction(act, b)) return;
+  if (
+    accountAction(act) ||
+    neighborAction(act, b) ||
+    roomAction(act, b) ||
+    villageAction(act, b) ||
+    sharedRoomAction(act, b)
+  )
+    return;
 };
 panel.addEventListener('click', onPanelClick);
 // 데모 초기화는 기록을 모두 지우므로 4초 안에 한 번 더 눌러야 실행된다
@@ -152,4 +162,3 @@ resetBtn.onclick = () => {
   toast('처음 상태로 되돌렸어요');
   entryFlash();
 };
-

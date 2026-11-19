@@ -17,7 +17,11 @@
  <header class="top">
   <div class="avatar-dot" id="hdrAvatar" aria-hidden="true"></div>
   <div class="who"><b id="hdrName">조약돌의 방</b><small id="hdrStats"></small></div>
-  <button class="reset" id="resetBtn">데모 초기화</button>
+  <div class="top-actions">
+   <button class="reset" id="nickBtn" type="button" hidden>닉네임 바꾸기</button>
+   <button class="reset" id="logoutBtn" type="button" hidden>로그아웃</button>
+   <button class="reset" id="resetBtn">데모 초기화</button>
+  </div>
  </header>
  <div class="main">
   <div class="stage-wrap" id="stageWrap">
@@ -46,6 +50,7 @@
 <div class="toast" id="toast"></div>
 <script src="vendor/three.min.js"></script>
 <script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"><\/script>')</script>
+<script src="js/api.js"></script>
 <script src="js/room.js"></script>
 <script src="js/room-search.js"></script>
 <script src="js/room-panels.js"></script>
@@ -64,6 +69,7 @@
 <script src="js/stage.js"></script>
 <script src="js/render.js"></script>
 <script src="js/panel.js"></script>
+<script src="js/account.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

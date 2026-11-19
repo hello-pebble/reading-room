@@ -120,6 +120,7 @@
 |---|---|---|
 | POST | `/auth/google` | body `{idToken}`(화면이 구글에서 받은 ID 토큰). 로그인 필요 없음. 서버가 RS256 서명(구글 공개키 `kid`), `iss`(구글), `aud`(우리 클라이언트 ID, 문자열), `exp`(지나면 거절), `sub`를 확인한다. 성공 200 `{token, expiresAt, newUser, user:{id, publicId, nickname, avatar, needsNickname}}`. 처음 로그인이면 사용자를 만든다: 공개 번호(`publicId`)는 DB가 무작위 UUID로 만들고, 닉네임은 임시 `손님`, `needsNickname:true`. 실패 401 `INVALID_ID_TOKEN`, 클라이언트 ID(`GOOGLE_CLIENT_ID`)가 없으면 503 `AUTH_UNAVAILABLE`, 구글 키를 못 받으면 503 |
 | POST | `/auth/logout` | 이 기기에서 쓴 토큰만 끝낸다(204). 토큰이 없거나 틀리면 401 |
+| POST | `/dev/login` | **dev 프로파일 전용**(운영에서는 등록되지 않는다). body `{label}`(1~40자, 앞뒤 공백은 다듬는다, 아니면 400 `BAD_LABEL`). 이름(`label`)마다 계정이 하나이고 구글 로그인과 같은 흐름·같은 응답(`{token, expiresAt, newUser, user}`)으로 진짜 Bearer 토큰을 준다. 처음이면 사용자를 만들고(`auth_identity.provider='dev'`, 구글과 제공자가 달라 값이 같아도 다른 계정) 임시 닉네임·`needsNickname:true`이다. 구글 클라이언트 ID 없이 화면 연결을 시작하려는 용도이고, 나중에 구글 로그인으로 바꿀 때는 화면의 로그인 호출만 바꾼다(결정 #71) |
 | PUT | `/me/nickname` | 닉네임 정하기·바꾸기. 처음 호출하면 `needsNickname`이 false가 된다 (위 "닉네임" 행) |
 
 - 토큰은 무작위 32바이트(base64url)이고 로그인 응답에서만 볼 수 있다. 모든 요청에 `Authorization: Bearer <token>`으로 보낸다. 같은 계정으로 여러 기기에서 로그인하면 기기마다 다른 토큰이다.

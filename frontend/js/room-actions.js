@@ -479,4 +479,3 @@ function roomAction(act, b) {
   }
   return false;
 }
-

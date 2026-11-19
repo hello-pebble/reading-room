@@ -161,4 +161,3 @@ function joinByCode(c) {
   toast(n.mine ? '내가 만든 모닥불이에요' : '모닥불에 들어왔어요');
   return true;
 }
-

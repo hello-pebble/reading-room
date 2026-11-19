@@ -16,9 +16,8 @@ const mmdd = (ts) => {
 function hdrText(extra) {
   const c = calData();
   return (
-    '@' +
-    S.user.handle +
-    ' · 읽은 책 ' +
+    (S.user.handle ? '@' + S.user.handle + ' · ' : '') + // 서버 모드에는 핸들이 없다 (결정 #69)
+    '읽은 책 ' +
     S.finished.length +
     '권' +
     (c.streak ? ' · ' + c.streak + '일 연속 기록' : '') +
@@ -315,4 +314,3 @@ canvas.addEventListener('click', (e) => {
   }
   if (panelOpen && panelOpen !== 'mirror') closePanel();
 });
-

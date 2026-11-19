@@ -296,4 +296,3 @@ function cancelMirror() {
   zoom(false);
   render();
 }
-

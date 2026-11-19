@@ -19,7 +19,7 @@
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
-| 인증 | 로그인이 없어 **`X-User-Id` 헤더**로 사용자를 식별하는 임시 필터(`UserIdFilter`, 없으면 401). 구글 로그인(결정 #55)이 생기면 교체. `POST /dev/users`는 `dev` 프로파일에서만 열린다 |
+| 인증 | **구글 로그인 + Bearer 세션 토큰**(결정 #68). `POST /auth/google`로 구글 ID 토큰을 보내면 서버가 확인하고 `{token, expiresAt, newUser, user}`를 돌려준다. 이후 모든 요청에 `Authorization: Bearer <token>`(`UserIdFilter`, 없거나 틀리거나 만료면 401). 개발용 `X-User-Id` 헤더와 `POST /dev/users`는 **`dev` 프로파일에서만** 열린다(운영에서는 무시). 아래 "인증 API" 참고 |
 | 시각 | 서버 `Clock`으로 `now()`를 정하고, 응답의 시각은 모두 UTC(`...Z`) ISO 문자열. 날짜 자르기(달력·월 목표·직접 기록)는 `Asia/Seoul` |
 | 멱등키 | `Idempotency-Key` 헤더. `idempotency_key(user_id, key, path, status, body)`에 **성공 응답만** 저장하고 재전송이면 그대로 돌려준다. 같은 키를 다른 경로에 쓰면 422. 적용: `POST /books`, `/books/{id}/notes`, `/books/{id}/finish`, `/drop`, `/sessions/start`, `/{id}/stop`, `/{id}/check`, `/{id}/confirm`, `/sessions/manual`. (`PUT`·`PATCH`·구독 저장은 원래 멱등) |
 | 아바타 | 표에 없던 **`PUT /me/avatar`**를 만들었다. 모르는 키는 버리고, 모르는 값·빠진 키는 기본값으로 채우며, **400은 해금 조건 미충족일 때만**(glasses는 책 1건 이상, beanie는 `DONE` 10권 이상). `GET /me`에 `avatar`가 들어 있다 |
@@ -42,8 +42,9 @@
 
 | 테이블 | 컬럼 | 제약 |
 |---|---|---|
-| `app_user` | id, handle, nickname, avatar(JSON), status, beta_tester, created_at | handle unique (영소문자·숫자·`_`, 3~15자). **nickname은 한글·영문·숫자만, 공백 없이 1~5자**(이모티콘·특수문자·공백 금지, 겹쳐도 됨. 결정 #67, DB 제약 `app_user_nickname_rule`). 월 목표는 `monthly_goal` 테이블(월별 이력, 결정 #39) |
-| `auth_identity` | id, user_id, provider, provider_user_id, created_at | unique(provider, provider_user_id) |
+| `app_user` | id, handle, nickname, avatar(JSON), status, beta_tester, created_at | handle unique (영소문자·숫자·`_`, 3~15자). **nickname은 한글·영문·숫자만, 공백 없이 1~5자**(이모티콘·특수문자·공백 금지, 겹쳐도 됨. 결정 #67, DB 제약 `app_user_nickname_rule`). `nickname_chosen_at`: 닉네임을 직접 정한 시각, 비어 있으면 임시 닉네임(`needsNickname`, 결정 #68). 월 목표는 `monthly_goal` 테이블(월별 이력, 결정 #39) |
+| `auth_identity` | id, user_id, provider, provider_user_id, created_at | unique(provider, provider_user_id). 구글은 `provider='google'`, `provider_user_id`=구글 계정 고유 ID(`sub`) (결정 #67) |
+| `auth_session` | token_hash(SHA-256 16진수 64자, 기본키), user_id(사용자와 함께 삭제), created_at, expires_at | 로그인 세션. 토큰 원문은 저장하지 않는다. 30일 뒤 만료(고정), 로그인할 때 그 사용자의 만료 세션을 지운다 (결정 #68) |
 | `invite_code` | code, created_by, max_uses, used_count, expires_at | |
 
 `avatar` 예: `{"color":"#ffd6e4","expr":"happy","face":"glasses","head":"bow","prop":"mug"}` (3D 유령, 결정 #23)
@@ -112,6 +113,18 @@
 기능은 `furniture_code`, 외형은 `skin_id`에 묶는다. 에셋은 몸체와 상태 레이어(소파·책, 스탠드·빛)를 분리하고, 앵커 포인트(책 놓는 자리, 앉는 자리, 빛 위치)는 메타데이터로 둔다.
 
 ## API (주요)
+
+### 인증 API (결정 #67·#68, 설계: `docs/superpowers/specs/2026-11-19-google-login-design.md`)
+
+| 메서드 | 경로 | 동작 |
+|---|---|---|
+| POST | `/auth/google` | body `{idToken}`(화면이 구글에서 받은 ID 토큰). 로그인 필요 없음. 서버가 RS256 서명(구글 공개키 `kid`), `iss`(구글), `aud`(우리 클라이언트 ID, 문자열), `exp`(지나면 거절), `sub`를 확인한다. 성공 200 `{token, expiresAt, newUser, user:{id, handle, nickname, avatar, needsNickname}}`. 처음 로그인이면 사용자를 만든다: 핸들은 자동(`g`+영소문자·숫자 8자), 닉네임은 임시 `손님`, `needsNickname:true`. 실패 401 `INVALID_ID_TOKEN`, 클라이언트 ID(`GOOGLE_CLIENT_ID`)가 없으면 503 `AUTH_UNAVAILABLE`, 구글 키를 못 받으면 503 |
+| POST | `/auth/logout` | 이 기기에서 쓴 토큰만 끝낸다(204). 토큰이 없거나 틀리면 401 |
+| PUT | `/me/nickname` | 닉네임 정하기·바꾸기. 처음 호출하면 `needsNickname`이 false가 된다 (위 "닉네임" 행) |
+
+- 토큰은 무작위 32바이트(base64url)이고 로그인 응답에서만 볼 수 있다. 모든 요청에 `Authorization: Bearer <token>`으로 보낸다. 같은 계정으로 여러 기기에서 로그인하면 기기마다 다른 토큰이다.
+- 구글 키(JWKS)는 6시간 캐시하고 모르는 `kid`가 오면 최소 1분 간격으로 다시 받는다. `alg`가 RS256이 아니거나(none·HS256) `aud`가 배열이면 거절한다.
+- **가입은 지금 열려 있다**: 구글 계정이 있으면 누구나 가입된다. 초대 코드(`invite_code` 테이블)·허용 목록 검사는 아직 없다(사용자 결정 필요). 핸들은 자동으로 만들고 바꾸는 API는 없다.
 
 ### 타이머
 

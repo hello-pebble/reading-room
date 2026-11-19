@@ -22,11 +22,12 @@ public class UserRepository {
     }
 
     public int updateNickname(String nickname, long userId) {
-        return dsl.execute("update app_user set nickname = ? where id = ?", nickname, userId);
+        return dsl.execute("update app_user set nickname = ?, nickname_chosen_at = coalesce(nickname_chosen_at, now()) where id = ?", nickname, userId);
     }
 
     public Record insert(String handle, String nickname) {
-        return dsl.fetchOne("insert into app_user(handle, nickname) values (?, ?) returning id, handle, nickname, avatar::text as avatar", handle, nickname);
+        // 개발용 생성은 닉네임을 이미 정한 것으로 친다 (구글 가입은 AuthRepository.insertUser가 임시 닉네임으로 만든다)
+        return dsl.fetchOne("insert into app_user(handle, nickname, nickname_chosen_at) values (?, ?, now()) returning id, handle, nickname, avatar::text as avatar, false as needs_nickname", handle, nickname);
     }
 
     public Record countByHandle(String handle) {
@@ -34,6 +35,6 @@ public class UserRepository {
     }
 
     public Record findById(long id) {
-        return dsl.fetchOne("select id, handle, nickname, avatar::text as avatar from app_user where id = ?", id);
+        return dsl.fetchOne("select id, handle, nickname, avatar::text as avatar, nickname_chosen_at is null as needs_nickname from app_user where id = ?", id);
     }
 }

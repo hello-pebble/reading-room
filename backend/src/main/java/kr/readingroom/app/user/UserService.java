@@ -86,7 +86,7 @@ public class UserService {
     private UserResponse view(Record r) {
         try {
             return new UserResponse(r.get("id", Long.class), r.get("handle", String.class), r.get("nickname", String.class),
-                    json.readValue(r.get("avatar", String.class), AvatarResponse.class));
+                    json.readValue(r.get("avatar", String.class), AvatarResponse.class), r.get("needs_nickname", Boolean.class));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);
         }

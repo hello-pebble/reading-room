@@ -33,7 +33,7 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 - 요청은 `Controller → Service → Repository` 순서로 흐르고, 요청·응답은 기능 패키지의 `dto/` record다. 수정 위치와 패키지 표는 `backend/README.md`를 먼저 본다. SQL은 Repository에만 두고 값은 `?`로 바인딩한다. 스키마는 Flyway(`src/main/resources/db/migration/V*.sql`)로만 바꾸고 이미 있는 마이그레이션은 고치지 않는다(새 `V9__…` 추가).
 - 검사: `cd backend && ./gradlew test`. DB가 필요한 통합 테스트(`ApiTestBase`)는 기본으로 내장 PostgreSQL(zonky)을 띄우고, 안 되면 `TEST_DATABASE_URL`(`jdbc:postgresql://…`), `TEST_DATABASE_USER`, `TEST_DATABASE_PASSWORD`로 외부 DB를 준다(테스트마다 스키마를 비운다). 루트 사용자로는 PostgreSQL이 실행되지 않으니 일반 사용자로 돌린다. 시각은 `TestClock`으로 고정·이동한다.
 - API 계약은 `docs/DATA_API.md`가 기준이다. 경로·필드·상태 코드를 바꾸면 그 문서와 `docs/DECISIONS.md`를 같이 고친다. 오류는 `ApiException`(상태, 코드, 한국어 메시지)으로 던진다.
-- 인증은 임시다: `X-User-Id` 헤더(`UserIdFilter`). 구글 로그인(결정 #55)이 붙으면 교체한다. 책 검색(`GET /books/search`)만 헤더 없이 열려 있다.
+- 인증은 구글 로그인 + Bearer 세션 토큰이다(결정 #68): `Authorization: Bearer <토큰>`을 `UserIdFilter`가 확인한다. 개발용 `X-User-Id` 헤더와 `/dev/users`는 dev 프로파일에서만 된다(테스트가 이것을 쓴다). 책 검색(`GET /books/search`)과 `POST /auth/google`만 로그인 없이 열려 있다.
 - 시간 규칙은 서버 `Clock`으로 계산하고(`Instant`, 응답은 UTC ISO), 날짜 자르기는 `Asia/Seoul`이다. 상태처럼 시각으로 알 수 있는 값은 저장값에만 기대지 말고 시각으로 계산한다(예: `BoardService`).
 - 비밀 키(`NL_CERT_KEY`, VAPID 등)는 환경변수로만 받는다. 코드·문서·커밋·로그에 값을 적지 않는다. 키가 없을 때는 503처럼 명확한 오류로 응답한다.
 
@@ -44,7 +44,8 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 - 공유방 4단계(끝남): 알림 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·`GET /books/{id}/rooms`(`V12__room_alarm_archive.sql`, 결정 #63).
 - 공유방 5단계(끝남): 개방·종료 배치 `RoomOpenService`·`RoomOpenBatch`(`open_notified_at` 선점, 30분 기준, `V13__room_open_notify.sql`, 결정 #64). 대상 선정까지이고 푸시는 로그만 남긴다. 설계: `docs/superpowers/specs/2026-11-19-room-open-batch-design.md`.
 - 공유방 6단계(끝남): 모닥불 머문 시간 `CampStayService`(`POST /rooms/{id}/stay`·`stay/leave`)·합산 `GET /me/reading-time`·달력 반영(`camp_stay`, `V14__camp_stay.sql`, 결정 #65). 설계: `docs/superpowers/specs/2026-11-19-camp-stay-design.md`.
-- **다음 작업(순서 정함, ①은 끝남): ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ④ 광장 접속 인원 `GET /plaza/presence`(연결 방식은 SSE로 정했다).** (앞 번호는 원래 순서다.) 7일 지난 방 삭제 배치는 끝났고(결정 #66), 가져오기 마감 알림·이웃 접속 상태는 만들지 않기로 했다. 닉네임 규칙(한글·영문·숫자 1~5자, `PUT /me/nickname`, 결정 #67)은 구현했고, 구글 로그인(구글 `sub`를 `auth_identity`에 연결, 세션 토큰 발급)은 설계 중이다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64·#65 를 따른다.
+- 인증(끝남): 구글 로그인 `AuthService`·`GoogleIdTokenVerifier`·`UserIdFilter`(Bearer 토큰, 개발용 `X-User-Id`는 dev 프로파일만)·`V16__auth_session.sql`·`GOOGLE_CLIENT_ID`. 설계: `docs/superpowers/specs/2026-11-19-google-login-design.md`.
+- **다음 작업(순서 정함, ①은 끝남): ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ④ 광장 접속 인원 `GET /plaza/presence`(연결 방식은 SSE로 정했다).** (앞 번호는 원래 순서다.) 7일 지난 방 삭제 배치는 끝났고(결정 #66), 가져오기 마감 알림·이웃 접속 상태는 만들지 않기로 했다. 닉네임 규칙(한글·영문·숫자 1~5자, `PUT /me/nickname`, 결정 #67)은 구현했고, 구글 로그인(`POST /auth/google`, Bearer 세션 토큰, `auth_session`, 결정 #68)도 구현했다. 가입 제한(초대 코드)과 핸들 정하기는 정하지 않았다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64·#65 를 따른다.
 - 한 번에 한 기능씩 만들고, 기능마다 통합 테스트를 추가한다.
 
 ## 작업 방식

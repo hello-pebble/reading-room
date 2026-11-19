@@ -23,6 +23,7 @@
 | `calendar` | 달력·월 목표 |
 | `push` | 푸시 구독, 알림 대상 선정 |
 | `user` | 계정·아바타·닉네임(`PUT /me/nickname`, 한글·영문·숫자 1~5자) |
+| `auth` | 구글 로그인 `POST /auth/google`·로그아웃 `POST /auth/logout`, Bearer 세션 토큰(`auth_session`, 해시 저장·30일), 구글 ID 토큰 확인(`GoogleIdTokenVerifier`, 구글 키는 `GoogleKeys`). 필터는 `common.UserIdFilter`(개발용 `X-User-Id`는 dev 프로파일만). 환경변수 `GOOGLE_CLIENT_ID` |
 | `village` | 마을 게시판 읽기(`GET /rooms`), 광장 채팅(`/plaza/messages`, 24시간 삭제 배치). 방 한 줄 응답(`RoomResponse`)과 시각 상태 계산(`BoardService.state`)은 `room`도 쓴다 |
 | `room` | 공유방(모닥불) 개설 `POST /rooms`, 초대 미리보기 `GET /rooms/invite/{code}`, 닫기 `POST /rooms/{id}/close`, 입장 `POST /rooms/join`, 나가기 `DELETE /rooms/{id}/participants/me`, 보관 동의 `POST /rooms/{id}/agree` (V9: 초대 코드·방 이름 제약, 개설 기록 `room_open_log`), 대화 `GET·POST /rooms/{id}/messages`·읽음 `POST /rooms/{id}/read` (V10: `room_message`, `RoomMessage*`). 알림 켜기·끄기 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·책의 공유방 탭 `GET /books/{id}/rooms` (V12: `room_alarm`, `book_room_archive`, `RoomArchive*`). 개방/종료·삭제 배치는 다음 단계(`docs/DATA_API.md` 끝 메모) |
 | `neighbor` | 이웃집 책 추천: 방문 `GET /neighbors/{handle}`, 꽂기 `POST /neighbors/{handle}/recommendation`, 내 집 추천 `GET /me/recommendation`, 확인 `POST /me/recommendation/confirm` (V11: `neighbor_recommendation`, 집마다 확인 전 한 권은 부분 유니크 인덱스) |
@@ -39,4 +40,4 @@ API 경로·JSON 필드·DB 스키마는 이번 역할 분리에서 변경하지
 2. 인증키를 환경변수로 넣고 서버를 띄운다 (키는 파일·채팅에 적지 않는다): `NL_CERT_KEY=발급받은키 ./gradlew bootRun`
 3. 서버가 뜨면 `curl "http://localhost:8080/books/search?q=소년이 온다"`로 확인한다. 키가 없으면 503이다.
 4. 화면은 `frontend` 폴더를 `.claude/serve-nocache.py`(8765 포트)로 열고, 처음 한 번만 주소 끝에 `?searchApi=http://localhost:8080/books/search`를 붙여 연다 (저장된다). 다른 주소에서 열면 `CORS_ORIGINS`에 그 주소를 넣는다.
-- `GET /books/search`는 사용자 헤더(`X-User-Id`) 없이 열려 있다. 구글 로그인을 붙일 때 로그인 필요 + 호출 제한으로 바꾼다.
+- `GET /books/search`는 로그인(Bearer 토큰) 없이 열려 있다. 구글 로그인을 붙일 때 로그인 필요 + 호출 제한으로 바꾼다.

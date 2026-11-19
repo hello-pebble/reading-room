@@ -1142,3 +1142,83 @@ test('서버 달력 새로고침: 스탠드를 끄거나 완독하면 이번 달
   assert.equal(a.ev('calData().done'), 1);
   fin(a);
 });
+
+// ---- 서버 연결 4단계: 마을 광장 대화 (서버의 글을 나눠 본다. 가짜 이웃의 말은 끈다) ----
+const plazaApp = async (setup) => {
+  const r = await bookApp((s) => {
+    s.seed('bob', '밥');
+    if (setup) setup(s);
+  });
+  r.a.ev('PLAZA_POLL = 30'); // 새 글 확인 간격을 줄인다
+  return r;
+};
+const enterPlaza = async (a) => {
+  a.ev('enterVillage()');
+  await sleep(350);
+  a.ev('Object.assign(sim, { x: PLAZA.cx, z: PLAZA.cz }); syncPlazaChat()');
+  await settle();
+};
+const pzLog = (a) => a.doc.getElementById('pzLog');
+const say = (a, t) => {
+  a.doc.getElementById('pz').value = t;
+  a.ev('plazaSend()');
+};
+
+test('서버 광장: 들어가면 서버의 최근 글을 불러오고 내 글은 내 말로 보인다(가짜 이웃의 말은 없다)', async () => {
+  const { srv, a } = await plazaApp((s) => {
+    s.seedPlaza('bob', '안녕하세요', 5000);
+    s.seedPlaza('alice', '반가워요', 3000);
+  });
+  await enterPlaza(a);
+  assert.match(pzLog(a).textContent, /밥.*안녕하세요/);
+  assert.equal(pzLog(a).querySelectorAll('.msg.me').length, 1);
+  assert.match(pzLog(a).querySelector('.msg.me').textContent, /반가워요/);
+  assert.equal(calls(srv, 'GET', /^\/plaza\/messages$/).length, 1);
+  assert.ok(!a.state().plaza.some((m) => /^@/.test(m.who)), '가짜 이웃의 말은 서버 연결 모드에 없어요');
+  assert.doesNotMatch(a.doc.getElementById('pzHead').textContent, /\d\d\/100/, '서버에 접속 인원 API가 아직 없어요');
+  fin(a);
+});
+
+test('서버 광장: 광장에 있는 동안 새 글만 받아 보고, 밖으로 나가면 확인을 멈춘다', async () => {
+  const { srv, a } = await plazaApp((s) => s.seedPlaza('bob', '첫 글', 2000));
+  await enterPlaza(a);
+  srv.seedPlaza('bob', '새로 온 글');
+  await sleep(120);
+  assert.match(pzLog(a).textContent, /새로 온 글/);
+  assert.equal([...pzLog(a).querySelectorAll('.msg')].filter((m) => /첫 글/.test(m.textContent)).length, 1, '같은 글이 두 번 보이면 안 돼요');
+  assert.ok(calls(srv, 'GET', /\?since=/).length >= 1, '그 뒤로는 since로 새 글만 물어요');
+  a.ev('Object.assign(sim, { x: 2, z: 5 }); syncPlazaChat()');
+  await settle();
+  const n = srv.calls.length;
+  await sleep(120);
+  assert.equal(srv.calls.length, n, '광장 밖에서는 서버에 묻지 않아요');
+  fin(a);
+});
+
+test('서버 광장: 글을 보내면 서버가 만든 글이 보이고 칸이 비며, 서버가 거절하면 문구를 보이고 글은 남는다', async () => {
+  const { srv, a } = await plazaApp();
+  await enterPlaza(a);
+  say(a, '  안녕  ');
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /^\/plaza\/messages$/)[0].body, { content: '안녕' });
+  assert.equal(srv.plaza.at(-1).nickname, '나무');
+  assert.match(pzLog(a).querySelector('.msg.me').textContent, /안녕/);
+  assert.equal(a.doc.getElementById('pz').value, '');
+  say(a, '안녕');
+  await settle();
+  assert.match(a.doc.getElementById('pzE').textContent, /같은 말을 연달아 보낼 수 없어요/);
+  assert.equal(a.doc.getElementById('pz').value, '안녕', '거절되면 쓰던 글이 남아요');
+  assert.equal(pzLog(a).querySelectorAll('.msg.me').length, 1);
+  a.ev('Object.assign(sim, { x: 2, z: 5 })');
+  say(a, '밖에서');
+  assert.equal(calls(srv, 'POST', /plaza/).length, 2, '광장 밖에서는 보내지 않아요');
+  fin(a);
+});
+
+test('서버 광장: 글자는 그대로 보인다(HTML 주입 방지)', async () => {
+  const { a } = await plazaApp((s) => s.seedPlaza('bob', '<img src=x onerror=alert(1)>', 1000));
+  await enterPlaza(a);
+  assert.equal(pzLog(a).querySelector('img'), null);
+  assert.match(pzLog(a).textContent, /<img src=x/);
+  fin(a);
+});

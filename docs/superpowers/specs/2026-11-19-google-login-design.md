@@ -6,7 +6,7 @@
 임시 `X-User-Id` 헤더를 걷어내고, 구글 계정으로 로그인한 사용자만 API를 쓰게 한다. 화면(다른 주소의 정적 페이지)이 구글에서 받은 ID 토큰을 서버에 보내면 서버가 검증하고 자기 세션 토큰을 돌려준다.
 
 ## 하지 않는 것
-- 화면 연결, 카카오 로그인, 가입 제한(초대 코드): **이번에는 가입을 열어 둔다**(아래 "열린 질문"), 로그인 횟수 제한, 핸들 직접 정하기·바꾸기.
+- 화면 연결, 카카오 로그인, 가입 제한(초대 코드): **이번에는 가입을 열어 둔다**(아래 "열린 질문"), 로그인 횟수 제한.
 - 구글 이메일·프로필 저장(필요 없다: 구글 계정 고유 ID `sub`만 저장한다).
 
 ## 접근
@@ -17,8 +17,8 @@
 ## 설계
 1. `V16__auth_session.sql`: `auth_session(token_hash(SHA-256 16진수 64자, 기본키), user_id → app_user ON DELETE CASCADE, created_at, expires_at)`와 `app_user.nickname_chosen_at`(기존 사용자는 `created_at`으로 채움).
 2. `POST /auth/google` body `{idToken}`: 로그인 필요 없음. 검증 규칙(RS256만, `kid`로 키 선택, `iss`는 `accounts.google.com`/`https://accounts.google.com`, `aud`는 우리 클라이언트 ID, `exp` 지남·`sub` 없음 거절). 실패는 401 `INVALID_ID_TOKEN`, 클라이언트 ID(`GOOGLE_CLIENT_ID`)가 없으면 503 `AUTH_UNAVAILABLE`.
-   - `auth_identity(google, sub)`가 있으면 그 사용자로 로그인. 없으면 새 사용자를 만든다: 핸들은 자동(`g` + 영소문자·숫자 8자, 겹치면 다시), 닉네임은 임시 `손님`, `nickname_chosen_at`은 비움, `auth_identity` 연결.
-   - 응답 200 `{token, expiresAt, newUser, user:{id, handle, nickname, avatar, needsNickname}}`. `needsNickname`은 닉네임을 아직 안 정했을 때 true이고 화면은 닉네임 정하기로 보낸다.
+   - `auth_identity(google, sub)`가 있으면 그 사용자로 로그인. 없으면 새 사용자를 만든다: 공개 번호(`public_id`)는 DB가 무작위 UUID로 만들고(결정 #69), 닉네임은 임시 `손님`, `nickname_chosen_at`은 비움, `auth_identity` 연결.
+   - 응답 200 `{token, expiresAt, newUser, user:{id, publicId, nickname, avatar, needsNickname}}`. `needsNickname`은 닉네임을 아직 안 정했을 때 true이고 화면은 닉네임 정하기로 보낸다.
 3. 토큰: 무작위 32바이트를 base64url로 만들어 한 번만 돌려주고, DB에는 해시만 저장한다. 유효 기간 30일(고정, 갱신 없음). 로그인할 때 그 사용자의 만료된 세션을 지운다.
 4. `UserIdFilter`: `Authorization: Bearer <token>`을 해시해 만료 전 세션의 사용자로 인정한다. 없거나 틀리거나 만료면 401. **`X-User-Id` 헤더는 `dev` 프로파일에서만 받는다**(운영에서는 무시). 공개 경로에 `POST /auth/google`을 더한다.
 5. `POST /auth/logout`(로그인 필요): 쓴 토큰의 세션을 지운다(204). 다른 기기의 토큰은 그대로.
@@ -27,7 +27,7 @@
 
 ## 열린 질문 (사용자 결정 필요)
 - **가입 제한**: #55는 초대 링크 흐름을 말하지만, 계정 가입용 `invite_code`를 만들고 나눠 주는 방법이 정해지지 않았다. 지금은 구글 계정이 있으면 누구나 가입된다. 베타를 닫으려면 초대 코드 검사(`inviteCode` 필드)나 허용 목록을 더한다.
-- **핸들**: 자동으로 만든다. 이웃집 방문에 쓰이므로 정하거나 바꾸는 API가 필요한지 정해야 한다.
+- **핸들**(해결, 결정 #69): 핸들을 없애고 사용자는 무작위 공개 번호(UUID)로 가리킨다. 닉네임은 계속 바꿀 수 있다.
 
 ## 테스트 (`ApiTestBase`, `TestClock`, 직접 만든 RSA 키)
 새 사용자 로그인·재로그인(같은 사용자)·닉네임 정하기 / 잘못된 ID 토큰 여러 종류(aud·iss·exp·서명·alg none·HS256·kid·형식·sub 없음) / 클라이언트 ID 없음 503 / Bearer 규칙(없음·틀림·만료 30일·로그아웃·다른 기기) / 필터: 운영(dev 아님)에서는 `X-User-Id` 거절.

@@ -33,18 +33,18 @@ public class NeighborService {
     }
 
     /** 이웃집 방문: 아래 칸이 비어 있는지, 내가 꽂은 책이 있는지 */
-    public HouseResponse visit(long userId, String handle) {
-        Record house = house(userId, handle);
+    public HouseResponse visit(long userId, String publicId) {
+        Record house = house(userId, publicId);
         Record open = neighbors.findOpen(house.get("id", Long.class));
         boolean mine = open != null && open.get("from_user", Long.class) == userId;
-        return new HouseResponse(house.get("handle", String.class), house.get("nickname", String.class), open != null, mine, mine ? book(open) : null);
+        return new HouseResponse(house.get("public_id", String.class), house.get("nickname", String.class), open != null, mine, mine ? book(open) : null);
     }
 
     /** 내 책 한 권을 그 집에 꽂는다. 자격은 꽂는 순간의 책 상태로 다시 검사한다. */
     @Transactional
-    public RecommendationResponse recommend(long userId, String handle, RecommendRequest body) {
+    public RecommendationResponse recommend(long userId, String publicId, RecommendRequest body) {
         long bookId = bookId(body.bookId());
-        Record house = house(userId, handle);
+        Record house = house(userId, publicId);
         Record book = neighbors.findOwnedBook(bookId, userId);
         if (book == null) throw new ApiException(HttpStatus.NOT_FOUND, "BOOK_NOT_FOUND", "내 책을 찾을 수 없어요");
         if (!ELIGIBLE.contains(book.get("status", String.class)))
@@ -68,8 +68,12 @@ public class NeighborService {
             throw new ApiException(HttpStatus.NOT_FOUND, "NO_RECOMMENDATION", "확인할 추천이 없어요");
     }
 
-    private Record house(long userId, String handle) {
-        Record house = neighbors.findHouse(handle == null ? "" : handle.trim().toLowerCase());
+    /** 사용자 공개 번호: 8-4-4-4-12 모양의 UUID만 인정한다(대소문자 무시). UUID.fromString은 "1-1-1-1-1" 같은 느슨한 모양도 받아서 먼저 모양을 확인한다. */
+    private static final java.util.regex.Pattern PUBLIC_ID = java.util.regex.Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
+    private Record house(long userId, String publicId) {
+        // 번호 모양이 아니면 "없는 집"이다(500이 아니라 404)
+        Record house = publicId != null && PUBLIC_ID.matcher(publicId).matches() ? neighbors.findHouse(java.util.UUID.fromString(publicId)) : null;
         if (house == null) throw new ApiException(HttpStatus.NOT_FOUND, "HOUSE_NOT_FOUND", "이웃집을 찾을 수 없어요");
         if (house.get("id", Long.class) == userId) throw new ApiException(HttpStatus.BAD_REQUEST, "OWN_HOUSE", "내 집에는 추천할 수 없어요");
         return house;

@@ -52,21 +52,20 @@ class NicknameTest extends ApiTestBase {
     }
 
     @Test
-    void creatingAUserAppliesTheSameRuleAndDerivesADefaultFromTheHandle() throws Exception {
+    void creatingAUserAppliesTheSameRuleAndHasATemporaryDefault() throws Exception {
         for (String bad : new String[] {"😀", "여섯글자이름이", "a b", "나무!"}) {
-            mvc.perform(POST(0, "/dev/users", Map.of("handle", "someone", "nickname", bad))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("BAD_NICKNAME"));
+            mvc.perform(POST(0, "/dev/users", Map.of("nickname", bad))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("BAD_NICKNAME"));
         }
-        // 닉네임을 안 주면 핸들에서 영문·숫자만 남겨 5자까지 쓴다
-        mvc.perform(POST(0, "/dev/users", Map.of("handle", "reader_1"))).andExpect(status().isCreated()).andExpect(jsonPath("$.nickname").value("reade"));
-        mvc.perform(POST(0, "/dev/users", Map.of("handle", "___"))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("BAD_NICKNAME"));   // 남는 글자가 없다
+        // 닉네임을 안 주면 임시 닉네임 "손님"을 쓴다 (구글 가입 직후와 같다)
+        mvc.perform(POST(0, "/dev/users", Map.of())).andExpect(status().isCreated()).andExpect(jsonPath("$.nickname").value("손님"));
     }
 
     @Test
     void theDatabaseRefusesBadNicknamesForNewRows() {
         for (String bad : new String[] {"😀", "여섯글자이름이", "a b", "나무!", ""}) {
-            assertThrows(DataIntegrityViolationException.class, () -> dsl.execute("insert into app_user(handle, nickname) values ('dbcheck', ?)", bad));
+            assertThrows(DataIntegrityViolationException.class, () -> dsl.execute("insert into app_user(nickname) values (?)", bad));
         }
-        dsl.execute("insert into app_user(handle, nickname) values ('dbcheck', '나무1')");
-        assertThrows(DataIntegrityViolationException.class, () -> dsl.execute("update app_user set nickname = '나무!' where handle = 'dbcheck'"));
+        dsl.execute("insert into app_user(nickname) values ('나무1')");
+        assertThrows(DataIntegrityViolationException.class, () -> dsl.execute("update app_user set nickname = '나무!' where nickname = '나무1'"));
     }
 }

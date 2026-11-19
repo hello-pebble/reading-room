@@ -22,6 +22,6 @@ public class DevUserController {
     @PostMapping("/dev/users")
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@RequestBody CreateUserRequest body) {
-        return users.create(body.handle(), body.nickname() == null ? Nickname.fromHandle(body.handle()) : body.nickname());
+        return users.create(body.nickname() == null ? "손님" : body.nickname());   // 안 주면 구글 가입 직후와 같은 임시 닉네임
     }
 }

@@ -25,11 +25,4 @@ public final class Nickname {
         if (!valid(nickname)) throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_NICKNAME", MESSAGE);
         return nickname;
     }
-
-    /** dev 전용 기본값: 핸들에서 영문·숫자만 남겨 5자까지. 남는 글자가 없으면 빈 문자열(= 규칙 위반) */
-    static String fromHandle(String handle) {
-        if (handle == null) return null;
-        String s = handle.replaceAll("[^A-Za-z0-9]", "");
-        return s.length() > MAX ? s.substring(0, MAX) : s;
-    }
 }

@@ -57,7 +57,9 @@ class RoomChatTest extends ApiTestBase {
         Room r = roomWith(m("kind", "SAME", "isbn", "9788937460449"), a, b);
         mvc.perform(POST(a, "/rooms/" + r.id() + "/messages", m("content", "  안녕하세요  ", "page", 42))).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.content").value("  안녕하세요  ")).andExpect(jsonPath("$.page").value(42)).andExpect(jsonPath("$.mine").value(true))
-                .andExpect(jsonPath("$.nickname").value("alice")).andExpect(jsonPath("$.userId").value(a)).andExpect(jsonPath("$.left").value(false))
+                .andExpect(jsonPath("$.nickname").value("alice")).andExpect(jsonPath("$.publicId").value(publicId(a)))
+                .andExpect(jsonPath("$.userId").doesNotExist()).andExpect(jsonPath("$.handle").doesNotExist())      // 핸들·내부 번호는 밖으로 나가지 않는다 (결정 #69)
+                .andExpect(jsonPath("$.left").value(false))
                 .andExpect(jsonPath("$.createdAt").value("2026-11-17T03:00:00Z")).andExpect(jsonPath("$.avatar.color").exists());
         clock.advance(Duration.ofSeconds(10));
         say(b, r, "반가워요").andExpect(status().isCreated()).andExpect(jsonPath("$.page").doesNotExist());
@@ -246,7 +248,7 @@ class RoomChatTest extends ApiTestBase {
         mvc.perform(DELETE(b, "/rooms/" + r.id() + "/participants/me")).andExpect(status().isNoContent());
         mvc.perform(GET(a, "/rooms/" + r.id() + "/messages")).andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[1].content").value("밥의 글")).andExpect(jsonPath("$[1].nickname").value("나간 참여자")).andExpect(jsonPath("$[1].left").value(true))
-                .andExpect(jsonPath("$[1].userId").doesNotExist()).andExpect(jsonPath("$[1].handle").doesNotExist()).andExpect(jsonPath("$[1].avatar").doesNotExist())
+                .andExpect(jsonPath("$[1].userId").doesNotExist()).andExpect(jsonPath("$[1].handle").doesNotExist()).andExpect(jsonPath("$[1].publicId").doesNotExist()).andExpect(jsonPath("$[1].avatar").doesNotExist())
                 .andExpect(jsonPath("$[1].mine").value(false)).andExpect(jsonPath("$[0].nickname").value("alice"));
         mvc.perform(POST(b, "/rooms/join", m("code", r.code()))).andExpect(status().isCreated());              // 다시 들어와 동의하면 다시 이름으로 보인다
         mvc.perform(POST(b, "/rooms/" + r.id() + "/agree", Map.of())).andExpect(status().isOk());

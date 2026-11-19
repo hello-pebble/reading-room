@@ -125,7 +125,8 @@ class AuthTest extends ApiTestBase {
         assertThat(token).hasSizeGreaterThanOrEqualTo(40);
         JsonNode user = r.get("user");
         long id = user.get("id").asLong();
-        assertThat(user.get("handle").asText()).matches("g[a-z0-9]{8}");
+        assertThat(user.get("publicId").asText()).matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");   // 무작위 UUID (결정 #69)
+        assertThat(user.has("handle")).isFalse();                                                                                    // 핸들은 없다
         assertThat(user.get("nickname").asText()).isEqualTo("손님");
         assertThat(user.get("needsNickname").asBoolean()).isTrue();
         assertThat(dsl.fetchOne("select user_id from auth_identity where provider = 'google' and provider_user_id = 'sub-1'").get(0, Long.class)).isEqualTo(id);

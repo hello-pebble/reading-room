@@ -10,10 +10,8 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import kr.readingroom.app.auth.dto.LoginResponse;
-import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.TokenResolver;
 import kr.readingroom.app.user.UserService;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -27,7 +25,6 @@ public class AuthService implements TokenResolver {
     static final String GOOGLE = "google";
     static final Duration LIFETIME = Duration.ofDays(30);
     static final String PLACEHOLDER_NICKNAME = "손님";
-    private static final String HANDLE_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final GoogleIdTokenVerifier verifier;
@@ -75,18 +72,7 @@ public class AuthService implements TokenResolver {
     }
 
     private long newUser() {
-        for (int i = 0; i < 8; i++) {
-            Long id = auth.insertUser(newHandle(), PLACEHOLDER_NICKNAME);
-            if (id != null) return id;
-        }
-        throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "HANDLE_BUSY", "계정을 만들지 못했어요. 다시 시도해 주세요");
-    }
-
-    /** g + 영소문자·숫자 8자 (핸들 규칙 ^[a-z0-9_]{3,15}$) */
-    private static String newHandle() {
-        StringBuilder sb = new StringBuilder("g");
-        for (int i = 0; i < 8; i++) sb.append(HANDLE_CHARS.charAt(RANDOM.nextInt(HANDLE_CHARS.length())));
-        return sb.toString();
+        return auth.insertUser(PLACEHOLDER_NICKNAME);
     }
 
     private static String newToken() {

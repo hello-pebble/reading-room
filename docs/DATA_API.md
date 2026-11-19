@@ -15,7 +15,7 @@
 
 ## 구현 상태와 차이 (`backend/`, 2026-11-17)
 
-구현한 범위: **공유방 개방 알림 켜기·끄기(`PUT·DELETE /rooms/{id}/alarm`)와 내 서재로 가져오기(`POST /rooms/{id}/import`, 책의 공유방 탭 `GET /books/{id}/rooms`, 테이블 `room_alarm`·`book_room_archive`는 `V12__room_alarm_archive.sql`)**, 이웃집 책 추천(`GET /neighbors/{handle}`, `POST /neighbors/{handle}/recommendation`, `GET /me/recommendation`, `POST /me/recommendation/confirm`, `neighbor` 패키지, 테이블 `neighbor_recommendation`은 `V11__neighbor_recommendation.sql`)**, 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의·대화(`GET·POST /rooms/{id}/messages`)·읽음(`POST /rooms/{id}/read`)도 같은 패키지에 있다(테이블 `room_message`는 `V10__room_message.sql`). 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
+구현한 범위: **공유방 개방 알림 켜기·끄기(`PUT·DELETE /rooms/{id}/alarm`)와 내 서재로 가져오기(`POST /rooms/{id}/import`, 책의 공유방 탭 `GET /books/{id}/rooms`, 테이블 `room_alarm`·`book_room_archive`는 `V12__room_alarm_archive.sql`)**, 이웃집 책 추천(`GET /neighbors/{publicId}`, `POST /neighbors/{publicId}/recommendation`, `GET /me/recommendation`, `POST /me/recommendation/confirm`, `neighbor` 패키지, 테이블 `neighbor_recommendation`은 `V11__neighbor_recommendation.sql`)**, 책 검색(`GET /books/search`, 국립중앙도서관, 인증키 설정 전에는 503)과 **마을 게시판 읽기(`GET /rooms`)·광장 채팅(`GET·POST /plaza/messages`, `village` 패키지, 테이블 `shared_room`·`room_participant`·`plaza_message`는 `V8__village.sql`)**, 내 방(책·메모·스탠드 타이머·직접 기록·완독/포기·거울 아바타·달력/월 목표·푸시 구독과 알림 대상 선정). **공유방 개설(`POST /rooms`)·초대 미리보기·닫기는 `room` 패키지(V9)로 구현했고, 입장(`POST /rooms/join`)·나가기·보관 동의·대화(`GET·POST /rooms/{id}/messages`)·읽음(`POST /rooms/{id}/read`)도 같은 패키지에 있다(테이블 `room_message`는 `V10__room_message.sql`). 개방·종료 배치, 광장 접속 인원(`/plaza/presence`), 구글 로그인·`room_alarm`·`invite_code` 사용 로직·실제 VAPID 전송·공유방/일 단위 배치는 아직 없다.** 아래는 이 문서의 설계와 구현이 다른 곳이다. 확정 규칙(결정 #16, #17, #24, #26, #36, #39, #41 등)은 바꾸지 않았다.
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
@@ -23,7 +23,7 @@
 | 시각 | 서버 `Clock`으로 `now()`를 정하고, 응답의 시각은 모두 UTC(`...Z`) ISO 문자열. 날짜 자르기(달력·월 목표·직접 기록)는 `Asia/Seoul` |
 | 멱등키 | `Idempotency-Key` 헤더. `idempotency_key(user_id, key, path, status, body)`에 **성공 응답만** 저장하고 재전송이면 그대로 돌려준다. 같은 키를 다른 경로에 쓰면 422. 적용: `POST /books`, `/books/{id}/notes`, `/books/{id}/finish`, `/drop`, `/sessions/start`, `/{id}/stop`, `/{id}/check`, `/{id}/confirm`, `/sessions/manual`. (`PUT`·`PATCH`·구독 저장은 원래 멱등) |
 | 아바타 | 표에 없던 **`PUT /me/avatar`**를 만들었다. 모르는 키는 버리고, 모르는 값·빠진 키는 기본값으로 채우며, **400은 해금 조건 미충족일 때만**(glasses는 책 1건 이상, beanie는 `DONE` 10권 이상). `GET /me`에 `avatar`가 들어 있다 |
-| 닉네임 | **`PUT /me/nickname`** body `{nickname}` → 200 `/me`와 같은 모양. 한글(완성 글자·자음·모음)·영문(ASCII)·숫자만 1~5자이고 이모티콘·특수문자·공백(앞뒤 포함)은 400 `BAD_NICKNAME`(없거나 null도 400). 없는 사용자 404. 첫 로그인 직후 닉네임 정하기와 바꾸기가 같은 API다. 사용자 생성(`/dev/users`)도 같은 규칙이고, 닉네임을 안 주면 핸들에서 영문·숫자만 남겨 5자까지 쓴다(개발용) |
+| 닉네임 | **`PUT /me/nickname`** body `{nickname}` → 200 `/me`와 같은 모양. **언제든 다시 바꿀 수 있다**(사람을 구분하는 값은 닉네임이 아니라 공개 번호 `publicId`, 결정 #69). 한글(완성 글자·자음·모음)·영문(ASCII)·숫자만 1~5자이고 이모티콘·특수문자·공백(앞뒤 포함)은 400 `BAD_NICKNAME`(없거나 null도 400). 없는 사용자 404. 첫 로그인 직후 닉네임 정하기와 바꾸기가 같은 API다. 사용자 생성(`/dev/users`)도 같은 규칙이고, 닉네임을 안 주면 임시 닉네임 `손님`을 쓴다(개발용, 핸들은 없다) |
 | 책 | `GET /books?status=`, `GET /books/{id}`, `GET /books/{id}/notes`를 더했다. 전체 쪽수는 1~9999이고 0·음수는 비움, 9999 초과는 9999로 맞춘다(프로토타입과 같다). `PATCH`의 현재 쪽은 줄지 않고(작은 값은 무시) 전체 쪽수를 넘는 값도 그대로 저장하되 퍼센트만 100으로 막는다. **메모·스탠드 끄기·직접 기록·완독은 현재 쪽을 전체 쪽수까지만** 올리고 완독 때 넘은 값을 전체 쪽수로 줄인다. `percent`는 서버가 반올림해 내려준다. 포기한 책의 `finished_at`은 비운다. 메모·인용구 삭제 API는 아직 없다 |
 | 세션 | `RUNNING`뿐 아니라 **`NEEDS_CONFIRM`도 사용자당 1개 인덱스에 포함**해(확인 필요 상태도 켜진 것), 그 사이 새로 켤 수 없다(409 + 기존 세션). 컬럼 추가: `memo`, `needs_confirm_at`(전환 시각), `check_notified_for`·`confirm_notified_at`(푸시 중복 방지). 켠 지 3시간이 넘은 `RUNNING`은 10분 배치를 기다리지 않고 **요청 시점에도** `NEEDS_CONFIRM`으로 바꾼다(`check`·`stop`·`GET /sessions/current` 등. 3시간 확인 우회 방지) |
 | stop / confirm | `stop` 본문 `{endPage?, totalPages?(모르던 책만), memo?, endedBy?(LAMP/PIP/NOTIFICATION)}`. 메모는 세션과 책의 `MEMO` 노트로 남는다. `NEEDS_CONFIRM`에서 `stop`하면 `last_check_at`까지만 기록한다(1분 미만이면 `DISCARDED`). `confirm` 본문 `{until: LAST_CHECK \| MINUTES, minutes?, discard?}`: `LAST_CHECK`는 '계속'을 한 번도 안 눌렀으면 1시간으로 기록(프로토타입 [1시간 읽은 걸로 기록]), `MINUTES`는 1~600분이고 켠 뒤 지난 시간 안 |
@@ -42,7 +42,7 @@
 
 | 테이블 | 컬럼 | 제약 |
 |---|---|---|
-| `app_user` | id, handle, nickname, avatar(JSON), status, beta_tester, created_at | handle unique (영소문자·숫자·`_`, 3~15자). **nickname은 한글·영문·숫자만, 공백 없이 1~5자**(이모티콘·특수문자·공백 금지, 겹쳐도 됨. 결정 #67, DB 제약 `app_user_nickname_rule`). `nickname_chosen_at`: 닉네임을 직접 정한 시각, 비어 있으면 임시 닉네임(`needsNickname`, 결정 #68). 월 목표는 `monthly_goal` 테이블(월별 이력, 결정 #39) |
+| `app_user` | id, public_id, nickname, avatar(JSON), status, beta_tester, created_at | **public_id**: 다른 사람에게 보이는 무작위 UUID(v4, 유일, 바뀌지 않음, DB가 만든다). **핸들은 없다**(결정 #69). 순번인 `id`는 밖으로 나가지 않는다. **nickname은 한글·영문·숫자만, 공백 없이 1~5자**(이모티콘·특수문자·공백 금지, 겹쳐도 됨. 결정 #67, DB 제약 `app_user_nickname_rule`). `nickname_chosen_at`: 닉네임을 직접 정한 시각, 비어 있으면 임시 닉네임(`needsNickname`, 결정 #68). 월 목표는 `monthly_goal` 테이블(월별 이력, 결정 #39) |
 | `auth_identity` | id, user_id, provider, provider_user_id, created_at | unique(provider, provider_user_id). 구글은 `provider='google'`, `provider_user_id`=구글 계정 고유 ID(`sub`) (결정 #67) |
 | `auth_session` | token_hash(SHA-256 16진수 64자, 기본키), user_id(사용자와 함께 삭제), created_at, expires_at | 로그인 세션. 토큰 원문은 저장하지 않는다. 30일 뒤 만료(고정), 로그인할 때 그 사용자의 만료 세션을 지운다 (결정 #68) |
 | `invite_code` | code, created_by, max_uses, used_count, expires_at | |
@@ -118,13 +118,13 @@
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| POST | `/auth/google` | body `{idToken}`(화면이 구글에서 받은 ID 토큰). 로그인 필요 없음. 서버가 RS256 서명(구글 공개키 `kid`), `iss`(구글), `aud`(우리 클라이언트 ID, 문자열), `exp`(지나면 거절), `sub`를 확인한다. 성공 200 `{token, expiresAt, newUser, user:{id, handle, nickname, avatar, needsNickname}}`. 처음 로그인이면 사용자를 만든다: 핸들은 자동(`g`+영소문자·숫자 8자), 닉네임은 임시 `손님`, `needsNickname:true`. 실패 401 `INVALID_ID_TOKEN`, 클라이언트 ID(`GOOGLE_CLIENT_ID`)가 없으면 503 `AUTH_UNAVAILABLE`, 구글 키를 못 받으면 503 |
+| POST | `/auth/google` | body `{idToken}`(화면이 구글에서 받은 ID 토큰). 로그인 필요 없음. 서버가 RS256 서명(구글 공개키 `kid`), `iss`(구글), `aud`(우리 클라이언트 ID, 문자열), `exp`(지나면 거절), `sub`를 확인한다. 성공 200 `{token, expiresAt, newUser, user:{id, publicId, nickname, avatar, needsNickname}}`. 처음 로그인이면 사용자를 만든다: 공개 번호(`publicId`)는 DB가 무작위 UUID로 만들고, 닉네임은 임시 `손님`, `needsNickname:true`. 실패 401 `INVALID_ID_TOKEN`, 클라이언트 ID(`GOOGLE_CLIENT_ID`)가 없으면 503 `AUTH_UNAVAILABLE`, 구글 키를 못 받으면 503 |
 | POST | `/auth/logout` | 이 기기에서 쓴 토큰만 끝낸다(204). 토큰이 없거나 틀리면 401 |
 | PUT | `/me/nickname` | 닉네임 정하기·바꾸기. 처음 호출하면 `needsNickname`이 false가 된다 (위 "닉네임" 행) |
 
 - 토큰은 무작위 32바이트(base64url)이고 로그인 응답에서만 볼 수 있다. 모든 요청에 `Authorization: Bearer <token>`으로 보낸다. 같은 계정으로 여러 기기에서 로그인하면 기기마다 다른 토큰이다.
 - 구글 키(JWKS)는 6시간 캐시하고 모르는 `kid`가 오면 최소 1분 간격으로 다시 받는다. `alg`가 RS256이 아니거나(none·HS256) `aud`가 배열이면 거절한다.
-- **가입은 지금 열려 있다**: 구글 계정이 있으면 누구나 가입된다. 초대 코드(`invite_code` 테이블)·허용 목록 검사는 아직 없다(사용자 결정 필요). 핸들은 자동으로 만들고 바꾸는 API는 없다.
+- **가입은 지금 열려 있다**: 구글 계정이 있으면 누구나 가입된다. 초대 코드(`invite_code` 테이블)·허용 목록 검사는 아직 없다(사용자 결정 필요). 핸들은 없다: 사람은 닉네임(바꿀 수 있음)으로 보이고 공개 번호(무작위 UUID, 고정)로 구분한다(결정 #69).
 
 ### 타이머
 
@@ -202,7 +202,7 @@
 | POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관. **구현**: 응답 `{id, result(CANCELED/CLOSED), closedAt}`. 개설자가 아니면 403(`NOT_OWNER`), 없으면 404, 이미 끝난 방(일찍 끝냄·시간 지남)은 409(`ROOM_ALREADY_CLOSED`). 취소해도 `room_open_log`는 남는다 |
 | DELETE | `/rooms/{id}/participants/me` | 방 나가기. 내 글은 남고 익명("나간 참여자")으로 내려간다. 개설자는 나갈 수 없다(409). **구현**: 204, 개설자 `OWNER_CANNOT_LEAVE` 409, 방이 없거나 참여 중이 아니면(이미 나간 경우 포함) 404. 행은 지우지 않고 `left_at`만 기록한다 |
 | POST | `/rooms/{id}/agree` | 보관 동의 기록(`agreed_at`). 동의 전에는 글 목록을 내려주지 않는다 (403). **구현**: 응답 `{roomId, agreedAt}`. 참여 중인 사람만(아니면 403, 나간 사람 포함), 방이 없으면 404, 다시 눌러도 처음 동의한 시각을 그대로 돌려준다 |
-| GET | `/rooms/{id}/messages?after=` | 글 목록. 삭제하지 않은 글은 모두 내려준다(쪽수 잠금은 #43으로 없어졌다). 다른 사람의 진행 퍼센트는 내려주지 않는다. **구현**: `after`는 마지막으로 본 **글 id**(숫자, 아니면 400). 있으면 그 다음 글부터 오래된 순으로 최대 100개, 없으면 가장 최근 100개를 오래된 순으로 준다. 응답 `[{id, userId, handle, nickname, avatar, content, page, createdAt, mine, left}]`. 나간 사람의 글은 남고 `userId`·`handle`·`avatar`가 없고 `nickname`이 `나간 참여자`, `left`가 true다(다시 들어오면 이름으로 돌아온다). 방이 없거나 보관 7일이 지났으면 404, 참여 중이 아니면 403(`NOT_PARTICIPANT`), 보관 동의 전이면 403(`AGREE_REQUIRED`). 종료된 방도 보관 7일 동안은 읽을 수 있다 |
+| GET | `/rooms/{id}/messages?after=` | 글 목록. 삭제하지 않은 글은 모두 내려준다(쪽수 잠금은 #43으로 없어졌다). 다른 사람의 진행 퍼센트는 내려주지 않는다. **구현**: `after`는 마지막으로 본 **글 id**(숫자, 아니면 400). 있으면 그 다음 글부터 오래된 순으로 최대 100개, 없으면 가장 최근 100개를 오래된 순으로 준다. 응답 `[{id, publicId, nickname, avatar, content, page, createdAt, mine, left}]`(글쓴이는 `publicId`로만 가리키고 핸들·내부 id는 없다, 결정 #69). 나간 사람의 글은 남고 `publicId`·`avatar`가 없고 `nickname`이 `나간 참여자`, `left`가 true다(다시 들어오면 이름으로 돌아온다). 방이 없거나 보관 7일이 지났으면 404, 참여 중이 아니면 403(`NOT_PARTICIPANT`), 보관 동의 전이면 403(`AGREE_REQUIRED`). 종료된 방도 보관 7일 동안은 읽을 수 있다 |
 | POST | `/rooms/{id}/messages` | 글 보내기. body `{content, page?}` (1~300자). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`). `OPEN` 방과 내가 참여 중인 방만. **구현**: 201과 글 한 줄(위와 같은 모양). 글자 수는 코드포인트로 세고(이모지 한 글자) 공백만 있거나 없으면 400(`BAD_CONTENT`), 앞뒤 공백은 그대로 둔다. `page`는 같은 책(`SAME`) 방에서만 1~9999 정수이고, 각자 읽기 방에서 주면 400(`PAGE_NOT_ALLOWED`), 범위·형식이 틀리면 400(`BAD_PAGE`). 도배 제한(`ChatRate`)은 **방과 상관없이 사용자당**이고 광장과는 따로 센다: ① 내 글이 3초 안(`created_at > 지금-3초`)에 이미 3건이면 429 `TOO_FAST`(첫 글이 3초 밖으로 나가는 순간 한 자리가 난다) ② 내 **직전 글**과 같고(앞뒤 공백 무시) 30초 안이면 409 `DUPLICATE_MESSAGE`(직전 글이 아니라 그 앞 글과 같은 것은 된다). 동시에 보내도 사용자 잠금으로 한 줄씩 검사해 3건을 넘지 않는다. 검사 순서: 방(404) → 참여(403) → 동의(403) → 상태(`SCHEDULED`는 409 `ROOM_NOT_OPEN`, 종료는 410 `ROOM_CLOSED`) → 내용(400) → 3초 3건(429) → 같은 글(409). 막힌 요청은 저장하지 않아 횟수에도 세지 않는다 |
 | ~~DELETE~~ | ~~`/rooms/{id}/messages/{mid}`~~ | 폐지 (#53). 보낸 글은 삭제·수정하지 않는다 |
 | POST | `/rooms/{id}/read` | 마지막으로 읽은 시각(`last_read_at`) 저장. 새 글 별(✦) 계산에 쓴다. **구현**: 응답 `{roomId, lastReadAt}`(서버 시각). 참여 중인 사람만(아니면 403), 방이 없거나 보관 7일이 지났으면 404, 종료된 방도 보관 기간 안에는 된다. 동의 전에도 저장은 되지만 글 목록은 못 본다 |
@@ -215,19 +215,19 @@
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| GET | `/plaza/messages?since=` | 최근 24시간 대화. `since`(ISO 시각, 예 `2026-11-18T03:00:00Z`)가 없으면 가장 최근 30개, 있으면 그 이후 글을 오래된 순으로 최대 30개(24시간보다 오래된 `since`는 24시간 전으로 본다). 응답 `[{id, userId, handle, nickname, avatar, content, createdAt}]`, 잘못된 `since`는 400. 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
+| GET | `/plaza/messages?since=` | 최근 24시간 대화. `since`(ISO 시각, 예 `2026-11-18T03:00:00Z`)가 없으면 가장 최근 30개, 있으면 그 이후 글을 오래된 순으로 최대 30개(24시간보다 오래된 `since`는 24시간 전으로 본다). 응답 `[{id, publicId, nickname, avatar, content, createdAt}]`(글쓴이는 `publicId`로만 가리키고 핸들·내부 id는 없다, 결정 #69), 잘못된 `since`는 400. 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
 | GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/100)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 100명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
 | POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거, 글자는 코드 포인트 기준). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 공유방 대화와 같은 `ChatRate`이지만 따로 센다. 같은 사람의 동시 전송은 DB 잠금으로 한 줄로 세운다), 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`. 성공하면 201과 만든 글 |
 
 ### 이웃집 책 추천 API
 
-집은 사용자의 `handle`로 가리킨다(대소문자·공백 무시). 전부 로그인(`X-User-Id`) 필요.
+집은 사용자의 **공개 번호**(`publicId`, 무작위 UUID, 대소문자 무시)로 가리킨다(결정 #69). 번호 모양이 아니거나 없는 번호는 404 `HOUSE_NOT_FOUND`(500이 아니다), 닉네임·내부 id는 주소가 아니다. 전부 로그인(Bearer 토큰) 필요.
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| GET | `/neighbors/{handle}` | 이웃집 방문. 응답 `{handle, nickname, occupied, mine, book}`. `occupied`는 아래 칸에 확인 전 추천이 있는지, `book`은 그 추천을 **내가** 꽂았을 때(`mine`)만 내려가고 남이 꽂은 책은 알려 주지 않는다. 없는 핸들은 404(`HOUSE_NOT_FOUND`), 내 집은 400(`OWN_HOUSE`) |
-| POST | `/neighbors/{handle}/recommendation` | 내 책 한 권을 그 집에 꽂는다. body `{bookId}`(정수, 아니면 400 `BAD_BOOK_ID`). 201과 `{id, fromNickname(나), book:{isbn,title,author,coverUrl}, createdAt}`. 내 책이 아니거나 없으면 404(`BOOK_NOT_FOUND`), **읽는 중(`READING`)·완독(`DONE`)이 아니면 400(`BOOK_NOT_ELIGIBLE`)** — 꽂는 순간의 상태로 다시 검사한다. 그 집에 확인 전 추천이 있으면 409(`HOUSE_OCCUPIED`, 덮어쓰지 않는다). 동시에 여러 명이 꽂아도 한 명만 201이다. 내 책과 기록은 바꾸지 않는다 |
-| GET | `/me/recommendation` | 내 집에 도착한 확인 전 추천 `{id, fromNickname, book, createdAt}`. 없으면 204. **보낸 사람은 닉네임(`fromNickname`, 보여 줄 때의 현재 닉네임)으로 밝힌다.** 핸들·사용자 id는 내려주지 않는다 |
+| GET | `/neighbors/{publicId}` | 이웃집 방문. 응답 `{publicId, nickname, occupied, mine, book}`. `occupied`는 아래 칸에 확인 전 추천이 있는지, `book`은 그 추천을 **내가** 꽂았을 때(`mine`)만 내려가고 남이 꽂은 책은 알려 주지 않는다. 없는 번호는 404(`HOUSE_NOT_FOUND`), 내 집은 400(`OWN_HOUSE`) |
+| POST | `/neighbors/{publicId}/recommendation` | 내 책 한 권을 그 집에 꽂는다. body `{bookId}`(정수, 아니면 400 `BAD_BOOK_ID`). 201과 `{id, fromNickname(나), book:{isbn,title,author,coverUrl}, createdAt}`. 내 책이 아니거나 없으면 404(`BOOK_NOT_FOUND`), **읽는 중(`READING`)·완독(`DONE`)이 아니면 400(`BOOK_NOT_ELIGIBLE`)** — 꽂는 순간의 상태로 다시 검사한다. 그 집에 확인 전 추천이 있으면 409(`HOUSE_OCCUPIED`, 덮어쓰지 않는다). 동시에 여러 명이 꽂아도 한 명만 201이다. 내 책과 기록은 바꾸지 않는다 |
+| GET | `/me/recommendation` | 내 집에 도착한 확인 전 추천 `{id, fromNickname, book, createdAt}`. 없으면 204. **보낸 사람은 닉네임(`fromNickname`, 보여 줄 때의 현재 닉네임)으로 밝힌다.** 공개 번호·내부 id는 내려주지 않는다 |
 | POST | `/me/recommendation/confirm` | 집 주인이 [확인했어요]. 204. 확인할 추천이 없으면 404(`NO_RECOMMENDATION`). 경로가 내 집이라 집 주인 본인만 확인할 수 있다. 확인만으로 내 책장에 책을 더하지 않고, 칸이 비어 다시 추천받을 수 있다 |
 
 ## 배치 작업 (`@Scheduled`)

@@ -22,8 +22,9 @@ class AccountTest extends ApiTestBase {
         mvc.perform(get("/me").header("X-User-Id", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
-                .andExpect(jsonPath("$.handle").value("reader_1"))
-                .andExpect(jsonPath("$.nickname").value("reade"))   // 핸들에서 영문·숫자만 남겨 5자까지 (닉네임 규칙 #67)
+                .andExpect(jsonPath("$.publicId").value(publicId(id)))
+                .andExpect(jsonPath("$.handle").doesNotExist())                                   // 핸들은 없다 (결정 #69)
+                .andExpect(jsonPath("$.nickname").value("reade"))   // 라벨에서 영문·숫자만 남겨 5자까지 (닉네임 규칙 #67)
                 .andExpect(jsonPath("$.avatar.color").value("#f6f3ff"))
                 .andExpect(jsonPath("$.avatar.prop").value("book"));
     }
@@ -34,17 +35,13 @@ class AccountTest extends ApiTestBase {
     }
 
     @Test
-    void handleConstraintAndUniqueIdentity() throws Exception {
-        for (String bad : new String[] {"ab", "Upper1", "has-dash", "abcdefghijklmnop"}) {
-            mvc.perform(post("/dev/users").contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"handle\":\"" + bad + "\"}")).andExpect(status().isBadRequest());
-            // DB CHECK도 막는다
-            org.junit.jupiter.api.Assertions.assertThrows(DataIntegrityViolationException.class,
-                    () -> dsl.execute("insert into app_user(handle, nickname) values (?, 'x')", bad));
-        }
+    void publicIdIsUniqueThereIsNoHandleAndIdentityIsUnique() throws Exception {
         long id = newUser("dup_user");
-        mvc.perform(post("/dev/users").contentType(MediaType.APPLICATION_JSON).content("{\"handle\":\"dup_user\"}"))
-                .andExpect(status().isConflict());
+        // 핸들 열은 없다 (결정 #69)
+        assertThat(dsl.fetchCount(dsl.selectFrom("information_schema.columns").where("table_name = 'app_user' and column_name = 'handle'"))).isZero();
+        // 공개 번호는 겹칠 수 없다
+        org.junit.jupiter.api.Assertions.assertThrows(DataIntegrityViolationException.class,
+                () -> dsl.execute("insert into app_user(nickname, public_id) values ('x', (select public_id from app_user where id = ?))", id));
         dsl.execute("insert into auth_identity(user_id, provider, provider_user_id) values (?, 'kakao', 'k1')", id);
         org.junit.jupiter.api.Assertions.assertThrows(DataIntegrityViolationException.class,
                 () -> dsl.execute("insert into auth_identity(user_id, provider, provider_user_id) values (?, 'kakao', 'k1')", id));

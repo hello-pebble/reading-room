@@ -117,7 +117,7 @@ public class RoomMessageService {
                 avatar = null;
             }
         }
-        return new RoomMessageResponse(r.get("id", Long.class), left ? null : author, left ? null : r.get("handle", String.class),
+        return new RoomMessageResponse(r.get("id", Long.class), left ? null : r.get("public_id", String.class),
                 left ? LEFT_NICKNAME : r.get("nickname", String.class), avatar, r.get("content", String.class), r.get("page", Integer.class),
                 Db.instant(r, "created_at"), author == userId, left);
     }

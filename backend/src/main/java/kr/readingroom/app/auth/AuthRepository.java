@@ -24,10 +24,9 @@ public class AuthRepository {
         return r == null ? null : r.get("user_id", Long.class);
     }
 
-    /** 핸들이 겹치면 아무것도 넣지 않고 null (서비스가 새 핸들로 다시 시도). 닉네임은 임시이고 nickname_chosen_at은 비운다. */
-    public Long insertUser(String handle, String placeholderNickname) {
-        Record r = dsl.fetchOne("insert into app_user(handle, nickname) values (?, ?) on conflict (handle) do nothing returning id", handle, placeholderNickname);
-        return r == null ? null : r.get("id", Long.class);
+    /** 임시 닉네임으로 사용자를 만든다(nickname_chosen_at은 비운다). 공개 번호(public_id)는 DB가 무작위 UUID로 채운다. */
+    public long insertUser(String placeholderNickname) {
+        return dsl.fetchOne("insert into app_user(nickname) values (?) returning id", placeholderNickname).get("id", Long.class);
     }
 
     public void insertIdentity(long userId, String provider, String providerUserId) {

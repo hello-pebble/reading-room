@@ -58,6 +58,11 @@ function applyUser(u) {
 
 // 로그인한 직후와 새로고침 때: 서버의 책·메모(books.js)와 켜진 스탠드·오늘 읽은 시간(sessions.js)을 불러온다
 const afterSignIn = () => {
+  HOUSE.at = 0; // 계정이 바뀌면 마을의 집을 다시 정한다 (neighbor-server.js)
+  HOUSE.next = null;
+  refreshNeighborHouses();
+  loadIncomingRecommendation();
+  startIncomingWatch();
   plazaReset(); // 다른 계정의 광장 글 표시가 남지 않게 (plaza.js)
   calReset(); // 다른 계정의 달력이 남지 않게. 이번 달은 다음 화면 그리기 때 서버에서 받는다 (calendar.js)
   return Promise.all([loadBooks(), loadSession(), loadRooms()])

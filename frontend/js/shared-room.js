@@ -27,6 +27,11 @@ const roomSub = (n) => {
 let campSince = 0;
 // 모닥불 장면에 머문 시간은 오늘 읽은 시간에 더한다. 스탠드 기록과 겹치는 구간은 한 번만 센다
 function recordCampTime(n, end) {
+  if (API.enabled) {
+    campSince = 0;
+    if (n && n.srv) serverStayLeave(n); // 머문 시간은 서버가 입장·퇴장 시각으로 센다 (rooms.js)
+    return 0;
+  }
   const a = campSince;
   campSince = 0;
   if (!a) return 0;
@@ -55,6 +60,7 @@ function enterCamp(n) {
   if (!n || n.kind !== 'OPEN' || !n.agreed || VIEW !== 'village') return;
   CAMP_ID = n.id;
   campSince = Date.now();
+  if (API.enabled && n.srv) serverStayEnter(n);
   VIEW = 'shared';
   const i = Math.max(
       0,

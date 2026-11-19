@@ -71,6 +71,10 @@ const vilList = () =>
   }));
 function enterVillage() {
   if (VIEW === 'village') return;
+  if (API.enabled && !HOUSE.at) {
+    refreshNeighborHouses().then(enterVillage); // 마을의 집에 살 사람을 먼저 정한다 (neighbor-server.js)
+    return;
+  }
   closePanel();
   const w = document.getElementById('stageWrap');
   w.classList.add('fading');
@@ -89,6 +93,7 @@ function enterVillage() {
       k: 0,
       rot: Math.PI / 4,
     });
+    if (API.enabled) applyNeighborHouses(); // 장면의 집 이름표를 만들기 직전에 정한다
     if (G3) G3.setView('village');
     buildSr();
     render();

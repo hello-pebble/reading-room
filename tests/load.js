@@ -76,6 +76,12 @@ function fakeServer() {
   const raise = (b, page) => { if (page != null && page > b.currentPage) b.currentPage = b.totalPages ? Math.min(page, b.totalPages) : page; };
   const srv = {
     calls, users, tokens, down: false,
+    recs: {}, // 집 주인 번호(user.id) → 확인 전 추천 {id, fromUid, book, at}
+    // fromLabel 계정이 toLabel 계정의 집에 그 계정의 책을 꽂아 둔다
+    seedRecommendation(fromLabel, toLabel, bookTitle) {
+      const from = users[fromLabel], to = users[toLabel], bk = (from.books || []).find((b) => b.title === bookTitle);
+      srv.recs[to.id] = { id: ++seq, fromUid: from.id, book: bk, at: Date.now() + srv.skew };
+    },
     rooms: [], // 공유방 (오래된 것부터). parts[0]이 개설자
     // 그 계정이 개설자인 방을 미리 만들어 둔다. o: {kind, title, isbn, max, openAt, hours} (시각은 서버 시각 ms)
     seedRoom(label, o = {}) {
@@ -208,6 +214,54 @@ function fakeServer() {
           r.msgs.push(msg);
           return res(201, { id: msg.id, publicId: user.publicId, nickname: user.nickname, avatar: {}, content, page: msg.page, createdAt: iso(t), mine: true, left: false });
         }
+      }
+      // 이웃집 책 추천 (집은 공개 번호로 가리킨다. 한 집에 확인 전 추천은 하나, 꽂은 책은 꽂은 사람에게만 보인다)
+      const recBook = (b) => ({ isbn: b.isbn, title: b.title, author: b.author, coverUrl: b.coverUrl });
+      if ((m = path.match(/^\/neighbors\/([^/]+)(\/recommendation)?$/))) {
+        const house = Object.values(users).find((u) => u.publicId === m[1].toLowerCase());
+        if (!house) return res(404, { error: 'HOUSE_NOT_FOUND', message: '그 집을 찾을 수 없어요' });
+        if (house.id === user.id) return res(400, { error: 'OWN_HOUSE', message: '내 집에는 추천할 수 없어요' });
+        const rec = srv.recs[house.id];
+        if (method === 'GET' && !m[2]) return res(200, { publicId: house.publicId, nickname: house.nickname, occupied: !!rec, mine: !!rec && rec.fromUid === user.id, book: rec && rec.fromUid === user.id ? recBook(rec.book) : null });
+        if (method === 'POST' && m[2]) {
+          if (!Number.isInteger(body.bookId)) return res(400, { error: 'BAD_BOOK_ID', message: '책 번호가 올바르지 않아요' });
+          const bk = books.find((x) => x.id === body.bookId);
+          if (!bk) return res(404, { error: 'BOOK_NOT_FOUND', message: '책을 찾을 수 없어요' });
+          if (bk.status !== 'READING' && bk.status !== 'DONE') return res(400, { error: 'BOOK_NOT_ELIGIBLE', message: '읽는 중이거나 다 읽은 책만 추천할 수 있어요' });
+          if (rec) return res(409, { error: 'HOUSE_OCCUPIED', message: '아직 집 주인이 책을 확인하지 않았어요' });
+          const made = (srv.recs[house.id] = { id: ++seq, fromUid: user.id, book: bk, at: srv.now() });
+          return res(201, { id: made.id, fromNickname: '나', book: recBook(bk), createdAt: iso(made.at) });
+        }
+      }
+      if (method === 'GET' && path === '/me/recommendation') {
+        const rec = srv.recs[user.id];
+        if (!rec) return res(204);
+        return res(200, { id: rec.id, fromNickname: Object.values(users).find((u) => u.id === rec.fromUid).nickname, book: recBook(rec.book), createdAt: iso(rec.at) });
+      }
+      if (method === 'POST' && path === '/me/recommendation/confirm') {
+        if (!srv.recs[user.id]) return res(404, { error: 'NO_RECOMMENDATION', message: '확인할 추천이 없어요' });
+        delete srv.recs[user.id];
+        return res(204);
+      }
+      // 모닥불 머문 시간 (들어갈 때 서버 시각을 적고, 나갈 때 1분 이상이면 끝난 기록으로 쳐서 읽은 시간·달력에 더한다)
+      if ((m = path.match(/^\/rooms\/(\d+)\/stay(\/leave)?$/)) && method === 'POST') {
+        const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);
+        if (!r) return res(404, { error: 'NOT_FOUND', message: '모닥불을 찾을 수 없어요' });
+        if (m[2]) {
+          const st = user.stay;
+          if (!st || st.roomId !== r.id) return res(404, { error: 'NO_OPEN_STAY', message: '열린 입장이 없어요' });
+          user.stay = null;
+          const end = Math.min(srv.now(), r.closedAt || r.closeAt), minutes = Math.floor((end - st.at) / 60000);
+          if (minutes < 1) return res(200, { roomId: r.id, enteredAt: iso(st.at), leftAt: iso(end), minutes: 0, credited: false });
+          (user.sess = user.sess || []).push({ id: ++seq, bookId: null, status: 'DONE', source: 'CAMP', startedAt: st.at, endedAt: end, endedBy: 'CAMP' });
+          return res(200, { roomId: r.id, enteredAt: iso(st.at), leftAt: iso(end), minutes, credited: true });
+        }
+        if (!me || me.left) return res(403, { error: 'NOT_PARTICIPANT', message: '참여 중인 모닥불이 아니에요' });
+        if (!me.agreed) return res(403, { error: 'AGREE_REQUIRED', message: '보관 동의가 필요해요' });
+        if (roomStatus(r) === 'CLOSED') return res(410, { error: 'ROOM_CLOSED', message: '이미 끝난 모닥불이에요' });
+        if (roomStatus(r) !== 'OPEN') return res(409, { error: 'ROOM_NOT_OPEN', message: '아직 열리지 않은 모닥불이에요' });
+        user.stay = { roomId: r.id, at: srv.now() };
+        return res(201, { roomId: r.id, enteredAt: iso(srv.now()) });
       }
       // 개방 알림·내 서재로 가져오기
       if ((m = path.match(/^\/rooms\/(\d+)\/(alarm|import)$/))) {

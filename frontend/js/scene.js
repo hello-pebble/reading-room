@@ -1277,7 +1277,12 @@ function createScene() {
     NEIGHBORS.forEach((n) => {
       house('neighbor:' + n.id, ...n.house, false);
       const [x, z, w, d, h] = n.house;
-      addLabel(esc(n.name) + '의 집', x + w / 2, h * 1.7 + 0.35, z + d / 2);
+      addLabel(
+        API.enabled && !n.pid ? esc(NB_EMPTY) : esc(n.name) + '의 집', // 서버 연결 모드에서 사는 사람이 없는 집은 "빈 집"
+        x + w / 2,
+        h * 1.7 + 0.35,
+        z + d / 2,
+      );
     });
     const bg = new THREE.Group();
     villageG.add(bg);

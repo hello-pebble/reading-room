@@ -18,6 +18,13 @@ const recommendedBooks = () => [
 const currentGift = () => S.recommendations[VIEW === 'neighbor' ? visitingNeighbor : 'me'] || null;
 
 function visitNeighbor(id) {
+  if (API.enabled) {
+    if (VIEW === 'village') serverVisitNeighbor(id); // 사는 사람이 있는 집만, 서버에서 집 정보를 받은 뒤 들어간다 (neighbor-server.js)
+    return;
+  }
+  enterNeighborHouse(id);
+}
+function enterNeighborHouse(id) {
   const n = NEIGHBORS.find((n) => n.id === id);
   if (!n || VIEW !== 'village') return;
   closePanel();
@@ -73,14 +80,18 @@ function neighborShelfPanel() {
   const n = neighborNow();
   if (!n) return head('이웃집');
   const gift = S.recommendations[n.id];
+  if (API.enabled && n.occupied && !gift)
+    return head(esc(n.name) + '의 책장') + '<p>이미 책이 꽂혀 있어요. 집 주인이 확인하면 다시 추천할 수 있어요.</p>';
   if (gift)
     return (
       head(esc(n.name) + '의 책장') +
       giftCard(gift) +
       `<p class="muted">책장 아래 칸에 꽂아 두었어요. 집 주인이 확인하면 다시 한 권을 추천할 수 있어요.</p>` +
-      (panelView.ownerPreview
-        ? `<div class="card"><b>집 주인이 되어 책 확인하기</b><p>추천받은 책을 확인했어요. 아래 칸을 비울까요?</p><button class="primary" data-act="giftRead" data-house="${n.id}">확인했어요</button></div>`
-        : `<details class="neighbor-demo"><summary>테스트 도구</summary><p class="muted">체험판에서는 집 주인의 확인을 직접 재현할 수 있어요.</p><button data-act="giftOwner">집 주인 시점으로 보기</button></details>`)
+      (API.enabled
+        ? '' // 집 주인 확인을 재현하는 도구는 체험판에만 있다
+        : panelView.ownerPreview
+          ? `<div class="card"><b>집 주인이 되어 책 확인하기</b><p>추천받은 책을 확인했어요. 아래 칸을 비울까요?</p><button class="primary" data-act="giftRead" data-house="${n.id}">확인했어요</button></div>`
+          : `<details class="neighbor-demo"><summary>테스트 도구</summary><p class="muted">체험판에서는 집 주인의 확인을 직접 재현할 수 있어요.</p><button data-act="giftOwner">집 주인 시점으로 보기</button></details>`)
     );
   const books = recommendedBooks();
   return (
@@ -108,6 +119,10 @@ function putRecommendation(key) {
     toast('읽는 중이거나 다 읽은 책만 추천할 수 있어요');
     return false;
   }
+  if (API.enabled) {
+    serverPutRecommendation(n, chosen.book); // 서버가 받아들이면 아래 칸에 보인다
+    return true;
+  }
   const b = chosen.book;
   S.recommendations[n.id] = {
     from: 'me',
@@ -124,7 +139,7 @@ function putRecommendation(key) {
 function incomingGiftHtml() {
   const g = S.recommendations.me;
   return g
-    ? `<div class="card"><b>이웃이 꽂아 둔 책 ✦</b>${giftCard(g)}<button data-act="giftRead" data-house="me">확인했어요</button></div>`
+    ? `<div class="card"><b>${API.enabled && g.from ? esc(g.from) + '님이 꽂아 둔 책' : '이웃이 꽂아 둔 책'} ✦</b>${giftCard(g)}<button data-act="giftRead" data-house="me">확인했어요</button></div>`
     : '';
 }
 function neighborAction(act, b) {
@@ -140,6 +155,10 @@ function neighborAction(act, b) {
     return true;
   }
   if (act === 'giftRead') {
+    if (API.enabled && b.dataset.house === 'me') {
+      serverConfirmRecommendation(); // 서버가 받아들인 뒤 아래 칸을 비운다
+      return true;
+    }
     const id = b.dataset.house,
       own = id === 'me' && VIEW === 'room' && panelOpen === 'shelf';
     const preview =

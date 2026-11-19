@@ -163,6 +163,29 @@ async function loadBookRooms(id) {
   if (panelOpen === 'shelf') renderPanel();
 }
 
+// 모닥불 머문 시간: 장면에 들어갈 때 서버에 알리고, 나올 때(나가기·시간 종료·방 닫기) 서버가 센 분을 받아 읽은 시간·달력에 반영한다.
+// 서버가 거절하면(끝난 방 등) 서버 문구를 보이고 마을로 돌아간다. 창을 그냥 닫으면 퇴장을 못 알려 그 입장은 시간으로 인정되지 않는다.
+function serverStayEnter(n) {
+  API.post('/rooms/' + n.sid + '/stay').catch((e) => {
+    if (e.status === 401) return;
+    toast(e.message);
+    if (VIEW === 'shared' && CAMP_ID === n.id) leaveCamp();
+    roomsRefresh();
+  });
+}
+function serverStayLeave(n) {
+  API.post('/rooms/' + n.sid + '/stay/leave')
+    .then(async (r) => {
+      if (!r.credited) return;
+      await refreshToday();
+      calRefresh();
+      toast(r.minutes + '분을 읽은 시간에 더했어요');
+    })
+    .catch((e) => {
+      if (e.status !== 404 && e.status !== 401) toast(e.message); // 404: 열린 입장이 없다(입장이 거절됐던 경우)
+    });
+}
+
 // 다른 기기에서 바뀐 방을 화면으로 돌아올 때 맞춘다
 document.addEventListener('visibilitychange', () => {
   if (API.enabled && API.token && document.visibilityState === 'visible') roomsRefresh();

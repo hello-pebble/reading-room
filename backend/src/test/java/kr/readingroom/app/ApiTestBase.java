@@ -48,7 +48,7 @@ public abstract class ApiTestBase extends PgTestBase {
 
     protected long newUser(String handle) throws Exception {
         MvcResult r = mvc.perform(MockMvcRequestBuilders.post("/dev/users").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"handle\":\"" + handle + "\",\"nickname\":\"" + handle + "\"}")).andReturn();
+                .content("{\"handle\":\"" + handle + "\"}")).andReturn();   // 닉네임은 핸들에서 영문·숫자만 5자까지 (닉네임 규칙 #67)
         return json.readTree(r.getResponse().getContentAsString()).get("id").asLong();
     }
 

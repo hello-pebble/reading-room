@@ -22,6 +22,6 @@ public class DevUserController {
     @PostMapping("/dev/users")
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@RequestBody CreateUserRequest body) {
-        return users.create(body.handle(), body.nickname() == null ? body.handle() : body.nickname());
+        return users.create(body.handle(), body.nickname() == null ? Nickname.fromHandle(body.handle()) : body.nickname());
     }
 }

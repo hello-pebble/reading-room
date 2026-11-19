@@ -21,6 +21,12 @@ public class MeController {
         return users.get(userId);
     }
 
+    /** 닉네임 정하기·바꾸기 (한글·영문·숫자 1~5자). 응답은 /me와 같은 모양이다. */
+    @PutMapping("/me/nickname")
+    public UserResponse nickname(@RequestAttribute(UserIdFilter.ATTR) long userId, @RequestBody NicknameRequest body) {
+        return users.changeNickname(userId, body == null ? null : body.nickname());
+    }
+
     /** 거울: 아바타 저장. 응답은 /me와 같은 모양이다. */
     @PutMapping("/me/avatar")
     public UserResponse avatar(@RequestAttribute(UserIdFilter.ATTR) long userId, @RequestBody AvatarRequest body) {

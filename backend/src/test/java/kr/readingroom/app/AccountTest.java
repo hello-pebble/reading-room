@@ -23,7 +23,7 @@ class AccountTest extends ApiTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.handle").value("reader_1"))
-                .andExpect(jsonPath("$.nickname").value("reader_1"))
+                .andExpect(jsonPath("$.nickname").value("reade"))   // 핸들에서 영문·숫자만 남겨 5자까지 (닉네임 규칙 #67)
                 .andExpect(jsonPath("$.avatar.color").value("#f6f3ff"))
                 .andExpect(jsonPath("$.avatar.prop").value("book"));
     }

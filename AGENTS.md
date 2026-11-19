@@ -44,7 +44,7 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 - 공유방 4단계(끝남): 알림 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·`GET /books/{id}/rooms`(`V12__room_alarm_archive.sql`, 결정 #63).
 - 공유방 5단계(끝남): 개방·종료 배치 `RoomOpenService`·`RoomOpenBatch`(`open_notified_at` 선점, 30분 기준, `V13__room_open_notify.sql`, 결정 #64). 대상 선정까지이고 푸시는 로그만 남긴다. 설계: `docs/superpowers/specs/2026-11-19-room-open-batch-design.md`.
 - 공유방 6단계(끝남): 모닥불 머문 시간 `CampStayService`(`POST /rooms/{id}/stay`·`stay/leave`)·합산 `GET /me/reading-time`·달력 반영(`camp_stay`, `V14__camp_stay.sql`, 결정 #65). 설계: `docs/superpowers/specs/2026-11-19-camp-stay-design.md`.
-- **다음 작업(순서 정함, ①은 끝남): ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ④ 광장 접속 인원 `GET /plaza/presence`(연결 방식은 SSE로 정했다).** (앞 번호는 원래 순서다.) 7일 지난 방 삭제 배치는 끝났고(결정 #66), 가져오기 마감 알림·이웃 접속 상태는 만들지 않기로 했다. 구글 로그인과 닉네임 규칙(최대 5자, 이모티콘·특수문자 금지)은 설계 중이다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64·#65 를 따른다.
+- **다음 작업(순서 정함, ①은 끝남): ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ④ 광장 접속 인원 `GET /plaza/presence`(연결 방식은 SSE로 정했다).** (앞 번호는 원래 순서다.) 7일 지난 방 삭제 배치는 끝났고(결정 #66), 가져오기 마감 알림·이웃 접속 상태는 만들지 않기로 했다. 닉네임 규칙(한글·영문·숫자 1~5자, `PUT /me/nickname`, 결정 #67)은 구현했고, 구글 로그인(구글 `sub`를 `auth_identity`에 연결, 세션 토큰 발급)은 설계 중이다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64·#65 를 따른다.
 - 한 번에 한 기능씩 만들고, 기능마다 통합 테스트를 추가한다.
 
 ## 작업 방식

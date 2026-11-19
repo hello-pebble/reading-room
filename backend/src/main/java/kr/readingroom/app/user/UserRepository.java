@@ -21,6 +21,10 @@ public class UserRepository {
         return dsl.execute("update app_user set avatar = ?::jsonb where id = ?", avatar, userId);
     }
 
+    public int updateNickname(String nickname, long userId) {
+        return dsl.execute("update app_user set nickname = ? where id = ?", nickname, userId);
+    }
+
     public Record insert(String handle, String nickname) {
         return dsl.fetchOne("insert into app_user(handle, nickname) values (?, ?) returning id, handle, nickname, avatar::text as avatar", handle, nickname);
     }

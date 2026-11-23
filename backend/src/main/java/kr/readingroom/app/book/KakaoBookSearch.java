@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -51,7 +52,7 @@ public class KakaoBookSearch {
                             .header("Authorization", "KakaoAK " + restKey).GET().build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (res.statusCode() != 200) throw failed();
-            return parse(json.readTree(res.body()));
+            return parse(json.readTree(res.body()), q);
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -66,6 +67,11 @@ public class KakaoBookSearch {
 
     /** 응답의 documents를 화면용으로 바꾼다. 중복 ISBN·제목 없는 항목은 빼고 최대 10개. 쪽수는 모른다(null). */
     static List<Map<String, Object>> parse(JsonNode root) {
+        return parse(root, "");
+    }
+
+    /** query(제목 검색어)를 알면 NlBookSearch와 같은 기준으로 정렬한다: 정확도순에서 수험서 등이 앞서는 것을 바로잡는다. */
+    static List<Map<String, Object>> parse(JsonNode root, String query) {
         List<Map<String, Object>> out = new ArrayList<>();
         JsonNode docs = root.path("documents");
         if (!docs.isArray()) return out;
@@ -82,9 +88,10 @@ public class KakaoBookSearch {
             m.put("isbn", isbn);
             m.put("coverUrl", text(d, "thumbnail").replaceFirst("^http:", "https:"));
             out.add(m);
-            if (out.size() == 10) break;
         }
-        return out;
+        NlBookSearch.rankByTitle(out, query, false);
+        out.sort(Comparator.comparing(b -> ((String) b.get("isbn")).isEmpty())); // ISBN 없는 항목은 뒤로(같은 책 공유방을 못 연다). 안정 정렬이라 앞선 순서는 그대로
+        return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
     }
 
     /** "8908033254 9788908033254"처럼 ISBN10과 ISBN13이 공백으로 이어져 온다. 13자리가 있으면 그것을, 없으면 있는 것을 쓴다. */

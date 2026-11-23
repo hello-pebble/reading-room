@@ -97,17 +97,27 @@ public class NlBookSearch implements BookSearchSource {
             m.put("coverUrl", text(d, "TITLE_URL").replaceFirst("^http:", "https:"));
             out.add(m);
         }
-        String q = norm(query);
-        if (!q.isEmpty()) out.sort(Comparator.comparingInt(b -> titleRank(norm((String) b.get("title")), q))); // 안정 정렬: 같은 단계는 API 순서
+        rankByTitle(out, query);
         return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
+    }
+
+    /** 제목 검색 결과를 같은 제목 → 검색어로 시작 → 검색어 포함 → 나머지 순으로 놓는다(안정 정렬: 같은 단계는 원래 순서). 카카오 결과에도 쓴다. */
+    static void rankByTitle(List<Map<String, Object>> list, String query) {
+        rankByTitle(list, query, true);
+    }
+
+    /** exactFirst가 false면 같은 제목과 시작하는 제목을 같은 단계로 보고 원래 순서를 지킨다(이미 정확도순으로 오는 카카오용). */
+    static void rankByTitle(List<Map<String, Object>> list, String query, boolean exactFirst) {
+        String q = norm(query);
+        if (!q.isEmpty()) list.sort(Comparator.comparingInt(b -> titleRank(norm((String) b.get("title")), q, exactFirst)));
     }
 
     private static String norm(String s) {
         return s == null ? "" : s.replaceAll("\\s+", "");
     }
 
-    private static int titleRank(String title, String q) {
-        if (title.equals(q)) return 0;
+    private static int titleRank(String title, String q, boolean exactFirst) {
+        if (title.equals(q)) return exactFirst ? 0 : 1;
         if (title.startsWith(q)) return 1;
         return title.contains(q) ? 2 : 3;
     }

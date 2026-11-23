@@ -144,12 +144,28 @@ const BOOK_SEARCH_URL = (() => {
       const v = q.get('searchApi');
       v ? localStorage.setItem('rr-search-url', v) : localStorage.removeItem('rr-search-url');
     }
-    return localStorage.getItem('rr-search-url') || '';
+    // 서버 연결 모드(?api=)에서는 따로 정하지 않아도 그 서버의 책 검색(국립중앙도서관)을 쓴다. ?searchApi=로 정한 주소가 있으면 그쪽이 먼저다
+    return localStorage.getItem('rr-search-url') || (API.enabled ? API.base + '/books/search' : '');
   } catch (e) {
-    return '';
+    return API.enabled ? API.base + '/books/search' : '';
   }
 })();
 const BOOK_API_KEY = ''; // 구글 북스 API 키 (선택)
+// 서점 검색(카카오) 결과에는 쪽수가 없어서, 고른 책의 ISBN으로 서버(국립중앙도서관)에서 쪽수·표지를 채운다.
+// 이미 적은 쪽수·표지는 덮어쓰지 않고, 조회가 안 되면 아무것도 바꾸지 않는다(직접 적으면 된다).
+async function fillBookDetails(isbn) {
+  if (!BOOK_SEARCH_URL || !isbn) return;
+  try {
+    const res = await fetch(BOOK_SEARCH_URL + '?q=' + encodeURIComponent(isbn));
+    if (!res.ok) return;
+    const x = (await res.json())[0];
+    if (!x || panelView.isbn !== isbn || panelOpen !== 'sofa') return; // 그 사이 다른 책을 골랐거나 창을 닫았다
+    let changed = false;
+    if (!(+panelView.tp > 0) && x.totalPages) ((panelView.tp = x.totalPages), (changed = true));
+    if (!panelView.cover && x.coverUrl) ((panelView.cover = x.coverUrl), (changed = true));
+    if (changed) renderPanel();
+  } catch (e) {}
+}
 async function runSearch() {
   panelView.msg = '찾는 중…';
   panelView.res = null;

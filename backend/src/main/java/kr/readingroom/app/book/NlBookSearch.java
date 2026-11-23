@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,12 +43,12 @@ public class NlBookSearch implements BookSearchSource {
     public List<Map<String, Object>> search(String field, String value) {
         if (certKey == null || certKey.isBlank())
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SEARCH_UNAVAILABLE", "책 검색이 아직 준비되지 않았어요. 직접 적어 주세요");
-        String url = URL + "?cert_key=" + enc(certKey) + "&result_style=json&page_no=1&page_size=20&ebook_yn=N&" + field + "=" + enc(value);
+        String url = URL + "?cert_key=" + enc(certKey) + "&result_style=json&page_no=1&page_size=50&ebook_yn=N&" + field + "=" + enc(value);
         try {
             HttpResponse<String> res = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(6)).GET().build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (res.statusCode() != 200) throw failed();
-            return parse(json.readTree(res.body()));
+            return parse(json.readTree(res.body()), "title".equals(field) ? value : "");
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -66,6 +67,14 @@ public class NlBookSearch implements BookSearchSource {
 
     /** 응답은 {TOTAL_COUNT, PAGE_NO, docs:[{TITLE, AUTHOR, PAGE, EA_ISBN, TITLE_URL ...}]}. docs 이름이 달라도 첫 객체 배열을 쓴다. */
     static List<Map<String, Object>> parse(JsonNode root) {
+        return parse(root, "");
+    }
+
+    /**
+     * 응답을 화면용으로 바꾼다. query(제목 검색어)가 있으면 제목 검색이 "포함" 검색이라 엉뚱한 책이 앞서는 것을 바로잡아
+     * 같은 제목 → 검색어로 시작하는 제목 → 검색어가 들어간 제목 → 나머지 순으로 놓는다(같은 단계는 API 순서 그대로). 최대 10개.
+     */
+    static List<Map<String, Object>> parse(JsonNode root, String query) {
         JsonNode docs = root.path("docs");
         if (!docs.isArray()) docs = root.path("DOCS");
         if (!docs.isArray()) {
@@ -82,14 +91,30 @@ public class NlBookSearch implements BookSearchSource {
             if (!seen.add(isbn.isEmpty() ? title + "|" + text(d, "AUTHOR") : isbn)) continue;
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("title", vol.isEmpty() ? title : title + " " + vol);
-            m.put("author", text(d, "AUTHOR"));
+            m.put("author", author(text(d, "AUTHOR")));
             m.put("totalPages", pages(text(d, "PAGE")));
             m.put("isbn", isbn);
             m.put("coverUrl", text(d, "TITLE_URL").replaceFirst("^http:", "https:"));
             out.add(m);
-            if (out.size() == 10) break;
         }
-        return out;
+        String q = norm(query);
+        if (!q.isEmpty()) out.sort(Comparator.comparingInt(b -> titleRank(norm((String) b.get("title")), q))); // 안정 정렬: 같은 단계는 API 순서
+        return out.size() > 10 ? new ArrayList<>(out.subList(0, 10)) : out;
+    }
+
+    private static String norm(String s) {
+        return s == null ? "" : s.replaceAll("\\s+", "");
+    }
+
+    private static int titleRank(String title, String q) {
+        if (title.equals(q)) return 0;
+        if (title.startsWith(q)) return 1;
+        return title.contains(q) ? 2 : 3;
+    }
+
+    /** 응답의 저자는 "저자 : 박경리", "지은이: 남기업,이진수"처럼 역할 머리말이 붙어 온다. 맨 앞의 짧은 한글 머리말만 뗀다. */
+    static String author(String s) {
+        return s.replaceFirst("^[가-힣·]{1,6}\\s*:\\s*", "");
     }
 
     private static String text(JsonNode d, String k) {

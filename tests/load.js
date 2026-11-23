@@ -135,6 +135,15 @@ function fakeServer() {
         const created = !users[label], u = users[label] || mk(label);
         return res(200, { token: issue(u), expiresAt: '2099-01-01T00:00:00Z', newUser: created, user: { ...u } });
       }
+      // 책 검색 (로그인 없이 열려 있다). srv.search = {status, body}를 정해 두면 그대로 답한다
+      if (method === 'GET' && path.startsWith('/books/search')) {
+        const q = decodeURIComponent((path.split('?q=')[1] || '').trim());
+        if (srv.search) return res(srv.search.status, srv.search.body);
+        if (!q) return res(400, { error: 'BAD_QUERY', message: '검색어를 적어 주세요' });
+        // ISBN 조회는 국립중앙도서관처럼 쪽수·표지까지, 제목 검색은 카카오처럼 쪽수 없이 준다
+        if (/^\d{13}$/.test(q)) return res(200, [{ title: '토지 이야기', author: '박경리', totalPages: 432, isbn: q, coverUrl: 'https://img.test/nl.jpg' }]);
+        return res(200, [{ title: q + ' 이야기', author: '박경리', totalPages: null, isbn: '9788954439497', coverUrl: '' }]);
+      }
       const user = auth && tokens[auth.replace('Bearer ', '')];
       if (!user) return res(401, { error: 'UNAUTHORIZED', message: '로그인이 필요해요' });
       if (method === 'GET' && path === '/me') return res(200, { ...user });

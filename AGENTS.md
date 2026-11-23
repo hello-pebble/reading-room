@@ -14,7 +14,7 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 | `npm run check` | `frontend/js/*.js`와 `frontend/*.html`의 인라인 스크립트가 문법 오류 없이 컴파일되는지 본다 |
 | `npm test` | `tests/scenarios.test.js` — 페이지를 가상 브라우저(jsdom)에 올려 패널·버튼·저장 상태를 실제로 조작한다 (약 2초) |
 
-- **실제 브라우저 테스트(Playwright)**: `npx playwright install chromium`(처음 한 번) 뒤 `npm run e2e`. 데스크톱과 폰 두 화면에서 3D가 그려지는지, 화면이 넘치거나 겹치지 않는지, 실제 클릭·키보드 흐름(방, 마을, 미니맵, 광장 채팅창)을 본다. 느려서(약 2분) 화면을 바꾼 작업에서만 돌린다. 좌표는 `PLAZA` 같은 상수를 읽어 쓴다.
+- **실제 브라우저 테스트(Playwright)**: `npx playwright install chromium`(처음 한 번) 뒤 `npm run e2e`. 데스크톱과 폰 두 화면에서 3D가 그려지는지, 화면이 넘치거나 겹치지 않는지, 실제 클릭·키보드 흐름(방, 마을, 미니맵, 광장 채팅창)과 모든 창에서 버튼 줄·카드·입력칸이 겹치거나 넘치지 않는지를 본다. 느려서(약 2분) 화면을 바꾼 작업에서만 돌린다. 좌표는 `PLAZA` 같은 상수를 읽어 쓴다.
 - jsdom 테스트는 3D(three.js)를 올리지 않는다. 그래서 **3D 그림, 실제 터치, 알림 팝업, 화면 겹침**은 테스트가 못 본다. 화면이 바뀌는 일이면 브라우저로 직접 확인한다.
 - 테스트는 페이지 안의 변수와 함수(`S`, `openF`, `endSession`, `plazaSend` …)를 `a.ev('...')`로 직접 부른다. 새 기능에는 같은 방식으로 테스트를 한두 개 추가한다 (`tests/load.js`의 `load()`가 로더).
 - 결함을 고칠 때는 그 결함을 재현하는 테스트를 먼저 추가하고 고친다.
@@ -33,13 +33,15 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 - 요청은 `Controller → Service → Repository` 순서로 흐르고, 요청·응답은 기능 패키지의 `dto/` record다. 수정 위치와 패키지 표는 `backend/README.md`를 먼저 본다. SQL은 Repository에만 두고 값은 `?`로 바인딩한다. 스키마는 Flyway(`src/main/resources/db/migration/V*.sql`)로만 바꾸고 이미 있는 마이그레이션은 고치지 않는다(새 `V9__…` 추가).
 - 검사: `cd backend && ./gradlew test`. DB가 필요한 통합 테스트(`ApiTestBase`)는 기본으로 내장 PostgreSQL(zonky)을 띄우고, 안 되면 `TEST_DATABASE_URL`(`jdbc:postgresql://…`), `TEST_DATABASE_USER`, `TEST_DATABASE_PASSWORD`로 외부 DB를 준다(테스트마다 스키마를 비운다). 루트 사용자로는 PostgreSQL이 실행되지 않으니 일반 사용자로 돌린다. 시각은 `TestClock`으로 고정·이동한다.
 - API 계약은 `docs/DATA_API.md`가 기준이다. 경로·필드·상태 코드를 바꾸면 그 문서와 `docs/DECISIONS.md`를 같이 고친다. 오류는 `ApiException`(상태, 코드, 한국어 메시지)으로 던진다.
-- 인증은 구글 로그인 + Bearer 세션 토큰이다(결정 #68): `Authorization: Bearer <토큰>`을 `UserIdFilter`가 확인한다. 개발용 `X-User-Id` 헤더와 `/dev/users`는 dev 프로파일에서만 된다(테스트가 이것을 쓴다). 책 검색(`GET /books/search`)과 `POST /auth/google`만 로그인 없이 열려 있다.
+- 인증은 게스트 로그인(기본, 가입 없음, `POST /auth/guest {deviceKey}`, 결정 #84) + Bearer 세션 토큰이다. 구글 로그인(`POST /auth/google`, 결정 #68)은 만들어 두었지만 화면은 쓰지 않는다: `Authorization: Bearer <토큰>`을 `UserIdFilter`가 확인한다. 개발용 `X-User-Id` 헤더와 `/dev/users`는 dev 프로파일에서만 된다(테스트가 이것을 쓴다). 책 검색(`GET /books/search`)과 `POST /auth/google`·`POST /auth/guest`·`POST /auth/transfer`(기기 이전 코드로 들어오기, 코드는 로그인한 기기가 `POST /me/transfer-code`로 만든다, 결정 #85)만 로그인 없이 열려 있다.
 - 시간 규칙은 서버 `Clock`으로 계산하고(`Instant`, 응답은 UTC ISO), 날짜 자르기는 `Asia/Seoul`이다. 상태처럼 시각으로 알 수 있는 값은 저장값에만 기대지 말고 시각으로 계산한다(예: `BoardService`).
 - 비밀 키(`NL_CERT_KEY`, `KAKAO_REST_KEY`, VAPID 등)는 환경변수로만 받는다. 코드·문서·커밋·로그에 값을 적지 않는다. 키가 없을 때는 503처럼 명확한 오류로 응답한다.
 
 ## 지금 상태와 다음 작업
 
-- **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 발급·실제 응답 확인 완료, 결정 #82, 제목 검색은 카카오 우선 결정 #83), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치), 공유방 개설·입장·대화·읽음(`room`), 이웃집 책 추천(`neighbor`, 결정 #62). 화면은 주소 끝 `?api=http://localhost:8080`으로 켜는 서버 연결 모드에서 **개발용 로그인·닉네임·내 정보와 책·메모·완독/포기·스탠드 타이머·달력/월 목표·광장 대화·마을 게시판과 공유방 개설/입장/나가기/대화/알림/가져오기/머문 시간·이웃집 책 추천까지** 연결했고(`api.js`·`account.js`·`books.js`·`sessions.js`·`calendar.js`·`plaza.js`·`rooms.js`·`rooms-chat.js`·`neighbor-server.js`, 서버 `POST /dev/login`, 결정 #71~#73·#75~#81), 나머지 기능은 아직 `localStorage`로 동작한다(책 검색은 서버 연결 모드에서 서버 검색을 자동으로 쓰고, 서버 없이는 `?searchApi=`).
+- **배포:** 서버 jar가 화면까지 낸다(결정 #86, `docs/DEPLOY.md`). 화면은 `frontend/config.js`(프로토타입, 서버 없음)와 jar의 `static/config.js`(같은 주소 서버 연결)로 갈린다.
+
+- **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 발급·실제 응답 확인 완료, 결정 #82, 제목 검색은 카카오 우선 결정 #83), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치), 공유방 개설·입장·대화·읽음(`room`), 이웃집 책 추천(`neighbor`, 결정 #62). 화면은 주소 끝 `?api=http://localhost:8080`으로 켜는 서버 연결 모드에서 **게스트 시작(가입 없음, 결정 #84)·닉네임·내 정보와 책·메모·완독/포기·스탠드 타이머·달력/월 목표·광장 대화·마을 게시판과 공유방 개설/입장/나가기/대화/알림/가져오기/머문 시간·이웃집 책 추천까지** 연결했고(`api.js`·`account.js`·`books.js`·`sessions.js`·`calendar.js`·`plaza.js`·`rooms.js`·`rooms-chat.js`·`neighbor-server.js`, 서버 `POST /dev/login`, 결정 #71~#73·#75~#81), 나머지 기능은 아직 `localStorage`로 동작한다(책 검색은 서버 연결 모드에서 서버 검색을 자동으로 쓰고, 서버 없이는 `?searchApi=`).
 - **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(끝남): 대화 `GET·POST /rooms/{id}/messages`(300자, 3초 3건·같은 글 30초 연속 금지(#61), 삭제·수정 없음)·읽음 `POST /rooms/{id}/read`·게시판 `unread`(`V10__room_message.sql`, 결정 #60).
 - 공유방 4단계(끝남): 알림 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·`GET /books/{id}/rooms`(`V12__room_alarm_archive.sql`, 결정 #63).
 - 공유방 5단계(끝남): 개방·종료 배치 `RoomOpenService`·`RoomOpenBatch`(`open_notified_at` 선점, 30분 기준, `V13__room_open_notify.sql`, 결정 #64). 대상 선정까지이고 푸시는 로그만 남긴다. 설계: `docs/superpowers/specs/2026-11-19-room-open-batch-design.md`.

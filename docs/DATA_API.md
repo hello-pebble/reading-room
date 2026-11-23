@@ -19,7 +19,7 @@
 
 | 영역 | 구현 (이 문서와 다른 점) |
 |---|---|
-| 인증 | **구글 로그인 + Bearer 세션 토큰**(결정 #68). `POST /auth/google`로 구글 ID 토큰을 보내면 서버가 확인하고 `{token, expiresAt, newUser, user}`를 돌려준다. 이후 모든 요청에 `Authorization: Bearer <token>`(`UserIdFilter`, 없거나 틀리거나 만료면 401). 개발용 `X-User-Id` 헤더와 `POST /dev/users`는 **`dev` 프로파일에서만** 열린다(운영에서는 무시). 아래 "인증 API" 참고 |
+| 인증 | **게스트 로그인(기본, 결정 #84) 또는 구글 로그인 + Bearer 세션 토큰**(결정 #68). 화면은 `POST /auth/guest`(기기 키)로 가입 없이 시작한다. `POST /auth/google`은 구글 ID 토큰으로 같은 응답을 준다. `POST /auth/google`로 구글 ID 토큰을 보내면 서버가 확인하고 `{token, expiresAt, newUser, user}`를 돌려준다. 이후 모든 요청에 `Authorization: Bearer <token>`(`UserIdFilter`, 없거나 틀리거나 만료면 401). 개발용 `X-User-Id` 헤더와 `POST /dev/users`는 **`dev` 프로파일에서만** 열린다(운영에서는 무시). 아래 "인증 API" 참고 |
 | 시각 | 서버 `Clock`으로 `now()`를 정하고, 응답의 시각은 모두 UTC(`...Z`) ISO 문자열. 날짜 자르기(달력·월 목표·직접 기록)는 `Asia/Seoul` |
 | 멱등키 | `Idempotency-Key` 헤더. `idempotency_key(user_id, key, path, status, body)`에 **성공 응답만** 저장하고 재전송이면 그대로 돌려준다. 같은 키를 다른 경로에 쓰면 422. 적용: `POST /books`, `/books/{id}/notes`, `/books/{id}/finish`, `/drop`, `/sessions/start`, `/{id}/stop`, `/{id}/check`, `/{id}/confirm`, `/sessions/manual`. (`PUT`·`PATCH`·구독 저장은 원래 멱등) |
 | 아바타 | 표에 없던 **`PUT /me/avatar`**를 만들었다. 모르는 키는 버리고, 모르는 값·빠진 키는 기본값으로 채우며, **400은 해금 조건 미충족일 때만**(glasses는 책 1건 이상, beanie는 `DONE` 10권 이상). `GET /me`에 `avatar`가 들어 있다 |
@@ -120,6 +120,9 @@
 |---|---|---|
 | POST | `/auth/google` | body `{idToken}`(화면이 구글에서 받은 ID 토큰). 로그인 필요 없음. 서버가 RS256 서명(구글 공개키 `kid`), `iss`(구글), `aud`(우리 클라이언트 ID, 문자열), `exp`(지나면 거절), `sub`를 확인한다. 성공 200 `{token, expiresAt, newUser, user:{id, publicId, nickname, avatar, needsNickname}}`. 처음 로그인이면 사용자를 만든다: 공개 번호(`publicId`)는 DB가 무작위 UUID로 만들고, 닉네임은 임시 `손님`, `needsNickname:true`. 실패 401 `INVALID_ID_TOKEN`, 클라이언트 ID(`GOOGLE_CLIENT_ID`)가 없으면 503 `AUTH_UNAVAILABLE`, 구글 키를 못 받으면 503 |
 | POST | `/auth/logout` | 이 기기에서 쓴 토큰만 끝낸다(204). 토큰이 없거나 틀리면 401 |
+| POST | `/auth/guest` | **게스트 로그인(결정 #84)**. body `{deviceKey}`(기기가 만든 무작위 키, 영문·숫자·`-`·`_` 32~128자, 아니면 400 `BAD_DEVICE_KEY`). 로그인 필요 없음(토큰이 틀려도 무시). 같은 키는 같은 계정이고(서버에는 SHA-256만 저장, `auth_identity.provider='guest'`) 처음이면 계정을 만든다. 성공 200 `{token, expiresAt, newUser, user}`는 구글 로그인과 같고 처음이면 닉네임 `손님`·`needsNickname:true`. 새 계정 만들기는 IP당 한 시간에 30개까지(`GUEST_SIGNUPS_PER_HOUR_PER_IP`), 넘으면 429 `TOO_MANY_GUESTS`(이미 있는 키로 다시 들어오는 것은 세지 않는다). 토큰이 만료돼도 같은 키로 다시 부르면 같은 계정의 새 토큰을 받는다 |
+| POST | `/me/transfer-code` | **기기 이전 코드 만들기(결정 #85)**. 로그인 필요, body 없음. 성공 200 `{code, expiresAt}`: 8자리 일회용 코드(영문 대문자·숫자, `I O 0 1` 제외)와 10분 뒤 만료 시각. 계정마다 하나라서 새로 만들면 이전 코드는 못 쓴다. 서버에는 SHA-256만 `transfer_code`에 두고 원문은 이 응답에서만 보인다 |
+| POST | `/auth/transfer` | **이전 코드로 이 기기를 그 계정에 잇고 로그인(결정 #85)**. body `{code, deviceKey}`. 로그인 필요 없음(토큰이 틀려도 무시). 코드는 대소문자·공백·하이픈을 무시하고 한 번만 쓸 수 있다. 성공 200 `{token, expiresAt, newUser:false, user}`(게스트 로그인과 같음). 이 기기 키가 이미 다른 게스트 계정에 이어져 있었으면 그 연결이 코드의 계정으로 옮겨 간다. 코드 모양이 틀리면 400 `BAD_CODE`, 기기 키가 틀리면 400 `BAD_DEVICE_KEY`, 없거나 만료됐으면 404 `INVALID_CODE`, 모양이 맞는 시도가 IP당 10분에 10번을 넘으면 429 `TOO_MANY_ATTEMPTS` |
 | POST | `/dev/login` | **dev 프로파일 전용**(운영에서는 등록되지 않는다). body `{label}`(1~40자, 앞뒤 공백은 다듬는다, 아니면 400 `BAD_LABEL`). 이름(`label`)마다 계정이 하나이고 구글 로그인과 같은 흐름·같은 응답(`{token, expiresAt, newUser, user}`)으로 진짜 Bearer 토큰을 준다. 처음이면 사용자를 만들고(`auth_identity.provider='dev'`, 구글과 제공자가 달라 값이 같아도 다른 계정) 임시 닉네임·`needsNickname:true`이다. 구글 클라이언트 ID 없이 화면 연결을 시작하려는 용도이고, 나중에 구글 로그인으로 바꿀 때는 화면의 로그인 호출만 바꾼다(결정 #71) |
 | PUT | `/me/nickname` | 닉네임 정하기·바꾸기. 처음 호출하면 `needsNickname`이 false가 된다 (위 "닉네임" 행) |
 

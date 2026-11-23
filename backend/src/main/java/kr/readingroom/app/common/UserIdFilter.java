@@ -39,8 +39,10 @@ public class UserIdFilter extends OncePerRequestFilter {
         // 브라우저가 먼저 보내는 CORS 확인(OPTIONS), 책 검색(공개 서지 데이터), 초대 링크 미리보기(GET /rooms/invite/{code}, 로그인 전에 보여 준다)는
         // 사용자 헤더 없이 통과시킨다.
         // TODO: 구글 로그인이 생기면 책 검색도 로그인 필요 + 호출 횟수 제한으로 바꾼다(국립중앙도서관 호출 한도 보호).
-        return req.getMethod().equals("OPTIONS") || p.equals("/health") || p.equals("/books/search") || (req.getMethod().equals("GET") && p.startsWith("/rooms/invite/")) || p.startsWith("/dev/") || p.startsWith("/error")
-                || (req.getMethod().equals("POST") && p.equals("/auth/google"));   // 구글 로그인은 토큰을 받기 전에 부른다
+        // 화면 파일(GET 정적 파일)도 로그인 없이 내보낸다
+        boolean staticFile = req.getMethod().equals("GET") && (p.equals("/") || p.equals("/index.html") || p.equals("/config.js") || p.equals("/favicon.ico") || p.startsWith("/js/") || p.startsWith("/css/") || p.startsWith("/vendor/"));
+        return staticFile || req.getMethod().equals("OPTIONS") || p.equals("/health") || p.equals("/books/search") || (req.getMethod().equals("GET") && p.startsWith("/rooms/invite/")) || p.startsWith("/dev/") || p.startsWith("/error")
+                || (req.getMethod().equals("POST") && (p.equals("/auth/google") || p.equals("/auth/guest") || p.equals("/auth/transfer")));   // 구글·게스트·이전 코드 로그인은 토큰을 받기 전에 부른다
     }
 
     @Override

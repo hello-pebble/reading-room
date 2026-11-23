@@ -89,6 +89,8 @@ function renderPanel() {
   if (f === 'window') h = windowPanel();
   if (f === 'neighborShelf') h = neighborShelfPanel();
   if (f === 'login') h = loginPanel();
+  if (f === 'guestFail') h = guestFailPanel();
+  if (f === 'transfer') h = transferPanel();
   if (f === 'nickname') h = nicknamePanel();
   panel.classList.toggle('rcchat', h.includes('id="rcLog"'));
   panel.innerHTML = h;
@@ -123,6 +125,7 @@ panel.addEventListener('click', onPanelClick);
 let resetArm = 0,
   resetT;
 const resetBtn = document.getElementById('resetBtn');
+if (API.enabled) resetBtn.style.display = 'none'; // 서버 연결 모드에서는 기록이 서버에 있어 지우는 버튼을 숨긴다
 resetBtn.onclick = () => {
   if (!resetArm) {
     resetArm = 1;

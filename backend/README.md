@@ -37,9 +37,9 @@ API 경로·JSON 필드·DB 스키마는 이번 역할 분리에서 변경하지
 
 ## 책 검색을 화면에서 써 보기 (국립중앙도서관)
 1. PostgreSQL을 띄운다. Docker가 있으면: `docker run -d --name rr-pg -e POSTGRES_USER=readingroom -e POSTGRES_PASSWORD=readingroom -e POSTGRES_DB=readingroom -p 5432:5432 postgres:16`
-2. 인증키를 환경변수로 넣고 서버를 띄운다 (키는 파일·채팅에 적지 않는다): `NL_CERT_KEY=발급받은키 ./gradlew bootRun`
+2. 인증키를 환경변수로 넣고 서버를 띄운다 (키는 파일·채팅에 적지 않는다): `NL_CERT_KEY=발급받은키 ./gradlew bootRun`. 제목 검색 정확도를 높이려면 카카오 REST API 키도 `KAKAO_REST_KEY=키`로 같이 넣는다(없으면 국립중앙도서관 제목 검색을 쓴다).
 3. 서버가 뜨면 `curl "http://localhost:8080/books/search?q=소년이 온다"`로 확인한다. 키가 없으면 503이다.
-4. 화면은 `frontend` 폴더를 `.claude/serve-nocache.py`(8765 포트)로 열고, 처음 한 번만 주소 끝에 `?searchApi=http://localhost:8080/books/search`를 붙여 연다 (저장된다). 다른 주소에서 열면 `CORS_ORIGINS`에 그 주소를 넣는다.
+4. 화면은 주소 끝에 `?api=http://localhost:8080`을 붙여 열면(서버 연결 모드) 책 찾기가 자동으로 이 서버의 검색을 쓴다. 서버 없이 검색만 쓰려면 `frontend` 폴더를 `.claude/serve-nocache.py`(8765 포트)로 열고 처음 한 번 주소 끝에 `?searchApi=http://localhost:8080/books/search`를 붙인다(저장된다). 다른 주소에서 열면 `CORS_ORIGINS`에 그 주소를 넣는다.
 - `GET /books/search`는 로그인(Bearer 토큰) 없이 열려 있다. 구글 로그인을 붙일 때 로그인 필요 + 호출 제한으로 바꾼다.
 
 ## 화면과 함께 실행 (개발용 로그인, 서버 연결 1단계)

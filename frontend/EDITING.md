@@ -13,7 +13,7 @@
 | 책장 탭·진행 막대 | `room.css` | `.tabs`, `.progress` |
 | 달력 | `room.css` | `.cal` |
 | 거울 미리보기·색상·장식 버튼 | `room.css` | `.mir`, `.sw`, `.acc`, `.shuffle` |
-| 책 찾기(제목·저자 검색, 서버 검색 주소는 주소 끝 `?searchApi=…`로 저장) | `room-search.js` | `toIsbn13`, `searchBooks`, `runSearch` |
+| 책 찾기(제목·저자 검색, 서버 연결 모드에서는 서버 검색이 자동, 서버 없이는 주소 끝 `?searchApi=…`로 저장) | `room-search.js` | `toIsbn13`, `searchBooks`, `runSearch`, `fillBookDetails`(고른 책의 쪽수·표지를 ISBN으로 채움) |
 | 소파·스탠드·책장·거울·달력의 문구 | `room-panels.js` | `sofaPanel`, `lampPanel`, `shelfPanel`, `mirrorPanel`, `calendarPanel` |
 | 창문의 소식 문구 | `room-panels.js` | `windowPanel` |
 | 내 방 버튼을 눌렀을 때 동작 | `room-actions.js` | `roomAction` 안의 `act` 이름 |

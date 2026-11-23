@@ -488,6 +488,7 @@ function roomAction(act, b) {
       msg: '',
     });
     renderPanel();
+    if (!it.pages) fillBookDetails(it.isbn); // 쪽수가 없는 결과(서점 검색)는 ISBN으로 채운다 (room-search.js)
     return true;
   }
   if (act === 'bclear') {

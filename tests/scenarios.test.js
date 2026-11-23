@@ -1743,3 +1743,82 @@ test('서버 내 집에 온 추천: 로그인하면 보낸 사람 닉네임과 �
   assert.equal(a.ev('incomingGiftHtml()'), '');
   fin(a);
 });
+
+// ---- 책 검색 연결: 서버 연결 모드에서는 따로 정하지 않아도 서버(국립중앙도서관)의 검색을 쓴다 ----
+const searchOf = async (a, q) => {
+  a.ev(`searchBooks(${JSON.stringify(q)}).then((r) => { window.__r = r; })`);
+  await settle();
+  await settle();
+  return JSON.parse(a.ev('JSON.stringify(window.__r)'));
+};
+
+test('서버 책 검색: 서버 연결 모드에서는 서버의 /books/search로 찾고 화면 모양으로 바꾼다(로그인 토큰은 필요 없다)', async () => {
+  const { srv, a } = await bookApp();
+  const r = await searchOf(a, '토지');
+  const c = calls(srv, 'GET', /^\/books\/search/);
+  assert.equal(c.length, 1);
+  assert.equal(c[0].path, '/books/search?q=' + encodeURIComponent('토지'));
+  assert.deepEqual(r.items, [{ title: '토지 이야기', author: '박경리', pages: 0, isbn: '9788954439497', cover: '' }], '제목 검색 결과에는 쪽수가 없을 수 있어요(카카오)');
+  fin(a);
+});
+
+test('서버 책 검색: 서버가 말한 검색 오류(400)는 문구 그대로 보이고, 서버가 준비되지 않았으면(503) 오류 없이 다른 검색으로 넘어간다', async () => {
+  const { srv, a } = await bookApp();
+  srv.search = { status: 400, body: { error: 'BAD_QUERY', message: '이 링크에서 책을 찾지 못했어요. 제목으로 찾아 보세요' } };
+  const bad = await searchOf(a, '토지');
+  assert.equal(bad.err, '이 링크에서 책을 찾지 못했어요. 제목으로 찾아 보세요');
+  srv.search = { status: 503, body: { error: 'SEARCH_UNAVAILABLE', message: '책 검색이 아직 준비되지 않았어요' } };
+  const off = await searchOf(a, '토지');
+  assert.notEqual(off.err, '책 검색이 아직 준비되지 않았어요', '서버의 준비 안 됨 문구를 그대로 띄우지 않아요');
+  assert.ok(srv.calls.some((c) => /googleapis/.test(c.path)), '대신 구글 북스로 찾아 봐요');
+  assert.match(off.err, /직접 적어 주세요/, '그쪽도 안 되면 직접 적으라고 안내해요');
+  fin(a);
+});
+
+test('서버 책 검색: 찾은 책을 고르면 ISBN으로 쪽수·표지를 채우고, 소파에 올리면 ISBN·표지·쪽수가 서버에 함께 저장된다', async () => {
+  const { srv, a } = await bookApp();
+  sofa(a);
+  a.ev(`panelView.q = '토지'; runSearch()`);
+  await settle();
+  await settle();
+  a.click('#panel [data-act=bpick][data-i="0"]');
+  assert.equal(a.ev('panelView.tp'), '', '고른 직후에는 쪽수를 모른다(제목 검색 결과에는 없다)');
+  await settle();
+  await settle();
+  const lookup = calls(srv, 'GET', /^\/books\/search/).at(-1);
+  assert.equal(lookup.path, '/books/search?q=9788954439497', '고른 책의 ISBN으로 한 번 더 조회해요');
+  assert.equal(a.ev('panelView.tp'), 432);
+  assert.equal(a.ev('panelView.cover'), 'https://img.test/nl.jpg');
+  a.click('#panel [data-act=addBook]');
+  await settle();
+  const c = calls(srv, 'POST', /^\/books$/);
+  assert.equal(c.length, 1);
+  assert.equal(c[0].body.title, '토지 이야기');
+  assert.equal(c[0].body.isbn, '9788954439497');
+  assert.equal(c[0].body.coverUrl, 'https://img.test/nl.jpg');
+  assert.equal(c[0].body.totalPages, 432);
+  assert.equal(a.state().reading.isbn, '9788954439497');
+  fin(a);
+});
+
+test('서버 책 검색: 쪽수를 채우지 못해도(조회 실패·이미 직접 적음) 입력은 그대로이고 책을 올릴 수 있다', async () => {
+  const { srv, a } = await bookApp();
+  sofa(a);
+  a.ev(`panelView.q = '토지'; runSearch()`);
+  await settle();
+  await settle();
+  srv.search = { status: 502, body: { error: 'SEARCH_FAILED', message: '책 정보를 가져오지 못했어요' } };
+  a.click('#panel [data-act=bpick][data-i="0"]');
+  await settle();
+  await settle();
+  assert.equal(a.ev('panelView.tp'), '', '조회가 실패하면 쪽수는 빈 채로 둬요');
+  assert.equal(a.ev('panelView.t'), '토지 이야기');
+  a.ev(`panelView.tp = 100`); // 사용자가 직접 적은 쪽수는 덮어쓰지 않는다
+  srv.search = null;
+  a.ev(`fillBookDetails('9788954439497')`);
+  await settle();
+  await settle();
+  assert.equal(a.ev('panelView.tp'), 100);
+  assert.equal(a.ev('panelView.cover'), 'https://img.test/nl.jpg', '쪽수는 그대로 두고 비어 있던 표지만 채워요');
+  fin(a);
+});

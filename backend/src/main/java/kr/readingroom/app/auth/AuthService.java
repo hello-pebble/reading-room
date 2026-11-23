@@ -10,9 +10,11 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import kr.readingroom.app.auth.dto.LoginResponse;
+import kr.readingroom.app.auth.dto.TransferCodeResponse;
 import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.TokenResolver;
 import kr.readingroom.app.user.UserService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -24,7 +26,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Service
 public class AuthService implements TokenResolver {
-    static final String GOOGLE = "google", DEV = "dev";
+    static final String GOOGLE = "google", DEV = "dev", GUEST = "guest";
+    private static final java.util.regex.Pattern DEVICE_KEY = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{32,128}");
     static final Duration LIFETIME = Duration.ofDays(30);
     static final String PLACEHOLDER_NICKNAME = "손님";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -34,13 +37,19 @@ public class AuthService implements TokenResolver {
     private final UserService users;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final IpWindowLimit signups; // 게스트 새 계정: IP당 한 시간(결정 #84)
+    private final IpWindowLimit attempts; // 이전 코드 입력: IP당 10분(결정 #85)
 
-    public AuthService(GoogleIdTokenVerifier verifier, AuthRepository auth, UserService users, TransactionTemplate tx, Clock clock) {
+    public AuthService(GoogleIdTokenVerifier verifier, AuthRepository auth, UserService users, TransactionTemplate tx, Clock clock,
+            @Value("${app.auth.guest-signups-per-hour-per-ip:30}") int signupsPerHour,
+            @Value("${app.auth.transfer-attempts-per-10min-per-ip:10}") int attemptsPer10Min) {
         this.verifier = verifier;
         this.auth = auth;
         this.users = users;
         this.tx = tx;
         this.clock = clock;
+        this.signups = new IpWindowLimit(clock, signupsPerHour, Duration.ofHours(1));
+        this.attempts = new IpWindowLimit(clock, attemptsPer10Min, Duration.ofMinutes(10));
     }
 
     /** ID 토큰 확인(외부 키 내려받기가 있을 수 있어 DB 트랜잭션 밖에서)을 먼저 하고, 사용자 찾기·만들기와 세션 발급은 한 트랜잭션으로 한다. */
@@ -56,6 +65,59 @@ public class AuthService implements TokenResolver {
         String l = label == null ? "" : label.trim();
         if (l.isEmpty() || l.length() > 40) throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_LABEL", "이름은 1~40자로 적어 주세요");
         return loginOrCreate(DEV, l);
+    }
+
+    /**
+     * 게스트 로그인(결정 #84): 가입 없이 시작한다. 기기가 만든 무작위 키(deviceKey)의 SHA-256을 이 계정의 식별자로 쓰고(키 원문은 저장하지 않는다),
+     * 같은 키는 같은 계정이다. 토큰이 만료돼도 기기 키로 다시 들어온다. 새 계정을 만들 때만 IP당 시간당 횟수를 제한한다.
+     */
+    public LoginResponse guestLogin(String deviceKey, String ip) {
+        if (deviceKey == null || !DEVICE_KEY.matcher(deviceKey).matches())
+            throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_DEVICE_KEY", "기기 키가 올바르지 않아요");
+        String subject = hash(deviceKey);
+        if (auth.findUserByIdentity(GUEST, subject) == null && !signups.tryAcquire(ip))
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_GUESTS", "잠시 뒤에 다시 시도해 주세요");
+        return loginOrCreate(GUEST, subject);
+    }
+
+    static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // I O 0 1 제외(읽기 헷갈림)
+    static final Duration TRANSFER_LIFETIME = Duration.ofMinutes(10);
+
+    /**
+     * 기기 이전 코드를 만든다(결정 #85): 8자리 일회용 코드, 10분 유효, 계정마다 하나(새로 만들면 이전 코드는 못 쓴다).
+     * 서버에는 SHA-256만 저장하고 원문은 이 응답에서만 보인다.
+     */
+    public TransferCodeResponse issueTransferCode(long userId) {
+        StringBuilder code = new StringBuilder();
+        for (int i = 0; i < 8; i++) code.append(CODE_CHARS.charAt(RANDOM.nextInt(CODE_CHARS.length())));
+        Instant now = clock.instant(), expires = now.plus(TRANSFER_LIFETIME);
+        auth.upsertTransferCode(userId, hash(code.toString()), now, expires);
+        return new TransferCodeResponse(code.toString(), expires);
+    }
+
+    /**
+     * 이전 코드로 이 기기를 그 계정에 잇고 로그인한다. 이 기기 키가 이미 다른 게스트 계정에 이어져 있었다면(새 기기가 먼저 자동으로 시작한 경우)
+     * 그 연결이 코드의 계정으로 옮겨 간다. 코드는 한 번만 쓸 수 있고, 코드 모양이 맞는 시도는 IP당 10분에 10번까지 센다.
+     */
+    public LoginResponse redeemTransfer(String rawCode, String deviceKey, String ip) {
+        String code = rawCode == null ? "" : rawCode.toUpperCase().replaceAll("[\s-]", "");
+        if (!code.matches("[A-HJ-NP-Z2-9]{8}")) throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_CODE", "코드는 영문·숫자 8자리예요");
+        if (deviceKey == null || !DEVICE_KEY.matcher(deviceKey).matches())
+            throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_DEVICE_KEY", "기기 키가 올바르지 않아요");
+        if (!attempts.tryAcquire(ip)) throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ATTEMPTS", "잠시 뒤에 다시 시도해 주세요");
+        String subject = hash(deviceKey);
+        return tx.execute(status -> {
+            Instant now = clock.instant();
+            Long userId = auth.consumeTransferCode(hash(code), now);
+            if (userId == null) throw new ApiException(HttpStatus.NOT_FOUND, "INVALID_CODE", "코드가 없거나 만료됐어요");
+            auth.lockIdentity(GUEST, subject);
+            auth.pointIdentityTo(userId, GUEST, subject);
+            auth.deleteExpired(userId, now);
+            String token = newToken();
+            Instant expires = now.plus(LIFETIME);
+            auth.insertSession(hash(token), userId, now, expires);
+            return new LoginResponse(token, expires, false, users.get(userId));
+        });
     }
 
     private LoginResponse loginOrCreate(String provider, String subject) {

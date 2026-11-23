@@ -83,7 +83,9 @@ test('공유방: 동의·대화·별도 정보창·마을로 나가기가 이어
   await page.locator('#panel [data-act=rcAgree]').click();
   await page.waitForFunction("VIEW==='shared'");
   await page.locator('#rc').fill('분리한 공유방에서 보내요');
-  await page.locator('#rc').press('Enter');
+  // 폰의 Enter는 줄바꿈이라 보내기 버튼을 누른다
+  if (info.project.name === 'mobile') await page.locator('[data-act=rcSend]').click();
+  else await page.locator('#rc').press('Enter');
   await expect(page.locator('#rcLog')).toContainText('분리한 공유방에서 보내요');
   await page.locator('#campSide [data-camp=info]').click();
   await expect(page.locator('#campModal')).toHaveClass(/open/);
@@ -193,5 +195,54 @@ test('폰 폭 경계: 761px와 760px에서 방 구도가 바뀌어도 오류가 
   await page.setViewportSize({ width: 760, height: 800 });
   await page.waitForFunction("MQ.matches===true");
   expect(await noHScroll(page)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+// 창 모양: 모든 창을 열어 보고, 버튼 줄이 창 맨 아래에 하나만 있고 카드와 겹치지 않으며, 컨트롤이 창 밖으로 나가거나 서로 겹치지 않는지 본다.
+// (맨 아래 고정 버튼 줄 밑으로 긴 내용이 스크롤되는 것은 의도된 구조라 겹침에서 뺀다.) 데스크톱·폰 두 화면에서 돈다.
+test('창 모양: 내 방·마을의 모든 창에서 버튼 줄·카드·입력칸이 겹치거나 넘치지 않는다', async ({ page }) => {
+  const errors = await open(page);
+  const audit = () => page.evaluate(() => {
+    const inter = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    const p = document.getElementById('panel'), pr = p.getBoundingClientRect(), issues = [];
+    if (!p.innerHTML.trim()) return ['창이 비어 있어요'];
+    if (p.scrollWidth > p.clientWidth + 1) issues.push('가로 넘침');
+    const sticky = [...p.querySelectorAll('.foot')].filter(f => getComputedStyle(f).position === 'sticky');
+    if (sticky.length > 1) issues.push('고정 버튼 줄이 ' + sticky.length + '개');
+    sticky.forEach(f => { if (f.parentElement === p && f !== p.lastElementChild) issues.push('고정 .foot이 마지막 요소가 아님'); });
+    sticky.forEach(f => p.querySelectorAll('.card').forEach(c => { if (!c.contains(f) && inter(f.getBoundingClientRect(), c.getBoundingClientRect()) > 40) issues.push('.foot이 카드와 겹침'); }));
+    const folded = e => { const d = e.closest('details'); return !!d && !d.open; };   // 접힌 "테스트 도구" 상자 안은 보이지 않으니 뺀다
+    const ctrls = [...p.querySelectorAll('button,input,textarea,select')].filter(e => e.offsetParent !== null && !folded(e));
+    ctrls.forEach(e => { const r = e.getBoundingClientRect(); if (r.width && (r.right > pr.right + 1 || r.left < pr.left - 1)) issues.push('창 밖으로 나감: ' + (e.innerText || e.id).slice(0, 12)); });
+    for (let i = 0; i < ctrls.length; i++) for (let j = i + 1; j < ctrls.length; j++) {
+      const a = ctrls[i], b = ctrls[j];
+      if (a.contains(b) || b.contains(a) || a.closest('.foot') || b.closest('.foot')) continue;   // 고정 버튼 줄 밑 스크롤은 의도된 구조
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(), o = inter(ra, rb);
+      if (o > 0 && o / Math.min(ra.width * ra.height, rb.width * rb.height) > 0.2) {
+        const d = (e, r) => e.outerHTML.slice(0, 90) + ' [' + [r.left, r.top, r.width, r.height].map(Math.round) + ']';
+        issues.push('컨트롤끼리 겹침: ' + d(a, ra) + ' <-> ' + d(b, rb));
+      }
+    }
+    return issues;
+  });
+  const closeAll = () => page.evaluate(() => { panelOpen = null; try { closePanel(); } catch (e) {} });
+  const found = [];
+  for (const f of ['sofa', 'lamp', 'shelf', 'calendar', 'mirror', 'window']) {
+    await closeAll();
+    await page.evaluate(n => openF(n), f);
+    await page.waitForTimeout(450);
+    (await audit()).forEach(i => found.push(f + ': ' + i));
+  }
+  await closeAll();
+  await page.evaluate(() => enterVillage());
+  await page.waitForFunction('VIEW==="village"');
+  await page.waitForTimeout(500);
+  for (const f of ['board', 'fire:new']) {
+    await closeAll();
+    await page.evaluate(n => openV(n), f);
+    await page.waitForTimeout(500);
+    (await audit()).forEach(i => found.push(f + ': ' + i));
+  }
+  expect(found).toEqual([]);
   expect(errors).toEqual([]);
 });

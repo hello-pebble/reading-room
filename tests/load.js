@@ -13,7 +13,7 @@ const opened = [];
 const closeAll = () => { for (const w of opened.splice(0)) { try { w.close(); } catch (e) {} } };
 
 // api: fakeServer()를 주면 주소에 ?api=가 붙은 서버 연결 모드로 열고, 페이지의 fetch를 그 가짜 서버로 바꾼다. local: 열기 전에 localStorage에 미리 넣을 값
-function load({ state, touch, api, local } = {}) {
+function load({ state, touch, api, local, dev } = {}) {
   const html = fs.readFileSync(FILE, 'utf8')
     .replace(/<script src="([^"]+)"><\/script>/g, (_, src) => {
       if (src.startsWith('vendor/') || /^https?:/.test(src)) return ''; // 3D 라이브러리 제외
@@ -25,7 +25,8 @@ function load({ state, touch, api, local } = {}) {
   vc.on('jsdomError', e => errors.push(String((e && e.stack) || e)));
   vc.on('error', m => errors.push('console.error: ' + m));
   const dom = new JSDOM(html, {
-    url: 'http://localhost/' + (api ? '?api=http://api.test' : ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+    // dev: 이름으로 로그인하는 개발용 로그인(&dev=1). 기본은 게스트로 시작
+    url: 'http://localhost/' + (api ? '?api=http://api.test' + (dev ? '&dev=1' : '') : ''), runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       if (state) w.localStorage.setItem(KEY, JSON.stringify(state));
       if (local) for (const [k, v] of Object.entries(local)) w.localStorage.setItem(k, v);
@@ -76,6 +77,8 @@ function fakeServer() {
   const raise = (b, page) => { if (page != null && page > b.currentPage) b.currentPage = b.totalPages ? Math.min(page, b.totalPages) : page; };
   const srv = {
     calls, users, tokens, down: false,
+    guests: {}, // 기기 키 → 계정 (게스트 로그인)
+    codes: {}, // 이전 코드 → {user, expires(서버 시각 ms)}
     recs: {}, // 집 주인 번호(user.id) → 확인 전 추천 {id, fromUid, book, at}
     // fromLabel 계정이 toLabel 계정의 집에 그 계정의 책을 꽂아 둔다
     seedRecommendation(fromLabel, toLabel, bookTitle) {
@@ -135,6 +138,26 @@ function fakeServer() {
         const created = !users[label], u = users[label] || mk(label);
         return res(200, { token: issue(u), expiresAt: '2099-01-01T00:00:00Z', newUser: created, user: { ...u } });
       }
+      // 게스트 로그인: 기기 키가 같으면 같은 계정, 처음이면 만든다(srv.guestDown이면 서버 오류, srv.guests로 이미 만든 기기를 볼 수 있다)
+      if (method === 'POST' && path === '/auth/guest') {
+        if (srv.guestDown) return res(503, { error: 'AUTH_UNAVAILABLE', message: '지금은 시작할 수 없어요' });
+        const key = String(body.deviceKey == null ? '' : body.deviceKey);
+        if (!/^[A-Za-z0-9_-]{32,128}$/.test(key)) return res(400, { error: 'BAD_DEVICE_KEY', message: '기기 키가 올바르지 않아요' });
+        const created = !srv.guests[key], u = srv.guests[key] || (srv.guests[key] = mk('guest:' + key));
+        return res(200, { token: issue(u), expiresAt: '2099-01-01T00:00:00Z', newUser: created, user: { ...u } });
+      }
+      // 기기 이전 코드로 들어오기: 코드는 한 번만, 10분 안에. 이 기기 키가 코드의 계정으로 옮겨 온다 (srv.codes: 코드 → {user, expires})
+      if (method === 'POST' && path === '/auth/transfer') {
+        const code = String(body.code == null ? '' : body.code).toUpperCase().replace(/[\s-]/g, '');
+        const key = String(body.deviceKey == null ? '' : body.deviceKey);
+        if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) return res(400, { error: 'BAD_CODE', message: '코드는 영문·숫자 8자리예요' });
+        if (!/^[A-Za-z0-9_-]{32,128}$/.test(key)) return res(400, { error: 'BAD_DEVICE_KEY', message: '기기 키가 올바르지 않아요' });
+        const e = srv.codes[code];
+        if (!e || e.expires < srv.now()) return res(404, { error: 'INVALID_CODE', message: '코드가 없거나 만료됐어요' });
+        delete srv.codes[code];
+        srv.guests[key] = e.user;
+        return res(200, { token: issue(e.user), expiresAt: '2099-01-01T00:00:00Z', newUser: false, user: { ...e.user } });
+      }
       // 책 검색 (로그인 없이 열려 있다). srv.search = {status, body}를 정해 두면 그대로 답한다
       if (method === 'GET' && path.startsWith('/books/search')) {
         const q = decodeURIComponent((path.split('?q=')[1] || '').trim());
@@ -146,6 +169,15 @@ function fakeServer() {
       }
       const user = auth && tokens[auth.replace('Bearer ', '')];
       if (!user) return res(401, { error: 'UNAUTHORIZED', message: '로그인이 필요해요' });
+      if (method === 'POST' && path === '/me/transfer-code') {
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        for (const k of Object.keys(srv.codes)) if (srv.codes[k].user === user) delete srv.codes[k]; // 계정마다 하나
+        let code = '';
+        for (let i = 0; i < 8; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+        const expires = srv.now() + 10 * 60000;
+        srv.codes[code] = { user, expires };
+        return res(200, { code, expiresAt: new Date(expires).toISOString() });
+      }
       if (method === 'GET' && path === '/me') return res(200, { ...user });
       if (method === 'PUT' && path === '/me/nickname') {
         if (!NICK_RULE.test(body.nickname == null ? '' : body.nickname))

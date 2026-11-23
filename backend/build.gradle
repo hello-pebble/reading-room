@@ -25,6 +25,14 @@ dependencies {
     testImplementation 'io.zonky.test:embedded-postgres:2.1.0'
 }
 
+// 화면(frontend/)을 jar 안 static/에 넣어 서버 하나로 화면까지 낸다. 프로토타입용 config.js는 빼고 서버용(src/main/resources/static/config.js)을 쓴다
+tasks.named('processResources') {
+    from('../frontend') {
+        into 'static'
+        include 'index.html', 'css/**', 'js/**', 'vendor/**'
+    }
+}
+
 tasks.named('test') {
     useJUnitPlatform()
     systemProperty 'user.timezone', System.getProperty('test.tz', 'UTC')

@@ -48,6 +48,26 @@ public class AuthRepository {
         return dsl.execute("delete from auth_session where token_hash = ?", tokenHash);
     }
 
+    /** 이전 코드(해시)를 계정에 둔다. 계정마다 하나라서 새로 만들면 바꾼다. 지난 코드도 이때 치운다. */
+    public void upsertTransferCode(long userId, String codeHash, Instant now, Instant expiresAt) {
+        dsl.execute("delete from transfer_code where expires_at <= ?::timestamptz", now.toString());
+        dsl.execute("insert into transfer_code(user_id, code_hash, expires_at, created_at) values (?, ?, ?::timestamptz, ?::timestamptz) "
+                + "on conflict (user_id) do update set code_hash = excluded.code_hash, expires_at = excluded.expires_at, created_at = excluded.created_at",
+                userId, codeHash, expiresAt.toString(), now.toString());
+    }
+
+    /** 만료 전 코드를 쓰고(지우고) 그 계정을 돌려준다. 없거나 만료됐으면 null (한 번만 쓸 수 있다) */
+    public Long consumeTransferCode(String codeHash, Instant now) {
+        Record r = dsl.fetchOne("delete from transfer_code where code_hash = ? and expires_at > ?::timestamptz returning user_id", codeHash, now.toString());
+        return r == null ? null : r.get("user_id", Long.class);
+    }
+
+    /** 이 기기 키(게스트 식별자)를 그 계정에 잇는다. 이미 다른 계정에 이어져 있으면 그 연결을 이 계정으로 옮긴다. */
+    public void pointIdentityTo(long userId, String provider, String providerUserId) {
+        dsl.execute("insert into auth_identity(user_id, provider, provider_user_id) values (?, ?, ?) "
+                + "on conflict (provider, provider_user_id) do update set user_id = excluded.user_id", userId, provider, providerUserId);
+    }
+
     public int deleteExpired(long userId, Instant now) {
         return dsl.execute("delete from auth_session where user_id = ? and expires_at <= ?::timestamptz", userId, now.toString());
     }

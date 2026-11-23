@@ -272,6 +272,14 @@ aside.panel {
   z-index: 5;
   box-shadow: 0 -10px 12px -10px rgba(40, 30, 20, 0.18);
 }
+/* .foot은 창 맨 아래에 붙는 버튼 줄이라 창의 마지막 요소로 한 번만 쓴다. 카드 안에 들어가 있어도 카드를 가리지 않게 그냥 버튼 줄로 둔다 */
+.card .foot {
+  position: static;
+  margin: 10px 0 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
 .panel-head {
   position: sticky;
   top: 0;

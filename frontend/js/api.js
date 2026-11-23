@@ -27,7 +27,8 @@ const API = (() => {
       else if (v === '') ls.set(KEY_BASE, null);
     }
   } catch (e) {}
-  const base = ls.get(KEY_BASE);
+  // ?api= 로 정한 주소가 먼저, 없으면 배포 설정(config.js의 RR_API='same-origin')대로 이 화면을 연 주소의 서버
+const base = ls.get(KEY_BASE) || (window.RR_API === 'same-origin' && /^https?:/.test(location.protocol) ? location.origin : null);
 
   // status 0은 서버에 닿지 못한 경우(NETWORK). code·message는 서버가 준 값 그대로다.
   class ApiError extends Error {

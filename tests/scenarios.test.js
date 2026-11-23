@@ -571,7 +571,7 @@ test('서버 연결: ?api가 없으면 서버를 부르지 않고 프로토타�
 
 test('서버 연결: 토큰이 없으면 로그인 창이 뜨고, 새 계정은 닉네임 정하기로 이어진다', async () => {
   const srv = fakeServer();
-  const a = load({ api: srv });
+  const a = load({ dev: true, api: srv });
   await settle();
   assert.equal(a.ev('API.enabled'), true);
   assert.equal(a.ev('panelOpen'), 'login');
@@ -589,7 +589,7 @@ test('서버 연결: 토큰이 없으면 로그인 창이 뜨고, 새 계정은 
 
 test('닉네임 정하기: 규칙에 안 맞으면 서버 문구를 보여 주고 열려 있으며, 맞으면 헤더가 바뀌고 닫힌다', async () => {
   const srv = fakeServer();
-  const b = load({ api: srv, local: { [TOKEN]: srv.seed('alice') } }); // 닉네임을 아직 안 정한 계정
+  const b = load({ dev: true, api: srv, local: { [TOKEN]: srv.seed('alice') } }); // 닉네임을 아직 안 정한 계정
   await settle();
   assert.equal(b.ev('panelOpen'), 'nickname');
   for (const bad of ['😀', '여섯글자이름이', 'a b', '나무!']) {
@@ -616,7 +616,7 @@ test('닉네임 정하기: 규칙에 안 맞으면 서버 문구를 보여 주�
 
 test('로그인 창과 닉네임 정하기는 바깥 클릭·Esc로 닫히지 않는다', async () => {
   const srv = fakeServer();
-  const a = load({ api: srv });
+  const a = load({ dev: true, api: srv });
   await settle();
   const esc = () => a.w.document.dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Escape' }));
   esc();
@@ -637,7 +637,7 @@ test('로그인 창과 닉네임 정하기는 바깥 클릭·Esc로 닫히지 �
 test('재방문: 저장된 토큰으로 바로 들어가고, 닉네임이 있으면 창이 뜨지 않는다', async () => {
   const srv = fakeServer();
   const token = srv.seed('alice', '나무');
-  const a = load({ api: srv, local: { [TOKEN]: token } });
+  const a = load({ dev: true, api: srv, local: { [TOKEN]: token } });
   await settle();
   assert.equal(srv.calls[0].path, '/me', '내 정보를 먼저 불러와요(이어서 책을 불러와요)');
   assert.equal(a.ev('panelOpen'), null);
@@ -649,7 +649,7 @@ test('재방문: 저장된 토큰으로 바로 들어가고, 닉네임이 있으
 
 test('토큰이 만료·무효면 토큰을 지우고 로그인 창으로 돌아간다', async () => {
   const srv = fakeServer();
-  const a = load({ api: srv, local: { [TOKEN]: 'tok-없는토큰' } });
+  const a = load({ dev: true, api: srv, local: { [TOKEN]: 'tok-없는토큰' } });
   await settle();
   assert.equal(a.ev('panelOpen'), 'login');
   assert.equal(a.w.localStorage.getItem(TOKEN), null);
@@ -660,7 +660,7 @@ test('토큰이 만료·무효면 토큰을 지우고 로그인 창으로 돌아
 
 test('닉네임 바꾸기: 헤더 버튼으로 다시 열고(닫을 수 있다) 바꾸면 헤더에 바로 보인다', async () => {
   const srv = fakeServer();
-  const a = load({ api: srv, local: { [TOKEN]: srv.seed('alice', '나무') } });
+  const a = load({ dev: true, api: srv, local: { [TOKEN]: srv.seed('alice', '나무') } });
   await settle();
   a.click('#nickBtn');
   assert.equal(a.ev('panelOpen'), 'nickname');
@@ -679,7 +679,7 @@ test('닉네임 바꾸기: 헤더 버튼으로 다시 열고(닫을 수 있다) 
 test('로그아웃: 서버에 알리고 토큰을 지운 뒤 로그인 창으로 돌아간다', async () => {
   const srv = fakeServer();
   const token = srv.seed('alice', '나무');
-  const a = load({ api: srv, local: { [TOKEN]: token } });
+  const a = load({ dev: true, api: srv, local: { [TOKEN]: token } });
   await settle();
   a.click('#logoutBtn');
   await settle();
@@ -696,7 +696,7 @@ const bookApp = async (setup) => {
   const srv = fakeServer();
   const token = srv.seed('alice', '나무');
   if (setup) setup(srv);
-  const a = load({ api: srv, local: { [TOKEN]: token } });
+  const a = load({ dev: true, api: srv, local: { [TOKEN]: token } });
   a.ev('BOOK_SAVE_DELAY=20'); // 쪽수 저장 대기를 줄인다
   await settle();
   await settle();
@@ -858,7 +858,7 @@ test('다른 계정으로 로그인하면 그 계정의 책으로 바뀐다', as
 test('서버에 닿지 않으면 로그인 창에 안내가 나온다', async () => {
   const srv = fakeServer();
   srv.down = true;
-  const a = load({ api: srv });
+  const a = load({ dev: true, api: srv });
   await settle();
   val(a, 'loginLabel', 'alice');
   a.click('#panel [data-act=login]');
@@ -1820,5 +1820,233 @@ test('서버 책 검색: 쪽수를 채우지 못해도(조회 실패·이미 직
   await settle();
   assert.equal(a.ev('panelView.tp'), 100);
   assert.equal(a.ev('panelView.cover'), 'https://img.test/nl.jpg', '쪽수는 그대로 두고 비어 있던 표지만 채워요');
+  fin(a);
+});
+
+// ---- 게스트로 시작 (결정 #84): 가입·로그인 창 없이 기기 키로 들어간다 ----
+const DEVICE = 'myroom-device';
+const guestHeader = (a) => text(a, 'hdrName');
+
+test('게스트 시작: 토큰이 없으면 로그인 창 없이 기기 키로 시작하고, 새 계정은 닉네임 정하기로 이어진다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  await settle();
+  assert.notEqual(a.ev('panelOpen'), 'login', '이름을 묻는 로그인 창은 없어요');
+  assert.equal(a.ev('panelOpen'), 'nickname');
+  assert.equal(a.ev('ACCT.locked'), true, '처음 닉네임은 정할 때까지 닫을 수 없어요');
+  const key = a.w.localStorage.getItem(DEVICE);
+  assert.match(key, /^[A-Za-z0-9_-]{32,128}$/, '기기 키는 서버 규칙에 맞는 무작위 값이에요');
+  const c = calls(srv, 'POST', /^\/auth\/guest$/);
+  assert.equal(c.length, 1);
+  assert.deepEqual(c[0].body, { deviceKey: key });
+  assert.equal(calls(srv, 'POST', /\/dev\/login$/).length, 0);
+  assert.ok(a.w.localStorage.getItem(TOKEN), '받은 토큰을 기기에 둬요');
+  assert.equal(a.doc.getElementById('logoutBtn').hidden, true, '게스트는 기기가 곧 계정이라 로그아웃이 없어요');
+  assert.equal(a.doc.getElementById('nickBtn').hidden, false);
+  val(a, 'nickInput', '나무');
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  assert.equal(guestHeader(a), '나무의 방');
+  fin(a);
+});
+
+test('게스트 시작: 같은 기기로 다시 열면(토큰이 없어도) 같은 계정이고, 정해 둔 닉네임이 그대로다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  await settle();
+  val(a, 'nickInput', '나무');
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  const key = a.w.localStorage.getItem(DEVICE);
+  a.close();
+  const b = load({ api: srv, local: { [DEVICE]: key } }); // 토큰은 잃었지만 기기 키는 남아 있다
+  await settle();
+  await settle();
+  assert.equal(Object.keys(srv.guests).length, 1, '새 계정이 만들어지지 않아요');
+  assert.equal(guestHeader(b), '나무의 방');
+  assert.notEqual(b.ev('panelOpen'), 'nickname', '닉네임을 이미 정했으니 창이 뜨지 않아요');
+  assert.equal(b.w.localStorage.getItem(DEVICE), key, '기기 키는 그대로예요');
+  fin(b);
+});
+
+test('게스트 시작: 토큰이 만료돼도 로그인 창 없이 같은 기기 키로 조용히 다시 들어온다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  await settle();
+  val(a, 'nickInput', '나무');
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  const key = a.w.localStorage.getItem(DEVICE);
+  a.close();
+  const b = load({ api: srv, local: { [DEVICE]: key, [TOKEN]: 'tok-만료됐어요' } });
+  await settle();
+  await settle();
+  assert.notEqual(b.ev('panelOpen'), 'login');
+  assert.equal(guestHeader(b), '나무의 방');
+  assert.equal(Object.keys(srv.guests).length, 1);
+  assert.notEqual(b.w.localStorage.getItem(TOKEN), 'tok-만료됐어요', '새 토큰으로 바뀌어요');
+  fin(b);
+});
+
+test('게스트 시작 실패: 서버에 닿지 않으면 닫을 수 없는 안내와 [다시 시도]가 나오고, 다시 시도하면 이어진다', async () => {
+  const srv = fakeServer();
+  srv.guestDown = true;
+  const a = load({ api: srv });
+  await settle();
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'guestFail');
+  assert.match(a.doc.getElementById('panel').textContent, /지금은 시작할 수 없어요/);
+  a.ev('closePanel()'); // 바깥 클릭·Esc와 같은 닫기 시도
+  assert.equal(a.ev('panelOpen'), 'guestFail', '시작하기 전에는 닫을 수 없어요');
+  srv.guestDown = false;
+  a.click('#panel [data-act=guestRetry]');
+  await settle();
+  await settle();
+  assert.equal(a.ev('panelOpen'), 'nickname');
+  assert.equal(Object.keys(srv.guests).length, 1);
+  fin(a);
+});
+
+// ---- 기기 옮기기 (이전 코드, 결정 #85): 코드로 다른 기기에서 같은 계정으로 들어온다 ----
+const guestDevice = async (srv, nick) => {
+  const a = load({ api: srv });
+  await settle();
+  await settle();
+  val(a, 'nickInput', nick);
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  return a;
+};
+const issueCode = async (a) => {
+  a.click('#transferBtn');
+  a.click('#panel [data-act=transferIssue]');
+  await settle();
+  return a.doc.getElementById('xcode').textContent.replace('-', '');
+};
+const enterCode = async (b, code) => {
+  val(b, 'xin', code);
+  b.click('#panel [data-act=transferRedeem]');
+  await settle();
+  await settle();
+};
+
+test('기기 옮기기: 로그인한 뒤 버튼이 보이고, 코드 만들기를 누르면 서버가 준 코드가 ABCD-EFGH 모양으로 보인다', async () => {
+  const srv = fakeServer();
+  const a = load({ api: srv });
+  await settle();
+  await settle();
+  assert.equal(a.doc.getElementById('transferBtn').hidden, false);
+  val(a, 'nickInput', '나무');
+  a.click('#panel [data-act=saveNick]');
+  await settle();
+  a.click('#transferBtn');
+  assert.equal(a.ev('panelOpen'), 'transfer');
+  a.click('#panel [data-act=transferIssue]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /^\/me\/transfer-code$/).length, 1);
+  assert.match(a.doc.getElementById('xcode').textContent, /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+  assert.match(a.doc.getElementById('panel').textContent, /까지 쓸 수 있고, 한 번만 쓸 수 있어요/);
+  fin(a);
+});
+
+test('기기 옮기기: 다른 기기가 코드를 넣으면 같은 계정으로 바뀌고 책이 불러와진다', async () => {
+  const srv = fakeServer();
+  const a = await guestDevice(srv, '나무');
+  const keyA = a.w.localStorage.getItem(DEVICE);
+  srv.seedBook('guest:' + keyA, { title: '데미안', author: '헤세', totalPages: 200, currentPage: 50 });
+  const code = await issueCode(a);
+
+  const b = load({ api: srv }); // 새 기기: 먼저 자동으로 빈 게스트 계정을 만든다
+  await settle();
+  await settle();
+  assert.equal(b.ev('panelOpen'), 'nickname');
+  assert.notEqual(b.state().user.publicId, a.state().user.publicId);
+  b.click('#panel [data-act=openTransfer]');
+  assert.equal(b.ev('panelOpen'), 'transfer');
+  await enterCode(b, code.slice(0, 4) + '-' + code.slice(4).toLowerCase()); // 대소문자·하이픈은 무시한다
+  assert.deepEqual(calls(srv, 'POST', /^\/auth\/transfer$/).at(-1).body, { code: code.slice(0, 4) + '-' + code.slice(4).toLowerCase(), deviceKey: b.w.localStorage.getItem(DEVICE) });
+  assert.equal(b.state().user.publicId, a.state().user.publicId, '같은 계정이에요');
+  assert.equal(b.state().user.nickname, '나무');
+  assert.equal(b.state().reading.title, '데미안', '그 계정의 책이 불러와져요');
+  assert.notEqual(b.ev('panelOpen'), 'transfer');
+  assert.notEqual(b.ev('panelOpen'), 'nickname', '이미 닉네임이 있는 계정이라 닉네임 창이 닫혀요');
+  assert.equal(srv.guests[b.w.localStorage.getItem(DEVICE)], srv.guests[keyA], '새 기기 키가 그 계정으로 이어져요');
+  assert.match(text(b, 'toast'), /다른 기기의 계정으로 바꿨어요/);
+  fin(a);
+  fin(b);
+});
+
+test('기기 옮기기: 코드는 한 번만 쓸 수 있고, 틀렸거나 비어 있으면 서버·화면 문구가 나오고 창은 열려 있다', async () => {
+  const srv = fakeServer();
+  const a = await guestDevice(srv, '나무');
+  const code = await issueCode(a);
+  const b = load({ api: srv });
+  await settle();
+  await settle();
+  b.click('#panel [data-act=openTransfer]');
+  b.click('#panel [data-act=transferRedeem]'); // 비어 있다
+  assert.match(b.doc.getElementById('acctErr').textContent, /코드를 입력해 주세요/);
+  await enterCode(b, 'ABCDEFGH'); // 없는 코드
+  assert.match(b.doc.getElementById('acctErr').textContent, /코드가 없거나 만료됐어요/);
+  await enterCode(b, 'ab'); // 모양이 틀림
+  assert.match(b.doc.getElementById('acctErr').textContent, /코드는 영문·숫자 8자리예요/);
+  assert.equal(b.ev('panelOpen'), 'transfer');
+  await enterCode(b, code);
+  assert.equal(b.state().user.publicId, a.state().user.publicId);
+  const c = load({ api: srv });
+  await settle();
+  await settle();
+  c.click('#panel [data-act=openTransfer]');
+  await enterCode(c, code); // 같은 코드를 다시
+  assert.match(c.doc.getElementById('acctErr').textContent, /코드가 없거나 만료됐어요/);
+  fin(a);
+  fin(b);
+  fin(c);
+});
+
+test('기기 옮기기: 처음 닉네임을 정하는 중이면 닫을 수 없고, [닉네임 정하기로]로 돌아올 수 있다', async () => {
+  const srv = fakeServer();
+  const b = load({ api: srv });
+  await settle();
+  await settle();
+  assert.match(b.doc.getElementById('panel').textContent, /다른 기기에서 쓰던 계정이 있나요/);
+  b.click('#panel [data-act=openTransfer]');
+  assert.equal(b.ev('panelOpen'), 'transfer');
+  b.ev('closePanel()'); // 바깥 클릭·Esc와 같은 닫기 시도
+  assert.equal(b.ev('panelOpen'), 'transfer', '새 계정이 닉네임을 정하기 전에는 닫을 수 없어요');
+  b.click('#panel [data-act=openNickname]');
+  assert.equal(b.ev('panelOpen'), 'nickname');
+  assert.equal(b.ev('ACCT.locked'), true);
+  fin(b);
+});
+
+// ---- 창 모양 (구조): 창 맨 아래 고정 버튼 줄(.foot)은 창의 마지막 요소로 한 번만, 카드 안에는 넣지 않는다 ----
+test('계정 창의 모양: 버튼 줄(.foot)은 마지막에 하나뿐이고 카드 안에 있지 않다 (기기 옮기기·닉네임·로그인·시작 실패)', async () => {
+  const srv = fakeServer();
+  const token = srv.seed('alice', '나무');
+  const a = load({ dev: true, api: srv, local: { [TOKEN]: token } });
+  await settle();
+  await settle();
+  const states = {
+    '닉네임 바꾸기': "ACCT.locked = false; ACCT.nick = '나무'; openAccount('nickname')",
+    '처음 닉네임(잠김)': "ACCT.locked = true; ACCT.nick = ''; openAccount('nickname')",
+    '기기 옮기기': "ACCT.locked = false; ACCT.xfer = null; openAccount('transfer')",
+    '기기 옮기기(코드 있음)': "ACCT.locked = false; ACCT.xfer = { code: 'FERYU6BX', expiresAt: Date.now() + 600000 }; openAccount('transfer', '코드가 없거나 만료됐어요')",
+    '기기 옮기기(잠김)': "ACCT.locked = true; ACCT.xfer = null; openAccount('transfer')",
+    '개발용 로그인': "ACCT.locked = false; openAccount('login', '로그인이 만료됐어요')",
+    '시작 실패': "ACCT.locked = false; openAccount('guestFail', '서버에 연결할 수 없어요')",
+  };
+  for (const [name, code] of Object.entries(states)) {
+    a.ev('panelOpen = null; ACCT.locked = false');
+    a.ev(code);
+    const panel = a.doc.getElementById('panel');
+    const foots = [...panel.querySelectorAll('.foot')];
+    assert.ok(foots.length <= 1, name + ': .foot이 둘 이상이에요');
+    if (foots.length) assert.equal(panel.lastElementChild, foots[0], name + ': .foot이 마지막 요소가 아니에요');
+    assert.equal(panel.querySelectorAll('.card .foot').length, 0, name + ': 카드 안에 .foot이 있어요');
+  }
   fin(a);
 });

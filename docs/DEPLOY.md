@@ -25,7 +25,7 @@ docker compose up -d --build
 | `SERVER_PORT` | 8080 | 포트 |
 | `KAKAO_REST_KEY` | 없음 | 제목 검색(카카오 우선). 키가 없으면 국립중앙도서관 |
 | `NL_CERT_KEY` | 없음 | 국립중앙도서관. 둘 다 없으면 책 검색은 503 |
-| `FORWARD_HEADERS` | none | 프록시(nginx·로드밸런서) 뒤에서는 `framework`. 안 하면 모든 접속자가 프록시 IP 하나로 보여 게스트 가입·이전 코드 제한이 한꺼번에 걸린다 |
+| `FORWARD_HEADERS` | none | 프록시(nginx·로드밸런서) 뒤에서는 `framework`. 안 하면 모든 접속자가 프록시 IP 하나로 보여 게스트 가입·이전 코드 제한이 한꺼번에 걸린다. 켜면 `X-Forwarded-For`를 믿으므로 프록시가 이 헤더를 덮어써야 한다(아니면 IP를 속여 제한을 피할 수 있다) |
 | `GUEST_SIGNUPS_PER_HOUR_PER_IP` | 30 | IP당 한 시간 새 게스트 수 |
 | `TRANSFER_ATTEMPTS_PER_10MIN_PER_IP` | 10 | IP당 10분 이전 코드 입력 횟수 |
 | `GOOGLE_CLIENT_ID` | 없음 | 구글 로그인(화면은 쓰지 않음) |

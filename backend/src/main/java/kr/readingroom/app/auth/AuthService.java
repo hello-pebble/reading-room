@@ -14,6 +14,7 @@ import kr.readingroom.app.auth.dto.TransferCodeResponse;
 import kr.readingroom.app.common.ApiException;
 import kr.readingroom.app.common.TokenResolver;
 import kr.readingroom.app.user.UserService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -36,18 +37,19 @@ public class AuthService implements TokenResolver {
     private final UserService users;
     private final TransactionTemplate tx;
     private final Clock clock;
-    private final GuestSignupLimit signups;
-    private final TransferAttemptLimit attempts;
+    private final IpWindowLimit signups; // 게스트 새 계정: IP당 한 시간(결정 #84)
+    private final IpWindowLimit attempts; // 이전 코드 입력: IP당 10분(결정 #85)
 
-    public AuthService(GoogleIdTokenVerifier verifier, AuthRepository auth, UserService users, TransactionTemplate tx, Clock clock, GuestSignupLimit signups,
-            TransferAttemptLimit attempts) {
+    public AuthService(GoogleIdTokenVerifier verifier, AuthRepository auth, UserService users, TransactionTemplate tx, Clock clock,
+            @Value("${app.auth.guest-signups-per-hour-per-ip:30}") int signupsPerHour,
+            @Value("${app.auth.transfer-attempts-per-10min-per-ip:10}") int attemptsPer10Min) {
         this.verifier = verifier;
         this.auth = auth;
         this.users = users;
         this.tx = tx;
         this.clock = clock;
-        this.signups = signups;
-        this.attempts = attempts;
+        this.signups = new IpWindowLimit(clock, signupsPerHour, Duration.ofHours(1));
+        this.attempts = new IpWindowLimit(clock, attemptsPer10Min, Duration.ofMinutes(10));
     }
 
     /** ID 토큰 확인(외부 키 내려받기가 있을 수 있어 DB 트랜잭션 밖에서)을 먼저 하고, 사용자 찾기·만들기와 세션 발급은 한 트랜잭션으로 한다. */

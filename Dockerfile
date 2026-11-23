@@ -10,5 +10,4 @@ WORKDIR /app
 COPY --from=build /src/backend/build/libs/*.jar app.jar
 ENV TZ=Asia/Seoul
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s CMD ["bash","-c","exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\r\n\r\n' >&3 && grep -q 200 <&3"]
 ENTRYPOINT ["java","-jar","/app/app.jar"]

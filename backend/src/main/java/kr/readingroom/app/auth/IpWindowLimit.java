@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * IP별로 일정 시간(window) 안에 몇 번까지 허용할지 센다. 메모리에만 두므로 서버를 다시 켜면 비워지고, 서버가 여러 대면 대마다 센다.
  * 프록시 뒤에서는 요청 IP가 프록시 주소로 보일 수 있어 서버의 forward-headers 설정을 같이 정해야 한다.
- * 게스트 계정 만들기(GuestSignupLimit)와 이전 코드 입력(TransferAttemptLimit)이 같이 쓴다.
+ * AuthService가 게스트 계정 만들기와 이전 코드 입력에 각각 하나씩 쓴다.
  */
 class IpWindowLimit {
     private static final int SWEEP_AT = 5000; // 이만큼 쌓이면 지난 항목을 치운다

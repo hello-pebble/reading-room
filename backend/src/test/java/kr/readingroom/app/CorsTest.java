@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
  * 화면(다른 주소)이 서버 응답을 읽으려면 오류 응답에도 CORS 헤더가 있어야 한다.
  * 로그인 필터(UserIdFilter)가 401을 직접 돌려줄 때 헤더가 없으면 브라우저는 401 대신 "서버에 닿지 못함"으로 처리해 화면이 만료를 알 수 없다.
  */
+@org.springframework.test.context.TestPropertySource(properties = "app.cors.origins=http://localhost:8765")
 class CorsTest extends ApiTestBase {
     static final String ORIGIN = "http://localhost:8765";   // application.properties의 기본 허용 주소
 

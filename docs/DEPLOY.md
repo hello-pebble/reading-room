@@ -23,6 +23,7 @@ docker compose up -d --build
 |---|---|---|
 | `DATABASE_URL` / `DATABASE_USER` / `DATABASE_PASSWORD` | localhost:5432 / readingroom / readingroom | PostgreSQL. 시작할 때 Flyway가 스키마를 자동으로 만든다 |
 | `SERVER_PORT` | 8080 | 포트 |
+| `DB_POOL_SIZE` | 10 | DB 연결 풀 크기(Supabase 같은 외부 DB는 연결 한도에 맞춘다) |
 | `KAKAO_REST_KEY` | 없음 | 제목 검색(카카오 우선). 키가 없으면 국립중앙도서관 |
 | `NL_CERT_KEY` | 없음 | 국립중앙도서관. 둘 다 없으면 책 검색은 503 |
 | `FORWARD_HEADERS` | none | 프록시(nginx·로드밸런서) 뒤에서는 `native`. 안 하면 모든 접속자가 프록시 IP 하나로 보여 게스트 가입·이전 코드 제한이 한꺼번에 걸린다. 켜면 `X-Forwarded-For`를 믿는다(Tomcat은 오른쪽부터 내부 프록시를 건너뛰어 처음 만나는 바깥 주소를 쓴다). 프록시가 헤더 끝에 접속자 IP를 붙이는 환경(Cloud Run 등)이면 안전하다 |
@@ -30,7 +31,7 @@ docker compose up -d --build
 | `TRANSFER_ATTEMPTS_PER_10MIN_PER_IP` | 10 | IP당 10분 이전 코드 입력 횟수 |
 | `GOOGLE_CLIENT_ID` | 없음 | 구글 로그인(화면은 쓰지 않음) |
 | `VAPID_*` | 없음 | 웹 푸시(실발송은 아직 없음) |
-| `CORS_ORIGINS` | 로컬 주소들 | 화면을 다른 주소에서 열 때만 필요. 같은 서버에서 내면 불필요 |
+| `CORS_ORIGINS` | 비어 있음 | 화면을 다른 주소에서 열 때만 필요. 같은 서버에서 내면 불필요(운영에서 `null`·`*`는 넣지 않는다) |
 
 키 값은 환경변수로만 준다. 코드·문서·로그에 적지 않는다. 운영에서는 `dev` 프로파일을 켜지 않는다(`/dev/*`, `X-User-Id`가 열린다).
 
@@ -45,6 +46,9 @@ docker compose up -d --build
 
 ## 알려진 한계(테스트 배포에서 감안)
 
+- **IP 제한을 잠시 껐다(2026-11-24, 한도 없이 어디까지 되는지 보려는 테스트).** 게스트 가입·이전 코드 입력 제한은 `AuthService`에서 주석 처리했고 관련 테스트 2개는 `@Disabled`다. 공개 주소에 열어 두는 동안 봇이 가입을 마구 만들거나 책 검색(카카오·국립중앙도서관 호출 한도)을 소진할 수 있으니, 테스트 뒤 주석을 풀어 다시 켠다. 대화 속도 제한(3초 3건 등, 결정 #61)은 그대로다.
+- 모든 응답에 보안 헤더(nosniff, iframe 금지, Referrer 최소, HTTPS에서 HSTS)가 붙는다. 내용 보안 정책(CSP)은 화면의 인라인 스크립트 때문에 아직 없다.
+
 - 푸시 알림은 로그만 남긴다(실발송 없음). 알림은 화면 안 노란 별만.
 - 광장 접속 인원 표시, 신고·차단, 초대 코드(가입 제한)는 없다.
 - 게스트는 기기가 곧 계정: 브라우저 저장소를 지우면 새 계정이 된다(기기 이전 코드로 옮길 수 있다, 결정 #85).
@@ -52,41 +56,34 @@ docker compose up -d --build
 - 첫 접속은 3D 라이브러리(`vendor/three.min.js`, 약 600KB)를 내려받는다. 정적 파일 캐시·압축은 서버 기본값이다.
 - Docker 이미지 빌드는 개발 PC에서 아직 실행해 보지 않았다(jar 실행은 확인).
 
-## 구글 클라우드 배포(Cloud Run + Cloud SQL)
+## 구글 클라우드 배포(Cloud Run) + Supabase DB
 
-서울 리전(`asia-northeast3`) 기준이다. 절차를 위에서부터 따른다. `PROJECT`·`REGION` 등은 바꿔 쓴다.
+DB는 Supabase PostgreSQL을 쓴다. Cloud SQL·VPC는 필요 없고, Cloud Run이 인터넷으로 Supabase에 바로 연결한다.
+
+**Supabase 연결 주소 (중요)**
+- Supabase 대시보드 → Connect → **Session pooler**의 주소를 쓴다. 호스트는 `aws-0-<리전>.pooler.supabase.com`, 포트 **5432**, 사용자는 `postgres.<프로젝트ref>`.
+- Direct connection(`db.<ref>.supabase.co`)은 IPv6 전용이라 Cloud Run(IPv4)에서 안 닿는다. Transaction pooler(6543)는 Flyway·준비된 문장과 맞지 않으니 쓰지 않는다.
+- JDBC 주소는 `jdbc:postgresql://aws-0-<리전>.pooler.supabase.com:5432/postgres?sslmode=require`.
+- 스키마는 서버가 시작할 때 Flyway가 `public`에 만든다. 비밀번호는 Supabase 프로젝트의 DB 비밀번호다.
+- 연결 수 한도가 작으니 `DB_POOL_SIZE`(기본 10)로 맞춘다(무료는 5 정도).
 
 **주의(이 서비스 특성)**
 - 서버 안에서 배치(알림·공유방 개방·정리)가 `@Scheduled`로 돈다. Cloud Run 기본(요청 때만 CPU)이면 배치가 멈추므로 **`--no-cpu-throttling`과 `--min-instances=1`**이 필요하다.
-- IP 제한이 메모리 안에 있고 배치가 중복 실행될 수 있어 **`--max-instances=1`**로 둔다(여러 대가 필요해지면 제한을 DB로 옮긴다).
-- `FORWARD_HEADERS=native`로 둔다(Cloud Run이 `X-Forwarded-For` 끝에 접속자 IP를 붙인다).
-- HTTPS는 Cloud Run이 처리한다. 포트는 8080 그대로다.
+- IP 제한이 메모리 안에 있고 배치가 중복 실행될 수 있어 **`--max-instances=1`**로 둔다.
+- `FORWARD_HEADERS=native`(Cloud Run이 `X-Forwarded-For` 끝에 접속자 IP를 붙인다). HTTPS는 Cloud Run이 처리하고 포트는 8080 그대로다.
 
 ```bash
 PROJECT=<프로젝트 id>; REGION=asia-northeast3
 gcloud config set project $PROJECT
-gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+gcloud services enable run.googleapis.com secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
 
-# 1) DB: Cloud SQL PostgreSQL 16 (사설 IP + VPC 연결이 가장 단순하다. 공개 IP를 쓰면 Cloud SQL 소켓 라이브러리가 따로 필요하다)
-gcloud sql instances create rr-db --database-version=POSTGRES_16 --region=$REGION --tier=db-f1-micro \
-  --network=default --no-assign-ip
-gcloud sql databases create readingroom --instance=rr-db
-gcloud sql users create readingroom --instance=rr-db --password=<DB 비밀번호>
-#   (사설 IP를 쓰려면 한 번 "서비스 연결(private services access)" 설정이 필요하다. 콘솔의 안내를 따른다)
-
-# 2) 키는 Secret Manager에: 값은 명령 기록에 남지 않게 입력한다
+# 1) 키는 Secret Manager에(값은 명령 기록에 남지 않게 입력한다). 실행 계정(기본 컴퓨트 서비스 계정)에 roles/secretmanager.secretAccessor 를 준다
+printf '%s' "<Supabase DB 비밀번호>" | gcloud secrets create db-password --data-file=-
 printf '%s' "<KAKAO 키>" | gcloud secrets create kakao-rest-key --data-file=-
 printf '%s' "<NL 키>"    | gcloud secrets create nl-cert-key --data-file=-
-printf '%s' "<DB 비밀번호>" | gcloud secrets create db-password --data-file=-
-# 실행 계정(기본 컴퓨트 서비스 계정)에 roles/secretmanager.secretAccessor 를 준다
 
-# 3) 배포: 루트 Dockerfile로 Cloud Build가 이미지를 만든다
-DB_IP=$(gcloud sql instances describe rr-db --format='value(ipAddresses[0].ipAddress)')
-gcloud run deploy reading-room --source . --region=$REGION --allow-unauthenticated \
-  --network=default --subnet=default --vpc-egress=private-ranges-only \
-  --no-cpu-throttling --min-instances=1 --max-instances=1 --cpu-boost --memory=1Gi \
-  --set-env-vars="DATABASE_URL=jdbc:postgresql://$DB_IP:5432/readingroom,DATABASE_USER=readingroom,FORWARD_HEADERS=native,TZ=Asia/Seoul" \
-  --set-secrets="DATABASE_PASSWORD=db-password:latest,KAKAO_REST_KEY=kakao-rest-key:latest,NL_CERT_KEY=nl-cert-key:latest"
+# 2) 배포: 루트 Dockerfile로 Cloud Build가 이미지를 만든다
+gcloud run deploy reading-room --source . --region=$REGION --allow-unauthenticated   --no-cpu-throttling --min-instances=1 --max-instances=1 --cpu-boost --memory=1Gi   --set-env-vars="DATABASE_URL=jdbc:postgresql://aws-0-<리전>.pooler.supabase.com:5432/postgres?sslmode=require,DATABASE_USER=postgres.<프로젝트ref>,DB_POOL_SIZE=5,FORWARD_HEADERS=native,TZ=Asia/Seoul"   --set-secrets="DATABASE_PASSWORD=db-password:latest,KAKAO_REST_KEY=kakao-rest-key:latest,NL_CERT_KEY=nl-cert-key:latest"
 ```
 
 배포가 끝나면 나오는 `https://….run.app` 주소를 열고 위 체크리스트를 확인한다. 로그는 `gcloud run services logs read reading-room --region=$REGION`.

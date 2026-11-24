@@ -75,8 +75,9 @@ public class AuthService implements TokenResolver {
         if (deviceKey == null || !DEVICE_KEY.matcher(deviceKey).matches())
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_DEVICE_KEY", "기기 키가 올바르지 않아요");
         String subject = hash(deviceKey);
-        if (auth.findUserByIdentity(GUEST, subject) == null && !signups.tryAcquire(ip))
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_GUESTS", "잠시 뒤에 다시 시도해 주세요");
+        // 한도 없이 어디까지 되는지 보려고 잠시 끈다(2026-11-24). 켜려면 아래 두 줄의 주석을 푼다
+        // if (auth.findUserByIdentity(GUEST, subject) == null && !signups.tryAcquire(ip))
+        //     throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_GUESTS", "잠시 뒤에 다시 시도해 주세요");
         return loginOrCreate(GUEST, subject);
     }
 
@@ -104,7 +105,8 @@ public class AuthService implements TokenResolver {
         if (!code.matches("[A-HJ-NP-Z2-9]{8}")) throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_CODE", "코드는 영문·숫자 8자리예요");
         if (deviceKey == null || !DEVICE_KEY.matcher(deviceKey).matches())
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_DEVICE_KEY", "기기 키가 올바르지 않아요");
-        if (!attempts.tryAcquire(ip)) throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ATTEMPTS", "잠시 뒤에 다시 시도해 주세요");
+        // 한도 없이 어디까지 되는지 보려고 잠시 끈다(2026-11-24). 켜려면 주석을 푼다
+        // if (!attempts.tryAcquire(ip)) throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ATTEMPTS", "잠시 뒤에 다시 시도해 주세요");
         String subject = hash(deviceKey);
         return tx.execute(status -> {
             Instant now = clock.instant();

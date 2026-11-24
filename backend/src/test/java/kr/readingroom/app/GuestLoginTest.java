@@ -90,6 +90,7 @@ class GuestLoginTest extends ApiTestBase {
     }
 
     /** 새 계정 만들기는 IP당 시간당 30개까지(기본값). 이미 있는 기기 키로 다시 들어오는 것과 다른 IP는 막지 않는다. */
+    @org.junit.jupiter.api.Disabled("IP 제한을 잠시 껐다(AuthService). 켜면 이 줄을 지운다")
     @Test
     void newAccountsPerIpAreLimitedButReturningDevicesAndOtherIpsAreNot() throws Exception {
         for (int i = 0; i < 30; i++) guest(String.format("limit-key-%02d-", i) + "a".repeat(30), "10.9.9.9").andExpect(status().isOk());

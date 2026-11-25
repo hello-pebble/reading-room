@@ -12,6 +12,7 @@ import java.util.HexFormat;
 import kr.readingroom.app.auth.dto.LoginResponse;
 import kr.readingroom.app.auth.dto.TransferCodeResponse;
 import kr.readingroom.app.common.ApiException;
+import kr.readingroom.app.common.IpWindowLimit;
 import kr.readingroom.app.common.TokenResolver;
 import kr.readingroom.app.user.UserService;
 import org.springframework.beans.factory.annotation.Value;

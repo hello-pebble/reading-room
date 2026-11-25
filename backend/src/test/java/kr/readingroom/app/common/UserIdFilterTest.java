@@ -21,7 +21,7 @@ class UserIdFilterTest {
     }
 
     static MockMvc app(boolean dev) {
-        return standaloneSetup(new BookSearchController(new BookSearchService((f, v) -> List.of(Map.of("title", "소년이 온다")))))
+        return standaloneSetup(new BookSearchController(new BookSearchService((f, v) -> List.of(Map.of("title", "소년이 온다"))), java.time.Clock.systemUTC(), 30))
                 .addFilters(filter(dev)).setControllerAdvice(new ApiExceptionHandler()).build();
     }
 

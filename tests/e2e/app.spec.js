@@ -15,6 +15,41 @@ async function open(page) {
 }
 const noHScroll = page => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 
+// 버튼 글자 대비(WCAG): 글자색과 버튼 바탕색의 명도 대비. 바탕이 반투명이면 실패로 본다(뒤 배경에 따라 달라지므로)
+const contrastOf = (page, sel) => page.evaluate(sel => {
+  const cs = getComputedStyle(document.querySelector(sel));
+  const rgb = s => s.match(/[\d.]+/g).map(Number);
+  const [fr, fg, fb] = rgb(cs.color), bg = rgb(cs.backgroundColor);
+  if (bg.length > 3 && bg[3] < 1) return 0;
+  const L = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const a = L([fr, fg, fb]), b = L(bg);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}, sel);
+
+test('마을로 버튼: 이웃집·모닥불에서 바로 보이고(대비 4.5:1·44px 이상) Tab+Enter로 마을에 돌아온다 (결정 #98)', async ({ page }) => {
+  const errors = await open(page);
+  await page.evaluate('enterVillage()');
+  await page.waitForFunction("VIEW==='village'");
+  await page.evaluate("visitNeighbor('neighbor-0')");
+  await page.waitForFunction("VIEW==='neighbor'");
+  const exit = page.locator('#neighborExit');
+  await expect(exit).toBeVisible();
+  const b = await exit.boundingBox();
+  expect(b.height, '터치 높이').toBeGreaterThanOrEqual(44);
+  expect(b.width, '터치 너비').toBeGreaterThanOrEqual(44);
+  expect(await contrastOf(page, '#neighborExit'), '글자 대비').toBeGreaterThanOrEqual(4.5);
+  await exit.focus();
+  expect(await page.evaluate("getComputedStyle(document.activeElement).outlineStyle"), 'Tab 포커스 테두리').not.toBe('none');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction("VIEW==='village'");
+  // 모닥불의 [← 마을로]도 읽히는지 (불투명 바탕·대비)
+  await page.evaluate("const n=S.news.find(x=>x.kind==='OPEN'); n.agreed=true; enterCamp(n)");
+  await page.waitForFunction("VIEW==='shared'");
+  await expect(page.locator('#campExit')).toBeVisible();
+  expect(await contrastOf(page, '#campExit'), '모닥불 버튼 글자 대비').toBeGreaterThanOrEqual(4.5);
+  expect(errors).toEqual([]);
+});
+
 test('이웃집: 집과 책장 실제 클릭, 책 꽂기, 재방문·확인·다시 추천', async ({ page }, info) => {
   const errors = await open(page);
   await page.evaluate('enterVillage()');

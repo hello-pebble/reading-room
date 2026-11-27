@@ -349,13 +349,20 @@ aside.panel.rcchat > .rlog {
   outline: 2px solid #fff;
   outline-offset: 2px;
 }
+/* 어두운 모닥불 바닥 위의 밝은 버튼: 불투명 바탕(글자 대비 약 12:1), 터치 44px 이상, Tab 포커스 테두리 (결정 #98) */
 .camp-exit {
-  background: rgba(255, 250, 240, 0.94);
+  background: #fffaf0;
   border: 1px solid #d9cfb8;
   border-radius: 10px;
   padding: 9px 12px;
+  min-height: 44px;
+  min-width: 44px;
   color: #3b3226;
   cursor: pointer;
+}
+.camp-exit:focus-visible {
+  outline: 3px solid #f4bb42;
+  outline-offset: 2px;
 }
 .camp-chat-toggle {
   position: absolute;

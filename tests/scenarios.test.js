@@ -1629,6 +1629,26 @@ test('서버 가져오기: 내 책에 없으면 나중에 읽을 책으로 담�
   fin(a);
 });
 
+test('서버 모닥불 참여자: 들어가면 실제 참여자 명단을 받아 나와 나간 사람을 빼고, 각자 읽기 방은 그 사람의 실제 책을 붙인다 (결정 #92)', async () => {
+  const { srv, a } = await chatApp((s) => {
+    const r = chatRoom(s, { kind: 'OWN' });
+    r.parts[0].bookTitle = '싯다르타';
+  });
+  await openChat(a, newsOf(a)[0]);
+  assert.equal(calls(srv, 'GET', /\/participants$/).length, 1);
+  assert.equal(a.ev('S.news[0].parts.map((p) => p.nickname).join()'), '밥', '체험판 이웃이 아니라 실제 참여자 (나와 나간 사람은 빠진다)');
+  assert.equal(a.ev("rcBookTag(S.news[0], '밥')"), ' 『싯다르타』');
+  assert.equal(a.ev("rcBookTag(S.news[0], '모르는')"), '', '서버 연결 모드는 지어낸 책을 붙이지 않는다');
+  assert.equal(a.ev("rcBookTag(S.news[0], '나')"), '', '책을 고르지 않았으면 내 이름표에 방 이름을 책처럼 붙이지 않는다');
+  const before = a.ev('S.news[0].messages.length');
+  a.ev('rcFakeMsg(S.news[0])');
+  assert.equal(a.ev('S.news[0].messages.length'), before, '실제 참여자 이름으로 체험판 대사를 지어내지 않는다');
+  a.ev('loadRooms()');
+  await settle();
+  assert.equal(a.ev('S.news[0].parts.length'), 1, '방 목록을 새로 받아도 참여자 명단은 남는다');
+  fin(a);
+});
+
 // ---- 서버 연결 5‑4단계: 모닥불 머문 시간 (서버가 입장·퇴장 시각으로 센다) ----
 test('서버 모닥불 머문 시간: 들어갈 때 서버에 알리고, 나가면 서버가 센 분이 오늘 읽은 시간·달력에 더해진다(화면이 따로 더하지 않는다)', async () => {
   const { srv, a } = await chatApp((s) => chatRoom(s));

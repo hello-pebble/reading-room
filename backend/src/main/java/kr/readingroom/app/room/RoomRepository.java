@@ -155,6 +155,14 @@ public class RoomRepository {
         return dsl.fetchOne("select * from shared_room where invite_code = ? for update", code);
     }
 
+    /** 지금 참여 중인 사람(들어온 순): 공개 번호·닉네임·캐릭터·고른 책 제목·개설자인지·나인지 */
+    public org.jooq.Result<Record> activeParticipants(long roomId, long userId) {
+        return dsl.fetch("select u.public_id::text as public_id, u.nickname, u.avatar::text as avatar, b.title as book_title, "
+                + "(r.created_by = p.user_id) as owner, (p.user_id = ?) as mine "
+                + "from room_participant p join app_user u on u.id = p.user_id join shared_room r on r.id = p.room_id "
+                + "left join book b on b.id = p.book_id where p.room_id = ? and p.left_at is null order by p.joined_at, p.user_id", userId, roomId);
+    }
+
     /** 나간 참여도 행이 남아 있다(left_at). 없으면 null */
     public Record participant(long roomId, long userId) {
         return dsl.fetchOne("select * from room_participant where room_id = ? and user_id = ?", roomId, userId);

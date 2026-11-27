@@ -1585,10 +1585,11 @@ function createScene() {
       );
       if (i !== 3) seats.push([x, z, 1]);
     });
-    const others = Math.min(9, Math.max(0, (n.people || 1) - 1));
+    const real = API.enabled ? n.parts || [] : null; // 서버 연결 모드는 실제 참여자만 (명단을 받기 전에는 아무도 없다, 결정 #92)
+    const others = real ? Math.min(9, real.length) : Math.min(9, Math.max(0, (n.people || 1) - 1));
     [...seats, ...stand.map(([x, z]) => [x, z, 0])].slice(0, others).forEach(([x, z, sit], k) => {
-      const name = n.members[k] || NPCS[k % NPCS.length].name,
-        av = NPCS[k % NPCS.length].av,
+      const name = real ? real[k].nickname : n.members[k] || NPCS[k % NPCS.length].name,
+        av = real ? { ...AV_DEFAULT, ...(real[k].avatar || {}) } : NPCS[k % NPCS.length].av,
         g = build(av);
       g.root.scale.setScalar(0.8);
       campG.add(g.root);

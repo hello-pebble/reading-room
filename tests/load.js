@@ -247,6 +247,16 @@ function fakeServer() {
           ownerNickname: Object.values(users).find((u) => u.id === r.parts[0].uid).nickname, inviteCode: r.parts[0].uid === user.id ? r.code : null };
       };
       const mineRooms = () => srv.rooms.filter((r) => { const p = r.parts.find((x) => x.uid === user.id); return p && !p.left; });
+      // 모닥불 참여자 명단 (참여 중이면 동의 전에도. 들어온 순, 나간 사람 제외, 결정 #92)
+      if (method === 'GET' && (m = path.match(/^\/rooms\/(\d+)\/participants$/))) {
+        const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);
+        if (!r) return res(404, { error: 'NOT_FOUND', message: '모닥불을 찾을 수 없어요' });
+        if (!me || me.left) return res(403, { error: 'NOT_PARTICIPANT', message: '참여 중인 모닥불이 아니에요' });
+        return res(200, r.parts.filter((p) => !p.left).map((p, i) => {
+          const u = Object.values(users).find((q) => q.id === p.uid);
+          return { publicId: u.publicId, nickname: u.nickname, avatar: {}, ...(p.bookTitle ? { bookTitle: p.bookTitle } : {}), owner: i === 0, mine: p.uid === user.id };
+        }));
+      }
       // 공유방 대화·읽음 (참여 중 + 보관 동의 뒤에만. 글은 번호 순, after는 마지막으로 본 글 번호)
       if ((m = path.match(/^\/rooms\/(\d+)\/(messages|read)(?:\?after=(\d+))?$/))) {
         const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);

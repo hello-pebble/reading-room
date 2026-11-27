@@ -60,7 +60,10 @@ function enterCamp(n) {
   if (!n || n.kind !== 'OPEN' || !n.agreed || VIEW !== 'village') return;
   CAMP_ID = n.id;
   campSince = Date.now();
-  if (API.enabled && n.srv) serverStayEnter(n);
+  if (API.enabled && n.srv) {
+    serverStayEnter(n);
+    loadCampPeople(n);
+  }
   VIEW = 'shared';
   const i = Math.max(
       0,

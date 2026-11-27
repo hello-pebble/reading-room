@@ -56,8 +56,15 @@ const tagBook = (t) => {
   t = String(t || '').trim();
   return t.length > 8 ? t.split(/\s+/)[0] : t;
 }; // 제목이 8자를 넘으면 맨 앞 단어만
-const rcBookTag = (n, name) =>
-  n.rtype === 'OWN' ? ' 『' + tagBook(name === '나' ? n.book : BOOKPOOL[rcHash(name) % BOOKPOOL.length]) + '』' : ''; // 각자 읽기 방은 이름 옆에 그 사람이 읽는 책을 붙인다
+// 각자 읽기 방은 이름 옆에 그 사람이 읽는 책을 붙인다. 서버 연결 모드는 참여자 명단의 실제 책(없으면 붙이지 않는다, 결정 #92)
+const rcBookTag = (n, name) => {
+  if (n.rtype !== 'OWN') return '';
+  if (!API.enabled && name === '나') return ' 『' + tagBook(n.book) + '』';
+  if (name === '나') return n.myBook ? ' 『' + tagBook(n.myBook) + '』' : ''; // 서버 연결 모드의 n.book은 방 이름이라 쓰지 않는다
+  if (!API.enabled) return ' 『' + tagBook(BOOKPOOL[rcHash(name) % BOOKPOOL.length]) + '』';
+  const p = (n.parts || []).find((x) => x.nickname === name);
+  return p && p.bookTitle ? ' 『' + tagBook(p.bookTitle) + '』' : '';
+};
 const rcName = (m) => (m.left ? '나간 참여자' : m.who === '나' ? S.user.nickname : m.who);
 const rcHash = (s) => {
   let h = 0;
@@ -138,7 +145,7 @@ function campBubble(n, m) {
   G3.say(i, t);
 }
 function rcFakeMsg(n) {
-  if (!n.members.length) return;
+  if (API.enabled || !n.members.length) return; // 체험판 시연용. 서버 연결 모드에서 실제 참여자 이름으로 글을 지어내면 안 된다 (결정 #92)
   const who = n.members[Math.floor(Math.random() * n.members.length)],
     p = myPos(n).page;
   let page = null;
@@ -292,7 +299,12 @@ function rcMembersHtml(n) {
     ...n.members.map((x) => ({
       name: x,
       owner: x === n.owner,
-      book: n.rtype === 'OWN' ? BOOKPOOL[rcHash(x) % BOOKPOOL.length] : '',
+      book:
+        n.rtype !== 'OWN'
+          ? ''
+          : API.enabled // 서버 연결 모드는 그 사람이 고른 실제 책 (결정 #92)
+            ? ((n.parts || []).find((p) => p.nickname === x) || {}).bookTitle || ''
+            : BOOKPOOL[rcHash(x) % BOOKPOOL.length],
     })),
   ];
   return (

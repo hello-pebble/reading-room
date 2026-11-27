@@ -12,6 +12,7 @@ import kr.readingroom.app.common.RequestJson;
 import kr.readingroom.app.room.dto.ReadResponse;
 import kr.readingroom.app.room.dto.RoomMessageRequest;
 import kr.readingroom.app.room.dto.RoomMessageResponse;
+import kr.readingroom.app.room.dto.RoomParticipantResponse;
 import kr.readingroom.app.village.BoardService;
 import org.jooq.Record;
 import org.springframework.http.HttpStatus;
@@ -82,6 +83,23 @@ public class RoomMessageService {
     }
 
     /** 방이 있고(보관 7일이 안 지났고) 내가 참여 중이며 보관 동의를 했을 때만 방 행을 돌려준다 */
+    /** 모닥불 참여자 명단 (결정 #92). 참여 중이면 보관 동의 전에도 볼 수 있다(모닥불 둘레의 사람은 대화가 아니다) */
+    public List<RoomParticipantResponse> participants(long userId, long roomId) {
+        visible(roomId, userId, clock.instant());
+        Record me = rooms.participant(roomId, userId);
+        if (me == null || me.get("left_at") != null) throw notParticipant();
+        return rooms.activeParticipants(roomId, userId).stream().map(r -> {
+            JsonNode avatar;
+            try {
+                avatar = json.readTree(r.get("avatar", String.class));
+            } catch (Exception e) {
+                avatar = null;
+            }
+            return new RoomParticipantResponse(r.get("public_id", String.class), r.get("nickname", String.class), avatar,
+                    r.get("book_title", String.class), r.get("owner", Boolean.class), r.get("mine", Boolean.class));
+        }).toList();
+    }
+
     private Record member(long userId, long roomId, Instant now) {
         Record room = visible(roomId, userId, now);
         Record me = rooms.participant(roomId, userId);

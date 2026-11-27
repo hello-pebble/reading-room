@@ -126,7 +126,7 @@
 
 ### 자동 검사 (`npm run verify`)
 
-- `npm install`(처음 한 번) 뒤 `npm run verify`로 **문법 검사 + 시나리오 테스트**(124개, 약 1분)를 돌린다. 코드를 바꿀 때마다 돌리고, 통과해야 커밋한다.
+- `npm install`(처음 한 번) 뒤 `npm run verify`로 **문법 검사 + 시나리오 테스트**(123개, 약 1분)를 돌린다. 코드를 바꿀 때마다 돌리고, 통과해야 커밋한다.
 - `tests/check-syntax.js`는 `frontend/js/*.js`와 `frontend/*.html`의 인라인 스크립트 문법을, `tests/scenarios.test.js`는 페이지를 가상 브라우저(jsdom)에 올려 타이머·기록·쪽수·완독일·광장 대화·공유방 가져오기·거울·키보드 같은 규칙을 실제로 조작해 확인한다. 로더는 `index.html`에 적힌 순서대로 분리된 스크립트를 읽는다. 지금까지 겪은 결함이 되돌아오지 않게 막는 용도다.
 - 테스트는 3D를 올리지 않아서 **3D 그림, 터치, 알림 팝업, 화면 겹침**은 못 본다. 이런 것은 브라우저로 직접 확인한다.
 - 서버는 `cd backend && ./gradlew test`로 따로 검사한다 (243개, 실제 PostgreSQL 사용. 내장 PostgreSQL이 안 뜨는 PC는 `TEST_DATABASE_URL`로 외부 DB). 코드를 바꾸면 이 검사와 `npm run verify`를 둘 다 통과시킨다.

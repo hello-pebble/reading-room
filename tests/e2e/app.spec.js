@@ -148,7 +148,7 @@ test('방: 실제 클릭으로 소파를 눌러 창을 열 수 있다 (3D 클릭
   await expect.poll(() => page.evaluate('panelOpen')).toBe('sofa');
 });
 
-test('마을: 문으로 나가면 미니맵·접속 표시가 오른쪽 위·아래에 보이고 화면이 넘치지 않는다', async ({ page }, info) => {
+test('마을: 문으로 나가면 미니맵이 오른쪽 위에, 접속 인원이 채팅창 제목에 보이고 화면이 넘치지 않는다', async ({ page }, info) => {
   const errors = await open(page);
   await page.evaluate("openF('door')");
   await page.waitForFunction("VIEW==='village'", null, { timeout: 20000 });
@@ -159,9 +159,13 @@ test('마을: 문으로 나가면 미니맵·접속 표시가 오른쪽 위·아
   expect(Math.abs(m.width - m.height), '미니맵이 정사각형이 아니에요').toBeLessThanOrEqual(1);
   expect(m.y - s.y, '미니맵이 화면 위쪽에 있어야 해요').toBeLessThan(30);
   expect(s.x + s.width - (m.x + m.width), '미니맵이 화면 오른쪽에 있어야 해요').toBeLessThan(30);
-  await expect(page.locator('#online')).toHaveText(/접속 \(\d{2}\/\d+\)/);
-  const o = await page.locator('#online').boundingBox();
-  expect(o.y, '접속 표시는 화면 아래쪽').toBeGreaterThan(s.y + s.height * 0.8);
+  // 마을 어디서나 채팅창이 떠 있으므로(결정 #94) 하단 접속 글자는 숨고 인원은 채팅창 제목에 있다
+  await expect(page.locator('#plazaChat')).toBeVisible();
+  await expect(page.locator('#online')).toBeHidden();
+  await expect(page.locator('#pzHead')).toHaveText(/접속 \(\d{2}\/\d+\)/);
+  const c = await page.locator('#plazaChat').boundingBox();
+  const overlap = !(c.x + c.width <= m.x + 1 || m.x + m.width <= c.x + 1 || c.y + c.height <= m.y + 1 || m.y + m.height <= c.y + 1);
+  expect(overlap, '채팅창이 미니맵을 덮지 않는다').toBe(false);
   expect(await noHScroll(page)).toBe(true);
   await info.attach('마을', { body: await page.screenshot(), contentType: 'image/png' });
   expect(errors).toEqual([]);
@@ -241,6 +245,21 @@ test('창 모양: 내 방·마을의 모든 창에서 버튼 줄·카드·입력
     await page.waitForTimeout(500);
     (await audit()).forEach(i => found.push(f + ': ' + i));
   }
+  // 게시판의 초대 코드 입력칸과 입장 전 확인 카드 (결정 #95)
+  await closeAll();
+  await page.evaluate(() => { openV('board'); panelView.join = { code: '', err: '', preview: null }; renderPanel(); });
+  await page.waitForTimeout(300);
+  (await audit()).forEach(i => found.push('board+코드칸: ' + i));
+  await page.evaluate(() => { document.getElementById('jl').value = S.news.find(x => x.kind === 'OPEN').inviteCode; return joinCheck(); });
+  await page.waitForTimeout(300);
+  if (!(await page.locator('#joinPreview').count())) found.push('입장 전 확인 카드가 없음');
+  (await audit()).forEach(i => found.push('board+확인카드: ' + i));
+  // 모닥불을 피운 뒤 보이는 초대 링크·초대 코드·[코드 복사] 줄
+  await closeAll();
+  await page.evaluate(() => { openV('fire:new'); panelView.nf.kind = 'OWN'; createRoom(); });
+  await page.waitForTimeout(400);
+  if (!(await page.locator('#invCode').count())) found.push('초대 코드 줄이 없음');
+  (await audit()).forEach(i => found.push('개설 뒤 초대 코드: ' + i));
   expect(found).toEqual([]);
   expect(errors).toEqual([]);
 });

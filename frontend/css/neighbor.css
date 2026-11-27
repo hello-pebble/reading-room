@@ -6,13 +6,28 @@
   border-radius: 0;
   background: repeating-conic-gradient(#fbe4ee 0 25%, #fff7fb 0 50%) 0 0/56px 56px;
 }
+/* 돌아가는 버튼: 밝은 벽지 위에서도 바로 보이게 진한 초록(주 버튼 색) 바탕에 흰 글자 (대비 약 5:1), 터치 44px 이상 (결정 #98) */
 .neighbor-exit {
   display: none;
   position: absolute;
   top: 12px;
   left: 12px;
   z-index: 4;
-  background: rgba(255, 250, 240, 0.76);
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 16px;
+  background: var(--accent);
+  border: 1px solid #3d6147;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(40, 30, 20, 0.25);
+}
+.neighbor-exit:hover {
+  background: #44694e;
+}
+.neighbor-exit:focus-visible {
+  outline: 3px solid #3b3226;
+  outline-offset: 2px;
 }
 .stage-wrap.neighbor .neighbor-exit {
   display: block;

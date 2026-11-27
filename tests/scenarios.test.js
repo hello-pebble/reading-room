@@ -175,6 +175,96 @@ test('분리된 내 방: 입력 이벤트로 책·메모를 저장하고 다시 
   fin(a);
 });
 
+// ---- 마을 키보드 이동 (결정 #99): 방향키·WASD. 화면이 비스듬히 내려다보므로 화면 위 = 마을 좌표 (-x,-z) 쪽 ----
+const key = (a, type, code, target) => (target || a.doc).dispatchEvent(new a.w.KeyboardEvent(type, { code, key: code, bubbles: true, cancelable: true }));
+const vilAt = async (a) => {
+  a.ev('enterVillage()');
+  await sleep(350);
+  a.ev('Object.assign(sim, { x: 10, z: 12, mode: "idle", after: null })');
+};
+const pos = (a) => JSON.parse(a.ev('JSON.stringify([sim.x, sim.z])'));
+
+test('키보드 이동: 마을에서 방향키·WASD를 누르는 동안 화면 방향으로 걷고, 떼면 멈추며, 대각선도 같은 속도다', async () => {
+  const a = load();
+  await vilAt(a);
+  key(a, 'keydown', 'ArrowUp');
+  a.ev('stepSim(0.5)');
+  let [x, z] = pos(a);
+  assert.ok(x < 10 && z < 12 && Math.abs(10 - x - (12 - z)) < 1e-6, '화면 위로 = 마을 (-x,-z) 쪽');
+  const straight = Math.hypot(10 - x, 12 - z);
+  assert.ok(Math.abs(straight - 4.6 * 0.5) < 1e-6, '마을 걷기 속도 그대로');
+  key(a, 'keyup', 'ArrowUp');
+  a.ev('stepSim(0.5)');
+  assert.deepEqual(pos(a), [x, z], '떼면 멈춘다');
+  // 대각선(위+오른쪽 = W+D)도 같은 속도
+  a.ev('Object.assign(sim, { x: 10, z: 12 })');
+  key(a, 'keydown', 'KeyW');
+  key(a, 'keydown', 'KeyD');
+  a.ev('stepSim(0.5)');
+  [x, z] = pos(a);
+  assert.ok(Math.abs(Math.hypot(x - 10, z - 12) - straight) < 1e-6, '대각선이 더 빠르지 않다');
+  assert.ok(z < 12 && Math.abs(x - 10) < 1e-6, '위+오른쪽 = 마을 -z 쪽');
+  key(a, 'keyup', 'KeyW');
+  key(a, 'keyup', 'KeyD');
+  fin(a);
+});
+
+test('키보드 이동: 입력칸·한글 조합 중·창이 열린 동안에는 움직이지 않고, 창을 벗어나면 눌린 키를 잊는다', async () => {
+  const a = load();
+  await vilAt(a);
+  const still = (why) => {
+    a.ev('stepSim(0.5)');
+    assert.deepEqual(pos(a), [10, 12], why);
+  };
+  const pz = a.doc.getElementById('pz'); // 마을 어디서나 떠 있는 채팅 입력칸 (결정 #94)
+  pz.focus();
+  key(a, 'keydown', 'KeyW', pz);
+  still('채팅에 w를 쳐도 걷지 않는다');
+  key(a, 'keyup', 'KeyW', pz);
+  pz.blur();
+  a.doc.dispatchEvent(new a.w.KeyboardEvent('keydown', { code: 'KeyA', key: 'ㅁ', isComposing: true, bubbles: true }));
+  still('한글 조합 중');
+  key(a, 'keyup', 'KeyA');
+  a.ev(`openV('board'); Object.assign(sim, { x: 10, z: 12, mode: 'idle', after: null })`); // 게시판을 열면 게시판 앞으로 걸어가므로 멈춰 두고 키만 본다
+  key(a, 'keydown', 'ArrowLeft');
+  still('창이 열린 동안');
+  key(a, 'keyup', 'ArrowLeft');
+  a.ev('closePanel()');
+  key(a, 'keydown', 'ArrowDown');
+  a.w.dispatchEvent(new a.w.Event('blur'));
+  still('창을 벗어나면 눌린 키를 잊는다 (keyup을 못 받아도 혼자 걷지 않는다)');
+  key(a, 'keyup', 'ArrowDown');
+  key(a, 'keydown', 'ArrowDown');
+  a.ev(`openV('board'); Object.assign(sim, { x: 10, z: 12, mode: 'idle', after: null })`);
+  still('걷던 중에 창이 열리면 멈춘다');
+  a.ev('closePanel()');
+  still('창을 닫은 뒤에는 키를 새로 눌러야 걷는다');
+  key(a, 'keyup', 'ArrowDown');
+  fin(a);
+});
+
+test('키보드 이동: 클릭으로 가던 중 키를 누르면 그 이동과 도착 동작을 취소하고, 마을 경계를 넘지 않는다', async () => {
+  const a = load();
+  await vilAt(a);
+  a.ev('window.ARRIVED = 0; walkTo(20, 20, () => { window.ARRIVED++; })');
+  key(a, 'keydown', 'ArrowRight');
+  a.ev('stepSim(0.3)');
+  key(a, 'keyup', 'ArrowRight');
+  for (let i = 0; i < 40; i++) a.ev('stepSim(0.1)');
+  assert.notEqual(a.ev('sim.mode'), 'walk', '클릭 이동은 취소된다');
+  assert.equal(a.ev('window.ARRIVED'), 0, '취소된 이동의 도착 동작(집·게시판 열기)은 실행되지 않는다');
+  // 경계: 오래 눌러도 클릭 이동과 같은 경계 안
+  key(a, 'keydown', 'ArrowUp');
+  for (let i = 0; i < 100; i++) a.ev('stepSim(0.1)');
+  key(a, 'keyup', 'ArrowUp');
+  const [x, z] = pos(a);
+  assert.ok(x >= a.ev('L.minX || 1.1') - 1e-9 && z >= a.ev('L.minZ || 0.8') - 1e-9, '마을 밖으로 나가지 않는다');
+  // 다시 클릭하면 클릭 이동으로
+  a.ev('walkTo(10, 12)');
+  assert.equal(a.ev('sim.mode'), 'walk');
+  fin(a);
+});
+
 test('마을 구역: 모닥불 자리 8개는 모두 모닥불 구역 안이고 광장 밖이다', () => {
   const a = load();
   const { VSLOTS, PLAZA, ZONE } = JSON.parse(a.ev('JSON.stringify({VSLOTS,PLAZA,ZONE})'));

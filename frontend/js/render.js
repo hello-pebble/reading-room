@@ -310,7 +310,7 @@ canvas.addEventListener('click', (e) => {
     return;
   }
   if (p && p.floor) {
-    walkTo(Math.max(L.minX || 1.1, Math.min(L.X - 0.4, p.x)), Math.max(L.minZ || 0.8, Math.min(L.Y - 0.4, p.z)));
+    walkTo(clampX(p.x), clampZ(p.z)); // 바닥 안으로 (stage.js, 키보드 이동과 같은 범위)
     return;
   }
   if (panelOpen && panelOpen !== 'mirror') closePanel();

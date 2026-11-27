@@ -243,6 +243,35 @@ test('키보드 이동: 입력칸·한글 조합 중·창이 열린 동안에는
   fin(a);
 });
 
+test('키보드 이동: 글을 보낸 뒤 비어 있는 채팅 입력칸에서는 방향키로 걷고(글이 있으면 안 걷는다), Esc로 입력칸을 빠져나오면 WASD도 된다 (결정 #100)', async () => {
+  const a = load();
+  await vilAt(a);
+  const pz = a.doc.getElementById('pz');
+  pz.focus();
+  pz.value = '안녕';
+  key(a, 'keydown', 'ArrowUp', pz);
+  a.ev('stepSim(0.5)');
+  key(a, 'keyup', 'ArrowUp', pz);
+  assert.deepEqual(pos(a), [10, 12], '쓰던 글이 있으면 방향키는 글자 사이를 옮기는 데 쓴다');
+  pz.value = '';
+  key(a, 'keydown', 'ArrowUp', pz);
+  a.ev('stepSim(0.5)');
+  key(a, 'keyup', 'ArrowUp', pz);
+  assert.notDeepEqual(pos(a), [10, 12], '비어 있으면 방향키로 걷는다 (보낸 뒤 커서가 남아 있어도)');
+  a.ev('Object.assign(sim, { x: 10, z: 12 })');
+  key(a, 'keydown', 'KeyW', pz);
+  a.ev('stepSim(0.5)');
+  key(a, 'keyup', 'KeyW', pz);
+  assert.deepEqual(pos(a), [10, 12], 'WASD는 입력칸에서는 글자다');
+  pz.dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+  assert.notEqual(a.doc.activeElement, pz, 'Esc로 입력칸을 빠져나온다');
+  key(a, 'keydown', 'KeyW');
+  a.ev('stepSim(0.5)');
+  key(a, 'keyup', 'KeyW');
+  assert.notDeepEqual(pos(a), [10, 12], '빠져나오면 WASD로 걷는다');
+  fin(a);
+});
+
 test('키보드 이동: 클릭으로 가던 중 키를 누르면 그 이동과 도착 동작을 취소하고, 마을 경계를 넘지 않는다', async () => {
   const a = load();
   await vilAt(a);

@@ -1,7 +1,7 @@
 // 공용 · 기본 상태(defaultState), localStorage 불러오기·이관, 저장(save)
 
 function defaultState() {
-  return {
+  const st = {
     user: { nickname: '조약돌', handle: 'pebble' },
     streak: 7,
     reading: null,
@@ -116,6 +116,10 @@ function defaultState() {
       },
     ],
   };
+  // 서버 연결 모드는 체험판 예시(조약돌·예시 책·예시 공유방)로 시작하지 않는다. 서버 응답이 오기 전에도 빈 내 방으로 보인다 (결정 #96)
+  if (API.enabled)
+    Object.assign(st, { user: { nickname: '' }, streak: 0, finished: [], news: [], unlocked: {}, newItem: false });
+  return st;
 }
 let S;
 try {

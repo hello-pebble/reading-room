@@ -331,9 +331,9 @@ function rcInfoHtml(n, split) {
         : '불이 작아지고 있어요. ' + roomLeft(n) + '일 뒤에 꺼지고 기록이 사라져요. 그 전에 내 서재로 가져오세요.';
   const kv = [
     ['종류', n.rtype === 'OWN' ? '각자 읽기' : '같은 책 방' + (n.book ? '' : ' · 책을 아직 안 정했어요')],
-    ...(n.rtype === 'OWN' ? [['내가 읽는 책', n.book ? '『' + esc(n.book) + '』' : '아직 안 정했어요']] : []),
+    ...(n.rtype === 'OWN' ? [['내가 읽는 책', (API.enabled ? n.myBook : n.book) ? '『' + esc(API.enabled ? n.myBook : n.book) + '』' : '아직 안 정했어요']] : []), // 서버 연결 모드의 n.book은 방 이름이라 참여자 명단의 내 책을 쓴다 (결정 #92)
     ...(n.period ? [['기간', esc(n.period)]] : []),
-    ['공개 범위', n.vis === 'public' ? '마을에 공개' : '초대 링크로만'],
+    ['공개 범위', n.vis === 'public' ? '마을에 공개' : '초대 코드·링크로만'],
   ];
   let h = `<p class="muted">${state}</p><div class="rkv">${kv.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>`;
   if (n.kind !== 'CLOSED') h += inviteBlock(n);

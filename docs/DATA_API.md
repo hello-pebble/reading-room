@@ -114,7 +114,7 @@
 
 ## API (주요)
 
-### 인증 API (결정 #67·#68, 설계: `docs/superpowers/specs/2026-11-19-google-login-design.md`)
+### 인증 API (결정 #67·#68, 설계: `docs/archive/2026-11-19-google-login-design.md`)
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
@@ -265,14 +265,13 @@ window.addEventListener('pageshow', sync);
 sync();
 ```
 
-## 공유방 남은 일 메모 (2026-11-18)
+## 남은 일 메모 (2026-11-27 정리)
 
-공유방 서버는 개설·입장·대화·읽음·알림 켜기·가져오기·개방/종료 배치(대상 선정)까지 `room` 패키지에 구현됐다(결정 #59·#60·#63·#64). 아래는 남은 일이다.
+공유방·마을 서버는 개설부터 가져오기·머문 시간·참여자 명단·공개 범위까지, 접속 인원은 SSE까지 구현됐다. 아래는 남은 일과 정하지 않은 점이다.
 
-- **개방·종료 배치(1분)**: 대상 선정까지 구현했다(`RoomOpenService`·`RoomOpenBatch`, 결정 #64). `open_notified_at`으로 한 번만 선점하고, `status`를 `OPEN`·`CLOSED`로 맞춘다. **남은 것은 실제 푸시 전송**이다(`PushSender`의 메시지 모양을 방 개방용으로 일반화 → VAPID 실발송). 지금은 알릴 대상 목록을 만들고 로그만 남긴다.
-- **가져오기 마감 D-1 알림 / 자동 가져오기 옵션**(SPEC "마감 알림"): 아직 없다.
-- **하드 삭제(매일 새벽)**: 구현했다(`RoomPurgeService`·`RoomPurgeBatch`, 매일 04:00 한국 시간, 결정 #66). 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워지고, `room_open_log`·`book_room_archive`·`camp_stay`는 방 외래키가 없어 남는다.
-- **모닥불 머문 시간**: 구현했다(`CampStayService`, `V14__camp_stay.sql`, `GET /me/reading-time`, 결정 #65). 남은 것: 퇴장을 못 부른 열린 입장 행은 다음 입장 때 지워질 뿐 따로 청소하지 않는다(사용자당 하나라 쌓이지 않는다). 진행 중인 스탠드와 겹치는 열린 입장은 퇴장 뒤 합산에서 정리된다.
-- **광장 접속 인원 `GET /plaza/presence`**: SSE로 광장 안 접속자 명단까지 만들었다(결정 #91). 남은 것: 마을 전체 정원 100명이 차면 409로 막는 규칙(결정 #35), 서버를 여러 대로 늘릴 때 명단 공유.
-- **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`로 함께 지워진다). 재입장하면 보관 동의를 다시 받으므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다. 가져온 기록을 지우는 API(가져오기 취소)는 없다.
+- **개방 알림 실제 전송**: 개방·종료 배치(`RoomOpenService`·`RoomOpenBatch`, 결정 #64)는 알릴 대상을 `open_notified_at`으로 한 번만 고르고 로그만 남긴다. 남은 것: `PushSender` 메시지를 방 개방용으로 일반화 → VAPID 실발송.
+- **마을 정원**: 접속 인원(`GET /plaza/presence`, 결정 #91·#94)은 세기만 한다. 100명이 차면 409로 막는 규칙(결정 #35)과, 서버를 여러 대로 늘릴 때 명단 공유는 아직 없다.
+- **만들지 않기로 한 것**: 가져오기 마감 D-1 알림·자동 가져오기, 이웃 접속 상태.
+- **알아 둘 동작**: 방을 지우는 배치(결정 #66)에서 글·참여자·알림은 `ON DELETE CASCADE`로 함께 지워지고 `room_open_log`·`book_room_archive`·`camp_stay`는 남는다. 퇴장을 못 부른 모닥불 입장 행은 다음 입장 때 지워진다(사용자당 하나).
+- **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`). 가져온 기록을 지우는 API(가져오기 취소)는 없다.
 - **테스트 요령**: `ApiTestBase`가 `TestClock`(기준 `2026-11-17T03:00:00Z`)과 `truncate app_user ... cascade`를 쓰므로 `app_user`에서 외래키로 이어진 새 테이블은 자동으로 비워진다. 방은 `RoomOpenTest`·`RoomJoinTest`·`RoomChatTest`·`RoomImportTest`의 `open(...)`·`roomWith(...)`처럼 API로 열면 규칙이 그대로 지켜진다. 글은 도배 제한(3초 3건) 때문에 `clock.advance`로 시각을 옮겨 가며 보낸다.

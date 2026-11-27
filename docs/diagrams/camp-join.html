@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>모닥불 입장 흐름</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      /* 독서 마을 화면 색 (frontend/css/common.css) */
+      --color-paper:   #fffaf0;
+      --color-ink:     #3b3226;
+      --color-muted:   #6b5f4d;
+      --color-accent:  #4f7a5a;
+      --font-sans:     'Geist', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">State machine · decisions 95 · 97 · 101</p>
+    <h1>모닥불 입장 흐름</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 64 960 392" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="camp-join-title camp-join-desc">
+        <title id="camp-join-title">모닥불 입장 흐름</title>
+        <desc id="camp-join-desc">마을에 보이는 모닥불에 초대 방은 코드 입력과 입장 전 확인을 거쳐, 누구나 방과 내 방은 바로 보관 동의를 거쳐 들어가고, 끝나면 지난 방으로 7일 남는다.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6b5f4d"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f7a5a"/></marker>
+        </defs>
+
+        <rect x="0" y="64" width="960" height="392" fill="#fffaf0"/>
+
+        <!-- Transitions first (behind states) -->
+        <line x1="104" y1="102" x2="104" y2="136" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="168" y1="164" x2="228" y2="164" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="356" y1="164" x2="416" y2="164" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="544" y1="164" x2="604" y2="164" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="732" y1="164" x2="792" y2="164" stroke="#4f7a5a" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <path d="M 104,192 V 244 Q 104,252 112,252 H 660 Q 668,252 668,244 V 192" fill="none" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 856,136 V 116 Q 856,108 848,108 H 144 Q 136,108 136,116 V 136" fill="none" stroke="#6b5f4d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <line x1="856" y1="192" x2="856" y2="300" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="792" y1="328" x2="712" y2="328" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- Transition labels (Korean: 12px sans 500, 16px masks) -->
+        <rect x="172" y="136" width="52" height="16" rx="2" fill="#fffaf0"/>
+        <text x="198" y="148" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">초대 방</text>
+        <rect x="370" y="136" width="32" height="16" rx="2" fill="#fffaf0"/>
+        <text x="386" y="148" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">확인</text>
+        <rect x="558" y="136" width="32" height="16" rx="2" fill="#fffaf0"/>
+        <text x="574" y="148" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">입장</text>
+        <rect x="746" y="136" width="32" height="16" rx="2" fill="#fffaf0"/>
+        <text x="762" y="148" fill="#4f7a5a" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">동의</text>
+        <rect x="288" y="260" width="196" height="16" rx="2" fill="#fffaf0"/>
+        <text x="386" y="272" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">누구나 방 · 내 방 (코드 없이)</text>
+        <rect x="448" y="84" width="96" height="16" rx="2" fill="#fffaf0"/>
+        <text x="496" y="96" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">마을로 나가기</text>
+        <rect x="864" y="238" width="48" height="16" rx="2" fill="#fffaf0"/>
+        <text x="888" y="250" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">끝나면</text>
+        <rect x="728" y="304" width="48" height="16" rx="2" fill="#fffaf0"/>
+        <text x="752" y="316" fill="#6b5f4d" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">7일 뒤</text>
+
+        <!-- Start dot / End dot -->
+        <circle cx="104" cy="96" r="6" fill="#3b3226"/>
+        <circle cx="704" cy="328" r="8" fill="#fffaf0" stroke="#3b3226" stroke-width="1.2"/>
+        <circle cx="704" cy="328" r="5" fill="#3b3226"/>
+
+        <!-- States -->
+        <rect x="40" y="136" width="128" height="56" rx="8" fill="#fffaf0" stroke="#3b3226" stroke-width="1"/>
+        <text x="104" y="160" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">마을에 보임</text>
+        <text x="104" y="176" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">GET /rooms</text>
+
+        <rect x="228" y="136" width="128" height="56" rx="8" fill="#fffaf0" stroke="#3b3226" stroke-width="1"/>
+        <text x="292" y="160" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">코드 입력</text>
+        <text x="292" y="176" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">8-char code</text>
+
+        <rect x="416" y="136" width="128" height="56" rx="8" fill="#fffaf0" stroke="#3b3226" stroke-width="1"/>
+        <text x="480" y="160" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">입장 전 확인</text>
+        <text x="480" y="176" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">GET invite/{code}</text>
+
+        <rect x="604" y="136" width="128" height="56" rx="8" fill="#fffaf0" stroke="#3b3226" stroke-width="1"/>
+        <text x="668" y="160" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">보관 동의</text>
+        <text x="668" y="176" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">POST …/agree</text>
+
+        <rect x="792" y="136" width="128" height="56" rx="8" fill="rgba(79,122,90,0.10)" stroke="#4f7a5a" stroke-width="1.2"/>
+        <text x="856" y="160" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">모닥불</text>
+        <text x="856" y="176" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chat · stay time</text>
+
+        <rect x="792" y="300" width="128" height="56" rx="8" fill="rgba(59,50,38,0.05)" stroke="#6b5f4d" stroke-width="1"/>
+        <text x="856" y="324" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">지난 방</text>
+        <text x="856" y="340" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">import · 7 days</text>
+
+        <!-- Annotation callouts (italic serif) -->
+        <text x="40" y="320" fill="#3b3226" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif KR', serif">틀린 코드, 끝난 방, 가득 찬 방은 입력칸 아래에 이유를 보인다.</text>
+        <text x="40" y="344" fill="#3b3226" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif KR', serif">한 번 들어간 방은 나가도 코드나 동의 없이 바로 모닥불로 돌아온다.</text>
+
+        <!-- Legend strip -->
+        <line x1="40" y1="384" x2="920" y2="384" stroke="rgba(59,50,38,0.12)" stroke-width="0.8"/>
+        <text x="40" y="400" fill="#6b5f4d" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="416" width="14" height="10" rx="2" fill="#fffaf0" stroke="#3b3226" stroke-width="1"/>
+        <text x="60" y="425" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">상태</text>
+        <rect x="112" y="416" width="14" height="10" rx="2" fill="rgba(79,122,90,0.10)" stroke="#4f7a5a" stroke-width="1"/>
+        <text x="132" y="425" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">들어간 모닥불</text>
+        <circle cx="240" cy="421" r="5" fill="#3b3226"/>
+        <text x="252" y="425" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">시작</text>
+        <circle cx="304" cy="421" r="7" fill="#fffaf0" stroke="#3b3226" stroke-width="1.2"/>
+        <circle cx="304" cy="421" r="4" fill="#3b3226"/>
+        <text x="318" y="425" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">삭제</text>
+        <line x1="372" y1="421" x2="400" y2="421" stroke="#6b5f4d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="408" y="425" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">나가기(참여는 그대로)</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

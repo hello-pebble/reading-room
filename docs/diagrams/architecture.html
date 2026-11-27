@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>독서 마을 시스템 구성</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      /* 독서 마을 화면 색 (frontend/css/common.css): 종이·글자·강조 초록 */
+      --color-paper:   #fffaf0;
+      --color-ink:     #3b3226;
+      --color-muted:   #6b5f4d;
+      --color-accent:  #4f7a5a;
+      --font-sans:     'Geist', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · v0.2</p>
+    <h1>독서 마을 시스템 구성</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 80 960 324" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc">
+        <title id="architecture-title">독서 마을 시스템 구성</title>
+        <desc id="architecture-desc">브라우저 화면이 HTTPS로 Caddy를 거쳐 화면과 API를 함께 내는 서버 jar에 닿고, 서버는 Supabase PostgreSQL과 외부 책 검색 API를 쓴다.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6b5f4d"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f7a5a"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3e6a8a"/></marker>
+        </defs>
+
+        <rect x="0" y="80" width="960" height="324" fill="#fffaf0"/>
+
+        <!-- Zone: Oracle VM (Docker network) — drawn before arrows and nodes -->
+        <rect x="224" y="136" width="404" height="112" rx="8" fill="rgba(59,50,38,0.02)" stroke="rgba(59,50,38,0.14)" stroke-width="0.8"/>
+        <rect x="372" y="140" width="108" height="12" rx="2" fill="#fffaf0"/>
+        <text x="426" y="149" fill="#6b5f4d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">ORACLE VM · DOCKER</text>
+
+        <!-- Arrows first (behind boxes) -->
+        <line x1="168" y1="192" x2="240" y2="192" stroke="#3e6a8a" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="240" y1="212" x2="168" y2="212" stroke="#6b5f4d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <line x1="376" y1="200" x2="452" y2="200" stroke="#4f7a5a" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <path d="M 612,188 H 648 Q 656,188 656,180 V 152 Q 656,144 664,144 H 740" fill="none" stroke="#6b5f4d" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 612,212 H 648 Q 656,212 656,220 V 280 Q 656,288 664,288 H 740" fill="none" stroke="#3e6a8a" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- Arrow labels (opaque masks, gap from stroke) -->
+        <rect x="180" y="172" width="44" height="12" rx="2" fill="#fffaf0"/>
+        <text x="202" y="181" fill="#3e6a8a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTPS</text>
+        <rect x="184" y="220" width="36" height="12" rx="2" fill="#fffaf0"/>
+        <text x="202" y="229" fill="#6b5f4d" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SSE</text>
+        <rect x="388" y="180" width="52" height="12" rx="2" fill="#fffaf0"/>
+        <text x="414" y="189" fill="#4f7a5a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PROXY</text>
+        <rect x="676" y="124" width="52" height="12" rx="2" fill="#fffaf0"/>
+        <text x="702" y="133" fill="#6b5f4d" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">JDBC</text>
+        <rect x="676" y="296" width="52" height="12" rx="2" fill="#fffaf0"/>
+        <text x="702" y="305" fill="#3e6a8a" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REST</text>
+
+        <!-- Node: Browser (user) -->
+        <rect x="40" y="168" width="128" height="64" rx="6" fill="#fffaf0"/>
+        <rect x="40" y="168" width="128" height="64" rx="6" fill="rgba(107,95,77,0.10)" stroke="#7a6d5a" stroke-width="1"/>
+        <rect x="48" y="176" width="32" height="12" rx="2" fill="transparent" stroke="rgba(122,109,90,0.50)" stroke-width="0.8"/>
+        <text x="64" y="185" fill="#6b5f4d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">USER</text>
+        <text x="104" y="206" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">브라우저 화면</text>
+        <text x="104" y="222" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">three.js · fetch</text>
+
+        <!-- Node: Caddy (edge) -->
+        <rect x="240" y="168" width="136" height="64" rx="6" fill="#fffaf0"/>
+        <rect x="240" y="168" width="136" height="64" rx="6" fill="rgba(59,50,38,0.03)" stroke="rgba(59,50,38,0.32)" stroke-width="1"/>
+        <rect x="248" y="176" width="32" height="12" rx="2" fill="transparent" stroke="rgba(59,50,38,0.24)" stroke-width="0.8"/>
+        <text x="264" y="185" fill="#6b5f4d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EDGE</text>
+        <text x="308" y="206" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Caddy</text>
+        <text x="308" y="222" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">TLS · duckdns</text>
+
+        <!-- Node: server jar (focal) -->
+        <rect x="452" y="168" width="160" height="64" rx="6" fill="#fffaf0"/>
+        <rect x="452" y="168" width="160" height="64" rx="6" fill="rgba(79,122,90,0.10)" stroke="#4f7a5a" stroke-width="1"/>
+        <rect x="460" y="176" width="32" height="12" rx="2" fill="transparent" stroke="rgba(79,122,90,0.55)" stroke-width="0.8"/>
+        <text x="476" y="185" fill="#4f7a5a" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">APP</text>
+        <text x="532" y="206" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">서버 jar (화면+API)</text>
+        <text x="532" y="222" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Spring Boot · :8080</text>
+
+        <!-- Node: Supabase PostgreSQL (store) -->
+        <rect x="740" y="112" width="176" height="64" rx="6" fill="#fffaf0"/>
+        <rect x="740" y="112" width="176" height="64" rx="6" fill="rgba(59,50,38,0.05)" stroke="#6b5f4d" stroke-width="1"/>
+        <rect x="748" y="120" width="28" height="12" rx="2" fill="transparent" stroke="rgba(107,95,77,0.50)" stroke-width="0.8"/>
+        <text x="762" y="129" fill="#6b5f4d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="828" y="150" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Supabase Postgres</text>
+        <text x="828" y="166" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Seoul · Flyway V1–V19</text>
+
+        <!-- Node: book search (external) -->
+        <rect x="740" y="256" width="176" height="64" rx="6" fill="#fffaf0"/>
+        <rect x="740" y="256" width="176" height="64" rx="6" fill="rgba(107,95,77,0.10)" stroke="#7a6d5a" stroke-width="1"/>
+        <rect x="748" y="264" width="28" height="12" rx="2" fill="transparent" stroke="rgba(122,109,90,0.50)" stroke-width="0.8"/>
+        <text x="762" y="273" fill="#6b5f4d" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+        <text x="828" y="294" fill="#3b3226" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif" text-anchor="middle">책 검색 API</text>
+        <text x="828" y="310" fill="#6b5f4d" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Kakao · NL Korea</text>
+
+        <!-- Legend strip -->
+        <line x1="40" y1="344" x2="920" y2="344" stroke="rgba(59,50,38,0.12)" stroke-width="0.8"/>
+        <text x="40" y="360" fill="#6b5f4d" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <rect x="40" y="376" width="14" height="10" rx="2" fill="rgba(79,122,90,0.10)" stroke="#4f7a5a" stroke-width="1"/>
+        <text x="60" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">중심 서버</text>
+        <rect x="140" y="376" width="14" height="10" rx="2" fill="rgba(59,50,38,0.05)" stroke="#6b5f4d" stroke-width="1"/>
+        <text x="160" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">저장소</text>
+        <rect x="224" y="376" width="14" height="10" rx="2" fill="rgba(59,50,38,0.03)" stroke="rgba(59,50,38,0.32)" stroke-width="1"/>
+        <text x="244" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">입구(HTTPS)</text>
+        <rect x="332" y="376" width="14" height="10" rx="2" fill="rgba(107,95,77,0.10)" stroke="#7a6d5a" stroke-width="1"/>
+        <text x="352" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">사용자·외부</text>
+        <line x1="448" y1="381" x2="476" y2="381" stroke="#4f7a5a" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <text x="484" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">주 경로</text>
+        <line x1="564" y1="381" x2="592" y2="381" stroke="#3e6a8a" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="600" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">HTTP 요청</text>
+        <line x1="696" y1="381" x2="724" y2="381" stroke="#6b5f4d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+        <text x="732" y="385" fill="#6b5f4d" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Malgun Gothic', sans-serif">서버가 보내는 흐름(SSE)</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

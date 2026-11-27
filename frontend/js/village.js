@@ -256,7 +256,7 @@ function openV(f) {
 function boardPanel() {
   const sec = (t, k) => {
     const l = S.news.filter((n) => n.kind === k);
-    return l.length ? `<label>${t}</label>` + l.map(roomCard).join('') : '';
+    return l.length ? `<label>${t}</label>` + l.map((n) => roomCard(n)).join('') : ''; // map(roomCard)로 넘기면 배열이 hideTitle로 들어가 방 이름이 빠졌다
   };
   return (
     head('마을 게시판') +

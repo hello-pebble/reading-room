@@ -39,6 +39,14 @@ function sharedRoomAction(act, b) {
     openV('fire:new');
     return true;
   }
+  if (act === 'joinWithCode') {
+    openV('board');
+    panelView.join = { code: '', err: '', preview: null };
+    renderPanel();
+    const i = document.getElementById('jl');
+    if (i) i.focus();
+    return true;
+  }
   if (act === 'joinOpen') {
     panelView.join = { code: '', err: '', preview: null };
     renderPanel();

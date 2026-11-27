@@ -285,7 +285,7 @@ class RoomChatTest extends ApiTestBase {
         sayOk(a, r, "글");
         mvc.perform(DELETE(b, "/rooms/" + r.id() + "/participants/me")).andExpect(status().isNoContent());
         mvc.perform(POST(b, "/rooms/" + r.id() + "/read", Map.of())).andExpect(status().isForbidden());        // 나간 사람
-        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$[0].joined").value(false));   // 나가도 열린 방은 보이지만 참여 중은 아니다 (결정 #97)
         assertThat(dsl.fetchOne("select last_read_at from room_participant where room_id = ? and user_id = ?", r.id(), b).get("last_read_at")).isNull();
     }
 

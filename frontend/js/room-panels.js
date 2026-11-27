@@ -268,6 +268,7 @@ function windowPanel() {
     head('창문') +
     `<div class="muted" style="margin:0 0 8px">오늘 창밖은 ${sc.season} ${sc.weather}이에요.</div>` +
     S.news
+      .filter((n) => !n.locked) // 남의 방은 창문 소식에 넣지 않는다 (결정 #97)
       .map((n) => {
         const [l, c] = K[n.kind];
         let act = '';

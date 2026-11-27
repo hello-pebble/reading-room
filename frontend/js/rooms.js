@@ -20,6 +20,8 @@ function roomFromServer(r) {
     isbn: r.isbn || '',
     rtype: r.kind,
     mine: r.mine,
+    joined: !!r.joined,
+    locked: !r.mine && !r.joined, // 남의 방: 마을에 보이지만 들어가려면 초대 코드가 있어야 한다 (결정 #97)
     people: r.participants,
     max: r.maxParticipants,
     vis: 'invite',

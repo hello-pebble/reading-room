@@ -359,7 +359,8 @@ function fakeServer() {
           return res(201, view);
         }
       }
-      if (method === 'GET' && path === '/rooms') return res(200, mineRooms().map(roomRow));
+      // 게시판: 내가 만들었거나 참여 중인 방 + 아직 끝나지 않은 남의 방 (결정 #97)
+      if (method === 'GET' && path === '/rooms') return res(200, srv.rooms.filter((r) => mineRooms().includes(r) || roomStatus(r) !== 'CLOSED').map(roomRow));
       if (method === 'POST' && path === '/rooms') {
         if (body.kind !== 'SAME' && body.kind !== 'OWN') return res(400, { error: 'BAD_KIND', message: '방 종류를 골라 주세요' });
         if (!Number.isInteger(body.maxParticipants) || body.maxParticipants < 2 || body.maxParticipants > 10) return res(400, { error: 'BAD_MAX', message: '최대 인원은 2~10명이에요' });

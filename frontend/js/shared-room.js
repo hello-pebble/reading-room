@@ -189,9 +189,10 @@ function roomCard(n, noAct, hideTitle) {
       : rcEmpty(n)
         ? `<span class="muted">가져올 대화가 없어요</span>`
         : `<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
+  if (n.locked && n.kind !== 'CLOSED') act = `<button data-act="joinWithCode">초대 코드로 입장</button>`; // 결정 #97
   if (noAct) act = '';
   const tag = n.rtype ? `<span class="badge gray">${n.rtype === 'OWN' ? '각자 읽기' : '같은 책'}</span>` : '';
-  return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}${hideTitle ? '' : `<b class="grow" style="font-weight:normal">${esc(n.title)}</b>`}</div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period ? ' · ' + esc(n.period) : ''}</div>${act}</div>`;
+  return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}${n.locked ? '<span class="badge gray">초대 코드 필요</span>' : ''}${hideTitle ? '' : `<b class="grow" style="font-weight:normal">${esc(n.title)}</b>`}</div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period ? ' · ' + esc(n.period) : ''}</div>${act}</div>`;
 }
 
 // ===== 모닥불 피우기 (공유방 개설) =====

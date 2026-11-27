@@ -154,7 +154,7 @@ class RoomJoinTest extends ApiTestBase {
         mvc.perform(POST(b, "/rooms/join", m("code", r.code()))).andExpect(status().isCreated());
         mvc.perform(POST(b, "/rooms/" + r.id() + "/agree", Map.of())).andExpect(status().isOk());
         mvc.perform(DELETE(b, "/rooms/" + r.id() + "/participants/me")).andExpect(status().isNoContent());
-        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$[0].joined").value(false));   // 나가도 열린 방은 보이지만 참여 중은 아니다 (결정 #97)
         mvc.perform(GET(a, "/rooms")).andExpect(jsonPath("$[0].participants").value(1));
         clock.set("2026-11-17T04:00:00Z");
         mvc.perform(POST(b, "/rooms/join", m("code", r.code(), "bookId", bk))).andExpect(status().isCreated())

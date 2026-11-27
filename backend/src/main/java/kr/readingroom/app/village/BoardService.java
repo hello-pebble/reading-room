@@ -33,7 +33,7 @@ public class BoardService {
         if (status != null && !ORDER.containsKey(status))
             throw new ApiException(HttpStatus.BAD_REQUEST, "BAD_STATUS", "status는 SCHEDULED, OPEN, CLOSED 중 하나예요");
         Instant now = clock.instant();
-        return rooms.findMine(userId).stream()
+        return rooms.findVisible(userId, now.toString()).stream()
                 .map(r -> view(r, userId, now))
                 .filter(v -> v != null && (status == null || v.status().equals(status)))
                 .sorted(Comparator.comparing((RoomResponse v) -> ORDER.get(v.status())).thenComparingLong(BoardService::order))

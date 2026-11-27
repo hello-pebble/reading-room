@@ -375,6 +375,13 @@ function fakeServer() {
         srv.rooms.push(r);
         return res(201, roomRow(r));
       }
+      if (method === 'GET' && (m = path.match(/^\/rooms\/invite\/([A-Za-z0-9]+)$/))) {
+        const r = srv.rooms.find((x) => x.code === m[1].toUpperCase());
+        if (!r) return res(404, { error: 'ROOM_NOT_FOUND', message: '모닥불을 찾을 수 없어요' });
+        const owner = Object.values(users).find((u) => u.id === r.parts[0].uid);
+        return res(200, { title: r.title, kind: r.kind, isbn: r.kind === 'OWN' ? null : r.isbn, bookTitle: r.kind === 'OWN' ? null : r.bookTitle || '데미안', status: roomStatus(r),
+          ownerNickname: owner.nickname, participants: r.parts.filter((p) => !p.left).length, maxParticipants: r.max, openAt: iso(r.openAt), closeAt: iso(r.closeAt), closedAt: r.closedAt ? iso(r.closedAt) : null });
+      }
       if (method === 'POST' && path === '/rooms/join') {
         const code = String(body.code == null ? '' : body.code).trim().toUpperCase();
         if (!code) return res(400, { error: 'BAD_CODE', message: '초대 코드를 적어 주세요' });

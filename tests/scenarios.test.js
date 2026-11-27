@@ -1342,32 +1342,77 @@ test('서버 모닥불 피우기: 서버가 만든 방이 게시판에 생기고
   fin(a);
 });
 
-test('서버 초대 코드 입장: 코드(링크 포함)로 서버에 들어가고 방 창이 열린다. 없는 코드·가득 찬 방은 서버 문구가 나온다', async () => {
+test('서버 초대 코드 입장: [초대 코드로 입장] → 확인하면 방 이름·책·진행 시간·인원을 보이고 → [이 방에 입장] → 보관 동의 → 모닥불 (결정 #95)', async () => {
   const { srv, a } = await roomApp((s) => {
-    s.seedRoom('bob', { title: '밥의 모닥불', code: 'ABC234', max: 3 });
-    const full = s.seedRoom('bob', { title: '가득 찬 방', code: 'FULL234', max: 2 });
+    s.seedRoom('bob', { title: '밥의 모닥불', code: 'ABCD2345', max: 3 });
+    const full = s.seedRoom('bob', { title: '가득 찬 방', code: 'FULL2345', max: 2 });
     full.parts.push({ uid: 999, agreed: false, left: false });
+    s.seedRoom('bob', { title: '끝난 방', code: 'DONE2345', openAt: Date.now() - 5 * 3600e3, hours: 1 });
   });
   await toVillage(a);
   a.ev(`openV('board')`);
-  a.doc.getElementById('jl').value = '이상한코드';
-  a.click('#panel [data-act=joinLink]');
+  a.click('#panel [data-act=joinOpen]');
+  const inp = () => a.doc.getElementById('jl'),
+    err = () => a.doc.getElementById('jlE').textContent,
+    check = async (v) => {
+      inp().value = v;
+      a.click('#panel [data-act=joinCheck]');
+      await settle();
+    };
+  assert.equal(inp().placeholder, '8자리 초대 코드를 입력해 주세요');
+  await check('123');
+  assert.match(err(), /8자리 초대 코드를 입력해 주세요/);
+  await check('ZZZZ9999');
+  assert.match(err(), /초대 코드를 찾을 수 없어요/);
+  await check('done2345');
+  assert.match(err(), /이미 끝난 모닥불이에요/);
+  assert.equal(a.doc.getElementById('joinPreview'), null);
+  assert.equal(calls(srv, 'POST', /^\/rooms\/join$/).length, 0, '확인만으로는 들어가지 않는다');
+  // 정원이 찬 방: 미리보기는 보이지만 입장은 서버가 거절하고, 이유를 입력창 아래에 보인다
+  await check('https://x.test/#join=FULL2345');
+  a.click('#panel [data-act=joinConfirm]');
   await settle();
-  assert.match(text(a, 'toast'), /초대 코드를 찾을 수 없어요/);
-  a.doc.getElementById('jl').value = 'https://x.test/#join=FULL234';
-  a.click('#panel [data-act=joinLink]');
-  await settle();
-  assert.match(text(a, 'toast'), /정원이 가득 찼어요/);
+  assert.match(err(), /정원이 가득 찼어요/);
   assert.equal(newsOf(a).length, 0);
-  a.doc.getElementById('jl').value = ' abc234 ';
-  a.click('#panel [data-act=joinLink]');
+  // 정상 코드 (소문자·띄어쓰기·하이픈도 된다)
+  await check(' abcd-2345 ');
+  const card = a.doc.getElementById('joinPreview').textContent;
+  assert.match(card, /밥의 모닥불/);
+  assert.match(card, /책: 데미안/);
+  assert.match(card, /진행 시간: /);
+  assert.match(card, /참여 인원: 1\/3명/);
+  a.click('#panel [data-act=joinConfirm]');
   await settle();
-  assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'abc234' });
+  assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'ABCD2345' });
   const n = newsOf(a)[0];
   assert.equal(n.title, '밥의 모닥불');
-  assert.equal(n.people, 2);
+  assert.equal(n.people, 2, '참여 인원이 바로 바뀐다');
   assert.equal(n.agreed, false);
-  assert.equal(a.ev('panelOpen'), 'room:' + n.id, '들어오면 그 방의 안내 창이 열려요');
+  assert.equal(a.ev('panelOpen'), 'room:' + n.id, '들어오면 그 방의 보관 동의 창이 열린다');
+  a.click('#panel [data-act=rcAgree]');
+  await settle();
+  await settle();
+  assert.equal(a.ev('VIEW'), 'shared', '동의하면 모닥불로 이동한다');
+  assert.ok(calls(srv, 'GET', /\/participants$/).length >= 1, '참여자 목록을 바로 받는다');
+  assert.equal(a.ev('S.news[0].parts.map((p) => p.nickname).join()'), '밥');
+  fin(a);
+});
+
+test('방 정보의 초대 코드: 방을 만든 사람에게 코드와 [코드 복사]가 보이고, 누르면 코드를 복사한다', async () => {
+  const { a } = await roomApp((s) => {
+    s.seedRoom('alice', { title: '내 모닥불', code: 'MINE2345' }).parts[0].agreed = Date.now();
+  });
+  await toVillage(a);
+  a.ev("navigator.clipboard = { writeText: (t) => { window.COPIED = t; return Promise.resolve(); } }");
+  a.ev(`openV('room:${newsOf(a)[0].id}')`); // 동의한 열린 방은 모닥불 장면으로 간다
+  await settle();
+  a.click('#campSide [data-camp=info]'); // 오른쪽 위 ⓘ 방 정보
+  await settle();
+  assert.match(a.doc.getElementById('invCode').textContent, /MINE2345/);
+  a.click('[data-act=copyCode]');
+  await settle();
+  assert.equal(a.ev('window.COPIED'), 'MINE2345');
+  assert.match(text(a, 'toast'), /초대 코드를 복사했어요/);
   fin(a);
 });
 

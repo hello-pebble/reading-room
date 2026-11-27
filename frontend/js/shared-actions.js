@@ -39,8 +39,24 @@ function sharedRoomAction(act, b) {
     openV('fire:new');
     return true;
   }
-  if (act === 'joinLink') {
-    joinByCode(document.getElementById('jl').value);
+  if (act === 'joinOpen') {
+    panelView.join = { code: '', err: '', preview: null };
+    renderPanel();
+    const i = document.getElementById('jl');
+    if (i) i.focus();
+    return true;
+  }
+  if (act === 'joinCheck') {
+    joinCheck();
+    return true;
+  }
+  if (act === 'joinConfirm') {
+    joinConfirm();
+    return true;
+  }
+  if (act === 'copyCode') {
+    const n = S.news.find((x) => x.id === b.dataset.id);
+    if (n && n.inviteCode) copyCode(n);
     return true;
   }
   if (act === 'rkind') {

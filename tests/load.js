@@ -408,7 +408,7 @@ function fakeServer() {
         me.left = true;
         return res(204);
       }
-      // 마을 광장 대화 (모든 계정이 한 줄을 나눠 쓴다. 40자·같은 글 연속 금지·3초 3건만 흉내 낸다)
+      // 마을 광장 대화 (모든 계정이 한 줄을 나눠 쓴다. 300자·같은 글 연속 금지·3초 3건만 흉내 낸다)
       if (method === 'GET' && path === '/plaza/presence') {
         const q = [], wait = [], enc = new TextEncoder();
         const c = { user, send(t) { const v = enc.encode(t); wait.length ? wait.shift().ok({ value: v, done: false }) : q.push(v); } };
@@ -425,7 +425,7 @@ function fakeServer() {
       }
       if (method === 'POST' && path === '/plaza/messages') {
         const content = String(body.content == null ? '' : body.content).trim();
-        if (!content || [...content].length > 40) return res(400, { error: 'BAD_CONTENT', message: '한 줄은 1~40자로 적어 주세요' });
+        if (!content || [...content].length > 300) return res(400, { error: 'BAD_CONTENT', message: '한 줄은 1~300자로 적어 주세요' });
         const mine = srv.plaza.filter((x) => x.publicId === user.publicId), t = srv.now();
         if (mine.filter((x) => t - Date.parse(x.createdAt) < 3000).length >= 3) return res(429, { error: 'TOO_FAST', message: '조금 뒤에 보내 주세요' });
         const last = mine[mine.length - 1];

@@ -395,20 +395,18 @@ test('저장 실패: 저장소가 막히면 한 번만 알린다', async () => {
   fin(a);
 });
 
-test('광장 대화: 광장 안에서만 채팅창이 뜨고, 40자로 자르고, 밖에서는 보내지 않고, 글자는 그대로 보인다(HTML 주입 방지)', async () => {
+test('마을 대화: 마을 어디서나 채팅창이 뜨고 보낼 수 있으며(결정 #94), 300자로 자르고(결정 #93), 마을을 떠나면 숨고, 글자는 그대로 보인다(HTML 주입 방지)', async () => {
   const a = load();
   a.ev('enterVillage()'); await sleep(350);
   assert.equal(a.ev('VIEW'), 'village');
   const wrap = a.doc.getElementById('stageWrap');
-  // 광장 밖: 채팅창이 없다
+  // 광장 밖이어도 마을 안이면 채팅창이 뜬다 (결정 #94)
   a.ev(`Object.assign(sim,{x:2,z:5});syncPlazaChat()`);
-  assert.ok(!wrap.classList.contains('pz'), '광장 밖에서는 채팅창이 숨어야 해요');
-  // 광장 안: 채팅창이 뜬다
-  a.ev(`Object.assign(sim,{x:PLAZA.cx,z:PLAZA.cz});syncPlazaChat()`);   // 광장 한가운데 (광장 위치가 바뀌어도 맞도록 좌표를 직접 쓰지 않는다)
-  assert.ok(a.ev('inPlaza(PLAZA.cx,PLAZA.cz)'));
-  assert.ok(wrap.classList.contains('pz'), '광장 안에서는 채팅창이 떠야 해요');
-  a.doc.getElementById('pz').value = '가'.repeat(60); a.ev('plazaSend()');
-  assert.equal(a.state().plaza.at(-1).text.length, 40);
+  assert.ok(!a.ev('inPlaza(2,5)'));
+  assert.ok(wrap.classList.contains('pz'), '마을 어디서나 채팅창이 떠야 해요');
+  a.doc.getElementById('pz').value = '가'.repeat(310); a.ev('plazaSend()');
+  assert.equal(a.state().plaza.at(-1).text.length, 300);
+  assert.equal(a.doc.getElementById('pz').maxLength, 300);
   a.doc.getElementById('pz').value = '<img src=x onerror=alert(1)>'; a.ev('plazaSend()');
   assert.equal(a.doc.querySelector('#pzLog img'), null, '태그가 요소로 만들어지면 안 돼요');
   assert.match(a.doc.getElementById('pzLog').textContent, /<img src=x/);
@@ -416,11 +414,12 @@ test('광장 대화: 광장 안에서만 채팅창이 뜨고, 40자로 자르고
   const n = a.state().plaza.length;
   a.doc.getElementById('pz').value = '   '; a.ev('plazaSend()');
   assert.equal(a.state().plaza.length, n);
-  // 광장 밖
-  a.ev(`Object.assign(sim,{x:2,z:5})`);
+  // 광장 밖에서도 보낸다
   a.doc.getElementById('pz').value = '밖에서'; a.ev('plazaSend()');
-  assert.equal(a.state().plaza.length, n, '광장 밖에서는 보내지면 안 돼요');
-  assert.match(a.doc.getElementById('pzE').textContent, /걸어가는 중/);
+  assert.equal(a.state().plaza.at(-1).text, '밖에서', '광장 밖에서도 보낼 수 있어요');
+  // 마을을 떠나면 숨는다
+  a.ev("VIEW = 'room'; syncPlazaChat()");
+  assert.ok(!wrap.classList.contains('pz'), '마을 밖에서는 채팅창이 숨어야 해요');
   fin(a);
 });
 
@@ -1220,12 +1219,15 @@ test('서버 광장 접속 인원:들어서면 연결해 인원을 보이고, �
   assert.match(head(), /접속 \(01\/100\)/);
   a.ev('Object.assign(sim, { x: 2, z: 5 }); syncPlazaChat()');
   await settle();
-  assert.equal(srv.presence.length, 0, '광장을 떠나면 연결을 끊는다');
+  assert.equal(srv.presence.length, 1, '광장 밖이어도 마을 안이면 접속으로 센다 (결정 #94)');
+  a.ev("VIEW = 'room'; syncPlazaChat()");
+  await settle();
+  assert.equal(srv.presence.length, 0, '마을을 떠나면 연결을 끊는다');
   assert.equal(a.ev('PZ.people'), null);
   fin(a);
 });
 
-test('서버 광장: 광장에 있는 동안 새 글만 받아 보고, 밖으로 나가면 확인을 멈춘다', async () => {
+test('서버 광장: 마을에 있는 동안 새 글만 받아 보고, 마을을 떠나면 확인을 멈춘다', async () => {
   const { srv, a } = await plazaApp((s) => s.seedPlaza('bob', '첫 글', 2000));
   await enterPlaza(a);
   srv.seedPlaza('bob', '새로 온 글');
@@ -1233,11 +1235,11 @@ test('서버 광장: 광장에 있는 동안 새 글만 받아 보고, 밖으로
   assert.match(pzLog(a).textContent, /새로 온 글/);
   assert.equal([...pzLog(a).querySelectorAll('.msg')].filter((m) => /첫 글/.test(m.textContent)).length, 1, '같은 글이 두 번 보이면 안 돼요');
   assert.ok(calls(srv, 'GET', /\?since=/).length >= 1, '그 뒤로는 since로 새 글만 물어요');
-  a.ev('Object.assign(sim, { x: 2, z: 5 }); syncPlazaChat()');
+  a.ev("VIEW = 'room'; syncPlazaChat()");
   await settle();
   const n = srv.calls.length;
   await sleep(120);
-  assert.equal(srv.calls.length, n, '광장 밖에서는 서버에 묻지 않아요');
+  assert.equal(srv.calls.length, n, '마을 밖에서는 서버에 묻지 않아요');
   fin(a);
 });
 
@@ -1256,8 +1258,9 @@ test('서버 광장: 글을 보내면 서버가 만든 글이 보이고 칸이 �
   assert.equal(a.doc.getElementById('pz').value, '안녕', '거절되면 쓰던 글이 남아요');
   assert.equal(pzLog(a).querySelectorAll('.msg.me').length, 1);
   a.ev('Object.assign(sim, { x: 2, z: 5 })');
-  say(a, '밖에서');
-  assert.equal(calls(srv, 'POST', /plaza/).length, 2, '광장 밖에서는 보내지 않아요');
+  say(a, '광장 밖에서');
+  await settle();
+  assert.equal(calls(srv, 'POST', /plaza/).length, 3, '광장 밖이어도 마을 안이면 보낸다 (결정 #94)');
   fin(a);
 });
 
@@ -1484,7 +1487,7 @@ test('서버 공유방 대화: 열려 있는 동안 새 글만 받아 보고, �
   await settle();
   const n = srv.calls.length;
   await sleep(120);
-  assert.equal(srv.calls.filter((c, i) => i >= n && /\/messages/.test(c.path)).length, 0, '창이 없으면 서버에 묻지 않아요');
+  assert.equal(srv.calls.filter((c, i) => i >= n && /^\/rooms\/\d+\/messages/.test(c.path)).length, 0, '창이 없으면 서버에 묻지 않아요 (마을 대화 /plaza/messages는 따로 센다)');
   fin(a);
 });
 

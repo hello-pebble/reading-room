@@ -1095,7 +1095,7 @@ function createScene() {
     if (view !== 'village' && view !== 'shared') return;
     const e = document.createElement('div');
     e.className = 'ov vbub' + (i < 0 ? ' me' : '');
-    e.textContent = text;
+    e.textContent = text.length > 40 ? text.slice(0, 40) + '…' : text; // 글은 300자까지지만 말풍선은 앞 40자만 (전체는 대화창에)
     wrap.appendChild(e);
     vilBub.push({ el: e, i, until: performance.now() + ms });
   }

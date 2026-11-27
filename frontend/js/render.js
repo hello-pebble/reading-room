@@ -78,10 +78,10 @@ function render() {
   document.getElementById('hdrName').textContent = visiting
     ? neighborNow().name + '의 집'
     : VIEW === 'village'
-      ? S.user.nickname + ' · 마을'
+      ? (S.user.nickname || '나') + ' · 마을'
       : VIEW === 'shared'
         ? '모닥불 · ' + (S.news.find((n) => n.id === CAMP_ID)?.title || '공유방')
-        : S.user.nickname + '의 방';
+        : S.user.nickname ? S.user.nickname + '의 방' : '내 방'; // 닉네임을 받기 전에는 "내 방"
   document
     .getElementById('stage')
     .setAttribute(

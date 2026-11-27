@@ -581,6 +581,21 @@ test('서버 연결: ?api가 없으면 서버를 부르지 않고 프로토타�
   fin(a);
 });
 
+test('서버 연결 첫 화면: 체험판 예시(조약돌·예시 책·예시 공유방) 없이 빈 내 방으로 시작한다 (결정 #96)', async () => {
+  const srv = fakeServer();
+  srv.down = true; // 서버 응답이 오기 전(또는 닿지 않을 때) 보이는 화면
+  const a = load({ api: srv });
+  assert.equal(text(a, 'hdrName'), '내 방');
+  assert.doesNotMatch(a.doc.querySelector('header, .hdr, #hdrName').parentElement.textContent, /조약돌|@pebble/, '머리말에 예시 이름이 없다');
+  const s = a.state();
+  assert.equal(s.user.nickname, '');
+  assert.equal(s.finished.length, 0, '예시 완독 책이 없다');
+  assert.equal(s.news.length, 0, '예시 공유방이 없다');
+  assert.equal(s.streak, 0);
+  await settle(); // 서버에 닿지 않아 뜨는 안내까지 끝난 뒤 닫는다
+  fin(a);
+});
+
 test('서버 연결: 토큰이 없으면 로그인 창이 뜨고, 새 계정은 닉네임 정하기로 이어진다', async () => {
   const srv = fakeServer();
   const a = load({ dev: true, api: srv });

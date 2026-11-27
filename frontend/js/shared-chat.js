@@ -333,7 +333,7 @@ function rcInfoHtml(n, split) {
     ['종류', n.rtype === 'OWN' ? '각자 읽기' : '같은 책 방' + (n.book ? '' : ' · 책을 아직 안 정했어요')],
     ...(n.rtype === 'OWN' ? [['내가 읽는 책', (API.enabled ? n.myBook : n.book) ? '『' + esc(API.enabled ? n.myBook : n.book) + '』' : '아직 안 정했어요']] : []), // 서버 연결 모드의 n.book은 방 이름이라 참여자 명단의 내 책을 쓴다 (결정 #92)
     ...(n.period ? [['기간', esc(n.period)]] : []),
-    ['공개 범위', n.vis === 'public' ? '마을에 공개' : '초대 코드·링크로만'],
+    ['공개 범위', n.vis === 'public' ? '누구나 (초대 코드 없이)' : '초대 코드·링크로만'],
   ];
   let h = `<p class="muted">${state}</p><div class="rkv">${kv.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>`;
   if (n.kind !== 'CLOSED') h += inviteBlock(n);
@@ -351,12 +351,15 @@ function roomPanel(id) {
   if (!n) return head('모닥불') + '<p class="muted">이 공유방은 사라졌어요.</p>';
   const t = shortTitle(n);
   if (panelView.readAt === undefined) panelView.readAt = n.lastRead || 0;
-  if (n.locked)
+  if (n.locked) {
+    if (!panelView.join) panelView.join = { code: '', err: '', preview: null }; // 이 방의 초대 코드 입력 창 (결정 #101)
     return (
       head(t) +
-      roomCard(n, false, true) +
-      `<p class="muted">${esc(n.owner || '방장')}님이 피운 모닥불이에요. 들어가려면 방을 만든 사람에게 받은 초대 코드가 필요해요.</p>` // 결정 #97
+      roomCard(n, true, true) +
+      `<p class="muted">${esc(n.owner || '방장')}님이 피운 모닥불이에요. 방을 만든 사람에게 받은 초대 코드를 적어 주세요.</p>` +
+      joinCodeHtml('초대 코드') // 결정 #97
     );
+  }
   if (n.kind === 'SOON') return head(t) + roomCard(n, false, true) + rcInfoHtml(n); // RC-01 예정 방
   if (!n.agreed) {
     if (n.kind === 'CLOSED')

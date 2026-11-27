@@ -21,10 +21,10 @@ function roomFromServer(r) {
     rtype: r.kind,
     mine: r.mine,
     joined: !!r.joined,
-    locked: !r.mine && !r.joined, // 남의 방: 마을에 보이지만 들어가려면 초대 코드가 있어야 한다 (결정 #97)
+    locked: !r.mine && !r.joined && r.visibility !== 'PUBLIC', // 남의 초대 방: 보이지만 들어가려면 초대 코드 (결정 #97). 공개 방은 바로 (결정 #101)
     people: r.participants,
     max: r.maxParticipants,
-    vis: 'invite',
+    vis: r.visibility === 'PUBLIC' ? 'public' : 'invite', // 공개 방은 누구나 코드 없이 (결정 #101)
     inviteCode: r.inviteCode || '',
     opensAt: opens,
     closesAt: closes,
@@ -71,7 +71,7 @@ let PENDING_JOIN = ''; // 초대 링크(#join=)로 열었을 때 로그인 뒤�
 // 모닥불 피우기: 책은 소파·책장에서 골랐으면 책 번호(bookId)로, 직접 적었으면 ISBN 없이 보낸다(서버가 같은 책 방에는 책이 필요하다고 답한다)
 async function serverCreateRoom(nf, err) {
   if (ROOM_BUSY.create) return;
-  const body = { kind: nf.kind, visibility: 'INVITE', maxParticipants: Math.round(+nf.max), hours: nf.hours };
+  const body = { kind: nf.kind, visibility: nf.vis === 'public' ? 'PUBLIC' : 'INVITE', maxParticipants: Math.round(+nf.max), hours: nf.hours };
   const name = (nf.name || '').trim();
   if (name) body.title = name;
   const b = nfBook(nf);
@@ -123,6 +123,25 @@ async function serverJoin(raw, onErr) {
   }
 }
 
+// 공개 방(결정 #101): 게시판이 준 코드로 입장한 뒤 바로 보관 동의까지 하고 모닥불로 간다. 거절(정원·종료)은 알림으로 보인다
+async function joinPublicThenAgree(n) {
+  if (ROOM_BUSY.join) return;
+  ROOM_BUSY.join = true;
+  try {
+    await API.post('/rooms/join', { code: n.inviteCode });
+    await API.post('/rooms/' + n.sid + '/agree');
+    await loadRooms();
+    const m = S.news.find((x) => x.id === n.id);
+    if (m && m.kind === 'OPEN') {
+      closePanel();
+      enterCamp(m);
+    } else renderPanel();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    ROOM_BUSY.join = false;
+  }
+}
 // 방 하나에 대한 서버 동작(동의·나가기·닫기). 끝나면 목록을 다시 불러오고, 성공하면 새 방 객체로 ok를 부른다
 function serverRoomAct(n, name, ok) {
   const key = n.sid + ':' + name;

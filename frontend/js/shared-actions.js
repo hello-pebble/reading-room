@@ -40,9 +40,11 @@ function sharedRoomAction(act, b) {
     return true;
   }
   if (act === 'joinWithCode') {
-    openV('board');
-    panelView.join = { code: '', err: '', preview: null };
+    // 그 방의 초대 코드 입력 창을 바로 연다. openV와 달리 게시판·모닥불로 걸어가지 않는다 (결정 #101)
+    panelOpen = 'room:' + b.dataset.id;
+    panelView = { join: { code: '', err: '', preview: null } };
     renderPanel();
+    backdrop.classList.add('open');
     const i = document.getElementById('jl');
     if (i) i.focus();
     return true;

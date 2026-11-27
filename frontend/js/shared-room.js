@@ -4,7 +4,7 @@
 
 const RMAX = 10; // 공유방 최대 인원: 의자 6 + 서 있는 자리 4 (결정 #54, #41의 20명을 대체)
 
-const PUBLIC_ROOMS = false; // 베타는 초대만 (결정 #41, 열린 결정 M ②). 켜면 개설 창에 "마을에 공개" 선택지가 다시 나온다
+const PUBLIC_ROOMS = true; // 개설 창에서 초대 코드로만 / 누구나(코드 없이)를 고른다 (결정 #101, #41 ③을 대체)
 
 const shortTitle = (n) =>
   String(n.title || n.book || '')
@@ -189,10 +189,11 @@ function roomCard(n, noAct, hideTitle) {
       : rcEmpty(n)
         ? `<span class="muted">가져올 대화가 없어요</span>`
         : `<button class="primary" data-act="import" data-id="${n.id}">내 서재로 가져오기</button>`;
-  if (n.locked && n.kind !== 'CLOSED') act = `<button data-act="joinWithCode">초대 코드로 입장</button>`; // 결정 #97
+  if (n.locked && n.kind !== 'CLOSED') act = `<button data-act="joinWithCode" data-id="${n.id}">초대 코드로 입장</button>`; // 결정 #97: 그 방의 코드 입력 창 (걸어가지 않는다)
+  if (n.kind === 'SOON' && API.enabled && !n.mine && !n.joined) act = n.locked ? act : '<span class="muted">열리면 들어갈 수 있어요</span>';
   if (noAct) act = '';
   const tag = n.rtype ? `<span class="badge gray">${n.rtype === 'OWN' ? '각자 읽기' : '같은 책'}</span>` : '';
-  return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}${n.locked ? '<span class="badge gray">초대 코드 필요</span>' : ''}${hideTitle ? '' : `<b class="grow" style="font-weight:normal">${esc(n.title)}</b>`}</div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period ? ' · ' + esc(n.period) : ''}</div>${act}</div>`;
+  return `<div class="card"><div class="row"><span class="badge ${K[1]}">${K[0]}</span>${tag}${rcUnread(n) ? '<span class="badge">새 글</span>' : ''}${n.mine ? '<span class="badge">내가 연 방</span>' : ''}${n.locked ? '<span class="badge gray">초대 코드 필요</span>' : ''}${n.vis === 'public' && !n.mine ? '<span class="badge gray">누구나</span>' : ''}${hideTitle ? '' : `<b class="grow" style="font-weight:normal">${esc(n.title)}</b>`}</div><div class="muted" style="margin:6px 0 8px">${esc(roomSub(n))}${n.period ? ' · ' + esc(n.period) : ''}</div>${act}</div>`;
 }
 
 // ===== 모닥불 피우기 (공유방 개설) =====

@@ -54,6 +54,10 @@ function rcAct(act, b) {
   }
   if (act === 'rcAgree') {
     if (!n) return true;
+    if (API.enabled && n.vis === 'public' && !n.joined && !n.mine) {
+      joinPublicThenAgree(n); // 공개 방은 코드 없이 입장한 뒤 동의한다 (결정 #101)
+      return true;
+    }
     if (API.enabled) {
       serverRoomAct(n, 'agree', (m) => {
         if (!m) return;

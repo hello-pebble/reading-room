@@ -39,7 +39,7 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 
 ## 지금 상태와 다음 작업
 
-- **배포:** 서버 jar가 화면까지 낸다(결정 #86, `docs/DEPLOY.md`). 화면은 `frontend/config.js`(프로토타입, 서버 없음)와 jar의 `static/config.js`(같은 주소 서버 연결)로 갈린다.
+- **배포:** 서버 jar가 화면까지 낸다(결정 #86, `docs/DEPLOY.md`). 운영은 오라클 VM 컨테이너 + Caddy + Supabase 서울, 주소 `https://readingroom.duckdns.org`(결정 #89). 새 버전은 `main` 머지 뒤 VM에서 다시 빌드해 교체한다(자동 배포 없음). 화면은 `frontend/config.js`(프로토타입, 서버 없음)와 jar의 `static/config.js`(같은 주소 서버 연결)로 갈린다.
 
 - **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 발급·실제 응답 확인 완료, 결정 #82, 제목 검색은 카카오 우선 결정 #83), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치), 공유방 개설·입장·대화·읽음(`room`), 이웃집 책 추천(`neighbor`, 결정 #62). 화면은 주소 끝 `?api=http://localhost:8080`으로 켜는 서버 연결 모드에서 **게스트 시작(가입 없음, 결정 #84)·닉네임·내 정보와 책·메모·완독/포기·스탠드 타이머·달력/월 목표·광장 대화·마을 게시판과 공유방 개설/입장/나가기/대화/알림/가져오기/머문 시간·이웃집 책 추천까지** 연결했고(`api.js`·`account.js`·`books.js`·`sessions.js`·`calendar.js`·`plaza.js`·`rooms.js`·`rooms-chat.js`·`neighbor-server.js`, 서버 `POST /dev/login`, 결정 #71~#73·#75~#81), 나머지 기능은 아직 `localStorage`로 동작한다(책 검색은 서버 연결 모드에서 서버 검색을 자동으로 쓰고, 서버 없이는 `?searchApi=`).
 - **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(끝남): 대화 `GET·POST /rooms/{id}/messages`(300자, 3초 3건·같은 글 30초 연속 금지(#61), 삭제·수정 없음)·읽음 `POST /rooms/{id}/read`·게시판 `unread`(`V10__room_message.sql`, 결정 #60).

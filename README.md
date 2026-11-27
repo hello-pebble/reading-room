@@ -1,6 +1,7 @@
 # 독서 공유방 (reading-room)
 
 > 테스트 배포: 서버 하나가 화면과 API를 함께 낸다. 실행·환경변수·체크리스트는 [docs/DEPLOY.md](docs/DEPLOY.md)(결정 #86).
+> 운영 중(2026-11-27): https://readingroom.duckdns.org — 오라클 VM 컨테이너 + Caddy + Supabase 서울(결정 #89).
 
 3D 유령 + 원목 방 아이소메트릭 스타일의 독서 기록·공유 웹서비스.
 **내 방**에서 혼자 기록하고, **마을**에서 같은 책을 읽은 사람들과 이야기한다.

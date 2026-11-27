@@ -2,6 +2,8 @@
 
 서버 하나(Spring Boot jar)가 **화면과 API를 함께** 낸다(결정 #86). 필요한 것은 서버 실행 환경과 PostgreSQL 16 하나다.
 
+**지금 운영(2026-11-27):** 오라클 클라우드 우분투 VM의 Docker 컨테이너 + Caddy(HTTPS) + DuckDNS 주소 `https://readingroom.duckdns.org`, DB는 Supabase(서울). 절차는 아래 [오라클 VM + Caddy + Supabase](#오라클-vm--caddy--supabase-지금-운영)(결정 #89).
+
 ## 실행
 
 **Docker(권장)** — 저장소 루트에서:
@@ -54,7 +56,65 @@ docker compose up -d --build
 - 게스트는 기기가 곧 계정: 브라우저 저장소를 지우면 새 계정이 된다(기기 이전 코드로 옮길 수 있다, 결정 #85).
 - 카카오 검색 한도·약관은 아직 확인 전이다.
 - 첫 접속은 3D 라이브러리(`vendor/three.min.js`, 약 600KB)를 내려받는다. 정적 파일 캐시·압축은 서버 기본값이다.
-- Docker 이미지 빌드는 개발 PC에서 아직 실행해 보지 않았다(jar 실행은 확인).
+- Docker 이미지 빌드·실행은 오라클 VM에서 확인했다(2026-11-27).
+
+## 오라클 VM + Caddy + Supabase (지금 운영)
+
+같은 VM에 다른 서비스와 Caddy가 함께 돈다. 그래서 컨테이너는 **호스트 포트를 열지 않고** Caddy와 같은 Docker 네트워크에 붙인다(다른 서비스가 호스트 8080을 써도 부딪히지 않는다). `docker-compose.yml`은 DB까지 띄우는 구성이라 여기서는 쓰지 않는다.
+
+**1) Supabase 프로젝트**
+- 리전은 **Northeast Asia (Seoul)** `ap-northeast-2`. 생성 화면이 넓은 지역(Asia-Pacific 등)만 보이면 특정 리전을 직접 고른다(그냥 두면 싱가포르로 잡힐 수 있다).
+- Project Settings → **Data API는 끈다**(서버는 JDBC로만 접속하고, 켜 두면 RLS 없는 `public` 테이블이 anon 키로 읽힐 수 있다).
+- Connect → **Session pooler**(포트 5432) 값을 쓴다. Direct는 IPv6 전용, Transaction pooler(6543)는 Flyway와 맞지 않는다.
+
+**2) VM 준비** (Docker와 Caddy는 이미 있다고 본다)
+```bash
+git clone https://github.com/hello-pebble/reading-room.git ~/reading-room && cd ~/reading-room
+nano .env && chmod 600 .env     # 커밋하지 않는다
+```
+```
+DATABASE_URL=jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
+DATABASE_USER=postgres.<프로젝트 ref>
+DATABASE_PASSWORD=<Supabase DB 비밀번호>
+DB_POOL_SIZE=5
+FORWARD_HEADERS=native
+KAKAO_REST_KEY=<카카오 키>
+NL_CERT_KEY=<국립중앙도서관 키>
+```
+`FORWARD_HEADERS=native`가 없으면 모든 접속자가 Caddy 주소 하나로 보여 IP 제한(책 검색 등)이 전체에 한꺼번에 걸린다.
+
+**3) 빌드와 실행** (`<caddy 네트워크>`는 `docker ps --format '{{.Names}}\t{{.Networks}}'`로 확인)
+```bash
+sudo docker build -t reading-room .
+sudo docker run -d --name reading-room --restart unless-stopped --network <caddy 네트워크> --env-file .env reading-room
+sudo docker logs -f reading-room     # Started … 가 나오면 끝. 첫 시작 때 Flyway가 V1~V18을 만든다
+```
+
+**4) 주소와 Caddy**
+- DuckDNS에서 이름을 만들고 VM 공인 IP를 넣는다. VM의 공인 IP는 **예약(Reserved) IP**로 둔다(임시 IP면 VM을 다시 켤 때 바뀐다).
+- Caddy 사이트 파일(예: `caddy/sites/readingroom.caddy`, Caddyfile이 `import sites/*.caddy`로 읽는다):
+```
+readingroom.duckdns.org {
+    reverse_proxy reading-room:8080
+}
+```
+```bash
+sudo docker exec caddy caddy validate --config /etc/caddy/Caddyfile
+sudo docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+curl https://readingroom.duckdns.org/health     # {"status":"ok"}
+```
+인증서는 Caddy가 80/443으로 자동 발급한다(오라클 Security List·iptables에서 80/443이 열려 있어야 한다).
+
+**5) 새 버전 반영** (`main` 머지 뒤)
+```bash
+cd ~/reading-room && git pull && sudo docker build -t reading-room .
+sudo docker rm -f reading-room
+sudo docker run -d --name reading-room --restart unless-stopped --network <caddy 네트워크> --env-file .env reading-room
+sudo docker image prune -f     # 가끔: 이름 없는 옛 이미지 정리
+```
+교체하는 수십 초 동안 접속이 끊긴다. 데이터는 Supabase에 있어 그대로다. 컨테이너를 다시 만들어야(`rm` 뒤 `run`) 바뀐 `.env`도 읽는다.
+
+**확인한 것(2026-11-27):** `/health`, `/`(화면·3D), 토큰 없는 `/me` 401, `/dev/login`·`/dev/users` 404, 보안 헤더와 HTTPS의 HSTS, 게스트 시작·닉네임·책 검색(카카오)·등록·광장 글(한국 시간)·모닥불 개설·초대 미리보기·입장(같은 사람 다시 입장은 200)·보관 동의·대화·나가기·닫기. 확인 못 한 것: 스탠드 타이머, 달력, 기기 이전 코드, 이웃집, 폰 화면. 고른 책의 전체 쪽수가 비어 있던 경우가 있어 `NL_CERT_KEY`를 확인한다.
 
 ## 구글 클라우드 배포(Cloud Run) + Supabase DB
 

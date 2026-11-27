@@ -82,6 +82,55 @@ function setLayout(n) {
 const isSit = () => sim.mode === 'sit' || sim.mode === 'sitting';
 const MQ = matchMedia('(max-width:760px)');
 setLayout(MQ.matches ? 'tall' : 'wide');
+// 걸을 수 있는 범위: 지금 장면(내 방·마을)의 바닥 안. 클릭 이동과 키보드 이동이 같이 쓴다
+const clampX = (x) => Math.max(L.minX || 1.1, Math.min(L.X - 0.4, x)),
+  clampZ = (z) => Math.max(L.minZ || 0.8, Math.min(L.Y - 0.4, z));
+
+// ===== 마을 키보드 이동 (결정 #99): 방향키·WASD를 누르는 동안 화면 방향으로 걷는다 =====
+// 화면은 (1, 0.82, 1) 쪽에서 비스듬히 내려다보므로 화면 위 = 마을 (-x,-z), 화면 오른쪽 = (+x,-z)
+const MOVE_KEYS = { ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
+const heldKeys = new Set();
+const typingIn = (t) => !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
+document.addEventListener('keydown', (e) => {
+  const k = MOVE_KEYS[e.code];
+  if (!k || VIEW !== 'village' || panelOpen || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
+  if (e.code.startsWith('Arrow')) e.preventDefault(); // 방향키로 화면이 스크롤되지 않게 (WASD·Tab·Enter는 그대로)
+  heldKeys.add(k);
+  if (sim.mode === 'walk') {
+    sim.mode = 'idle'; // 클릭으로 가던 길과 도착 동작(집·게시판 열기)을 취소한다
+    sim.after = null;
+  }
+  if (G3) G3.follow();
+});
+document.addEventListener('keyup', (e) => {
+  const k = MOVE_KEYS[e.code];
+  if (k) heldKeys.delete(k);
+});
+// 창을 벗어나거나 탭이 숨으면 keyup을 못 받을 수 있으니 눌린 키를 잊는다 (혼자 계속 걷지 않게)
+window.addEventListener('blur', () => heldKeys.clear());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) heldKeys.clear();
+});
+function keyMove(dt) {
+  if (!heldKeys.size) return 0;
+  if (VIEW !== 'village' || panelOpen || isSit()) {
+    heldKeys.clear(); // 창이 열리거나 화면이 바뀌면 멈추고, 다시 누를 때까지 걷지 않는다
+    return 0;
+  }
+  const ux = (heldKeys.has('r') ? 1 : 0) - (heldKeys.has('l') ? 1 : 0),
+    uy = (heldKeys.has('d') ? 1 : 0) - (heldKeys.has('u') ? 1 : 0);
+  let dx = ux + uy,
+    dz = uy - ux;
+  const len = Math.hypot(dx, dz);
+  if (!len) return 0;
+  const v = 4.6 * dt; // 클릭 이동과 같은 마을 걷기 속도. 대각선도 같은 속도
+  dx /= len;
+  dz /= len;
+  sim.x = clampX(sim.x + dx * v);
+  sim.z = clampZ(sim.z + dz * v);
+  sim.rot += angDiff(sim.rot, Math.atan2(dx, dz)) * Math.min(1, dt * 12);
+  return 1;
+}
 function walkTo(tx, tz, done) {
   if (G3) G3.follow(); // 걸어가라고 하면 지도 끌기를 풀고 다시 캐릭터를 따라간다
   if (isSit()) {
@@ -124,6 +173,7 @@ function stepSim(dt) {
       moving = 1;
     }
   }
+  if (sim.mode !== 'walk' && keyMove(dt)) moving = 1;
   if (sim.mode === 'sitting') {
     sim.k = Math.min(1, sim.k + dt / 0.45);
     const k = sim.k;

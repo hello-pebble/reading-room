@@ -33,6 +33,7 @@ function load({ state, touch, api, local, dev } = {}) {
       if (api) w.fetch = (url, init) => api.fetch(url, init);
       w.matchMedia = q => ({ matches: /hover: hover/.test(q) && !touch, media: q, addEventListener() {}, removeEventListener() {} });
       w.ResizeObserver = class { observe() {} disconnect() {} };
+      if (!w.TextDecoder) w.TextDecoder = TextDecoder; // 접속 인원 스트림(SSE)을 읽을 때 쓴다
       w.HTMLCanvasElement.prototype.getContext = () => noopCtx();
     },
   });
@@ -99,6 +100,24 @@ function fakeServer() {
       const u = users[label], msg = { id: ++seq, uid: u.id, content, page: o.page == null ? null : o.page, at: Date.now() + srv.skew - (o.agoMs || 0) };
       (room.msgs = room.msgs || []).push(msg);
       return msg;
+    },
+    // 광장 접속 인원 (GET /plaza/presence, SSE): 연결마다 {user, send}. 누가 오가면 모두에게 명단을 보낸다
+    presence: [],
+    presenceList() {
+      const seen = new Map();
+      for (const c of srv.presence) if (!seen.has(c.user.publicId)) seen.set(c.user.publicId, { publicId: c.user.publicId, nickname: c.user.nickname, avatar: {} });
+      return [...seen.values()];
+    },
+    presenceBroadcast() {
+      const list = srv.presenceList();
+      for (const c of srv.presence) c.send('event:presence\ndata:' + JSON.stringify(list) + '\n\n');
+    },
+    // 다른 사람이 광장에 들어온 것처럼 연결을 하나 만든다. 돌려준 함수를 부르면 나간다
+    joinPlaza(label) {
+      const c = { user: users[label], send() {} };
+      srv.presence.push(c);
+      srv.presenceBroadcast();
+      return () => { srv.presence = srv.presence.filter((x) => x !== c); srv.presenceBroadcast(); };
     },
     plaza: [], // 광장 글 (오래된 것부터)
     // 그 계정이 쓴 광장 글을 미리 만들어 둔다. agoMs: 몇 ms 전에 썼는지
@@ -228,6 +247,16 @@ function fakeServer() {
           ownerNickname: Object.values(users).find((u) => u.id === r.parts[0].uid).nickname, inviteCode: r.parts[0].uid === user.id ? r.code : null };
       };
       const mineRooms = () => srv.rooms.filter((r) => { const p = r.parts.find((x) => x.uid === user.id); return p && !p.left; });
+      // 모닥불 참여자 명단 (참여 중이면 동의 전에도. 들어온 순, 나간 사람 제외, 결정 #92)
+      if (method === 'GET' && (m = path.match(/^\/rooms\/(\d+)\/participants$/))) {
+        const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);
+        if (!r) return res(404, { error: 'NOT_FOUND', message: '모닥불을 찾을 수 없어요' });
+        if (!me || me.left) return res(403, { error: 'NOT_PARTICIPANT', message: '참여 중인 모닥불이 아니에요' });
+        return res(200, r.parts.filter((p) => !p.left).map((p, i) => {
+          const u = Object.values(users).find((q) => q.id === p.uid);
+          return { publicId: u.publicId, nickname: u.nickname, avatar: {}, ...(p.bookTitle ? { bookTitle: p.bookTitle } : {}), owner: i === 0, mine: p.uid === user.id };
+        }));
+      }
       // 공유방 대화·읽음 (참여 중 + 보관 동의 뒤에만. 글은 번호 순, after는 마지막으로 본 글 번호)
       if ((m = path.match(/^\/rooms\/(\d+)\/(messages|read)(?:\?after=(\d+))?$/))) {
         const r = srv.rooms.find((x) => x.id === +m[1]), me = r && r.parts.find((p) => p.uid === user.id);
@@ -379,7 +408,16 @@ function fakeServer() {
         me.left = true;
         return res(204);
       }
-      // 마을 광장 대화 (모든 계정이 한 줄을 나눠 쓴다. 40자·같은 글 연속 금지·3초 3건만 흉내 낸다)
+      // 마을 광장 대화 (모든 계정이 한 줄을 나눠 쓴다. 300자·같은 글 연속 금지·3초 3건만 흉내 낸다)
+      if (method === 'GET' && path === '/plaza/presence') {
+        const q = [], wait = [], enc = new TextEncoder();
+        const c = { user, send(t) { const v = enc.encode(t); wait.length ? wait.shift().ok({ value: v, done: false }) : q.push(v); } };
+        const end = () => { srv.presence = srv.presence.filter((x) => x !== c); srv.presenceBroadcast(); while (wait.length) wait.shift().no(Object.assign(new Error('aborted'), { name: 'AbortError' })); };
+        if (init.signal) init.signal.addEventListener('abort', end);
+        srv.presence.push(c);
+        srv.presenceBroadcast();
+        return { ok: true, status: 200, body: { getReader: () => ({ read: () => (q.length ? Promise.resolve({ value: q.shift(), done: false }) : new Promise((ok, no) => wait.push({ ok, no }))) }) } };
+      }
       if (method === 'GET' && (m = path.match(/^\/plaza\/messages(?:\?since=(.+))?$/))) {
         const since = m[1] ? Date.parse(decodeURIComponent(m[1])) : null;
         const out = since == null ? srv.plaza.slice(-30) : srv.plaza.filter((x) => Date.parse(x.createdAt) >= since).slice(0, 30);
@@ -387,7 +425,7 @@ function fakeServer() {
       }
       if (method === 'POST' && path === '/plaza/messages') {
         const content = String(body.content == null ? '' : body.content).trim();
-        if (!content || [...content].length > 40) return res(400, { error: 'BAD_CONTENT', message: '한 줄은 1~40자로 적어 주세요' });
+        if (!content || [...content].length > 300) return res(400, { error: 'BAD_CONTENT', message: '한 줄은 1~300자로 적어 주세요' });
         const mine = srv.plaza.filter((x) => x.publicId === user.publicId), t = srv.now();
         if (mine.filter((x) => t - Date.parse(x.createdAt) < 3000).length >= 3) return res(429, { error: 'TOO_FAST', message: '조금 뒤에 보내 주세요' });
         const last = mine[mine.length - 1];

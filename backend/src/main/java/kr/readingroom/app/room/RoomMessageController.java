@@ -5,6 +5,7 @@ import kr.readingroom.app.common.UserIdFilter;
 import kr.readingroom.app.room.dto.ReadResponse;
 import kr.readingroom.app.room.dto.RoomMessageRequest;
 import kr.readingroom.app.room.dto.RoomMessageResponse;
+import kr.readingroom.app.room.dto.RoomParticipantResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +28,12 @@ public class RoomMessageController {
     @ResponseStatus(HttpStatus.CREATED)
     public RoomMessageResponse send(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long id, @RequestBody RoomMessageRequest body) {
         return messages.send(uid, id, body);
+    }
+
+    /** 모닥불 참여자 명단 (결정 #92) */
+    @GetMapping("/participants")
+    public List<RoomParticipantResponse> participants(@RequestAttribute(UserIdFilter.ATTR) long uid, @PathVariable long id) {
+        return messages.participants(uid, id);
     }
 
     @PostMapping("/read")

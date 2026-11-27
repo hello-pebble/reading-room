@@ -43,7 +43,19 @@ function roomFromServer(r) {
 }
 
 async function loadRooms() {
-  S.news = (await API.get('/rooms')).map(roomFromServer);
+  const old = new Map((S.news || []).map((x) => [x.id, x]));
+  S.news = (await API.get('/rooms')).map((r) => {
+    const n = roomFromServer(r),
+      o = old.get(n.id);
+    if (o && o.parts) {
+      n.parts = o.parts; // 참여자 명단은 모닥불에 들어갈 때 따로 받는다 (결정 #92)
+      n.members = o.members;
+      n.myBook = o.myBook;
+    }
+    return n;
+  });
+  const camp = VIEW === 'shared' && S.news.find((x) => x.id === CAMP_ID);
+  if (camp && camp.parts && camp.parts.length + 1 !== camp.people) loadCampPeople(camp); // 누가 들어오거나 나갔다
   save();
   render();
   if (panelOpen) renderPanel();
@@ -165,6 +177,20 @@ async function loadBookRooms(id) {
 
 // 모닥불 머문 시간: 장면에 들어갈 때 서버에 알리고, 나올 때(나가기·시간 종료·방 닫기) 서버가 센 분을 받아 읽은 시간·달력에 반영한다.
 // 서버가 거절하면(끝난 방 등) 서버 문구를 보이고 마을로 돌아간다. 창을 그냥 닫으면 퇴장을 못 알려 그 입장은 시간으로 인정되지 않는다.
+// 모닥불 참여자 명단(결정 #92): 나를 뺀 실제 참여자를 n.parts에 두고, 모닥불 장면에 있으면 다시 그린다
+async function loadCampPeople(n) {
+  try {
+    const list = await API.get('/rooms/' + n.sid + '/participants');
+    n.parts = list.filter((p) => !p.mine);
+    n.myBook = (list.find((p) => p.mine) || {}).bookTitle || ''; // 각자 읽기 방에서 내가 고른 책
+    n.members = n.parts.map((p) => p.nickname); // 말풍선은 닉네임으로 그 사람을 찾는다 (campBubble)
+    n.people = list.length;
+    if (VIEW === 'shared' && CAMP_ID === n.id && G3) G3.setView('shared', n);
+    render(); // 내 이름표 옆 책 (render.js)
+  } catch (e) {
+    toast(e.message);
+  }
+}
 function serverStayEnter(n) {
   API.post('/rooms/' + n.sid + '/stay').catch((e) => {
     if (e.status === 401) return;

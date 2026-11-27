@@ -84,7 +84,7 @@
 
 | 테이블 | 컬럼 | 수명 |
 |---|---|---|
-| `plaza_message` | id, user_id, content(최대 40자), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 공개 가입 전에 만든다(#41) |
+| `plaza_message` | id, user_id, content(최대 300자, 결정 #93), created_at | 24시간. 공유방 7일(`room_message`)보다 짧다. 책·방과 무관한 공개 대화라 `user_id`만 둔다. 신고·차단은 공개 가입 전에 만든다(#41) |
 
 ### 이웃집 책 추천
 
@@ -206,6 +206,7 @@
 | POST | `/rooms/{id}/close` | 개설자만. `SCHEDULED`는 삭제(취소), `OPEN`은 `CLOSED`로 바꾸고 그날부터 7일 보관. **구현**: 응답 `{id, result(CANCELED/CLOSED), closedAt}`. 개설자가 아니면 403(`NOT_OWNER`), 없으면 404, 이미 끝난 방(일찍 끝냄·시간 지남)은 409(`ROOM_ALREADY_CLOSED`). 취소해도 `room_open_log`는 남는다 |
 | DELETE | `/rooms/{id}/participants/me` | 방 나가기. 내 글은 남고 익명("나간 참여자")으로 내려간다. 개설자는 나갈 수 없다(409). **구현**: 204, 개설자 `OWNER_CANNOT_LEAVE` 409, 방이 없거나 참여 중이 아니면(이미 나간 경우 포함) 404. 행은 지우지 않고 `left_at`만 기록한다 |
 | POST | `/rooms/{id}/agree` | 보관 동의 기록(`agreed_at`). 동의 전에는 글 목록을 내려주지 않는다 (403). **구현**: 응답 `{roomId, agreedAt}`. 참여 중인 사람만(아니면 403, 나간 사람 포함), 방이 없으면 404, 다시 눌러도 처음 동의한 시각을 그대로 돌려준다 |
+| GET | `/rooms/{id}/participants` | **구현(결정 #92)**: 모닥불 참여자 명단. 지금 참여 중인 사람(나 포함, 나간 사람 제외)을 들어온 순으로 `[{publicId, nickname, avatar, bookTitle, owner, mine}]`. `bookTitle`은 입장(개설) 때 고른 책 제목이고 없으면 필드가 없다. 내부 id는 없다(결정 #69). 참여 중이면 보관 동의 전에도 볼 수 있다. 방이 없거나 보관 7일이 지났으면 404, 참여 중이 아니면 403(`NOT_PARTICIPANT`) |
 | GET | `/rooms/{id}/messages?after=` | 글 목록. 삭제하지 않은 글은 모두 내려준다(쪽수 잠금은 #43으로 없어졌다). 다른 사람의 진행 퍼센트는 내려주지 않는다. **구현**: `after`는 마지막으로 본 **글 id**(숫자, 아니면 400). 있으면 그 다음 글부터 오래된 순으로 최대 100개, 없으면 가장 최근 100개를 오래된 순으로 준다. 응답 `[{id, publicId, nickname, avatar, content, page, createdAt, mine, left}]`(글쓴이는 `publicId`로만 가리키고 핸들·내부 id는 없다, 결정 #69). 나간 사람의 글은 남고 `publicId`·`avatar`가 없고 `nickname`이 `나간 참여자`, `left`가 true다(다시 들어오면 이름으로 돌아온다). 방이 없거나 보관 7일이 지났으면 404, 참여 중이 아니면 403(`NOT_PARTICIPANT`), 보관 동의 전이면 403(`AGREE_REQUIRED`). 종료된 방도 보관 7일 동안은 읽을 수 있다 |
 | POST | `/rooms/{id}/messages` | 글 보내기. body `{content, page?}` (1~300자). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`). `OPEN` 방과 내가 참여 중인 방만. **구현**: 201과 글 한 줄(위와 같은 모양). 글자 수는 코드포인트로 세고(이모지 한 글자) 공백만 있거나 없으면 400(`BAD_CONTENT`), 앞뒤 공백은 그대로 둔다. `page`는 같은 책(`SAME`) 방에서만 1~9999 정수이고, 각자 읽기 방에서 주면 400(`PAGE_NOT_ALLOWED`), 범위·형식이 틀리면 400(`BAD_PAGE`). 도배 제한(`ChatRate`)은 **방과 상관없이 사용자당**이고 광장과는 따로 센다: ① 내 글이 3초 안(`created_at > 지금-3초`)에 이미 3건이면 429 `TOO_FAST`(첫 글이 3초 밖으로 나가는 순간 한 자리가 난다) ② 내 **직전 글**과 같고(앞뒤 공백 무시) 30초 안이면 409 `DUPLICATE_MESSAGE`(직전 글이 아니라 그 앞 글과 같은 것은 된다). 동시에 보내도 사용자 잠금으로 한 줄씩 검사해 3건을 넘지 않는다. 검사 순서: 방(404) → 참여(403) → 동의(403) → 상태(`SCHEDULED`는 409 `ROOM_NOT_OPEN`, 종료는 410 `ROOM_CLOSED`) → 내용(400) → 3초 3건(429) → 같은 글(409). 막힌 요청은 저장하지 않아 횟수에도 세지 않는다 |
 | ~~DELETE~~ | ~~`/rooms/{id}/messages/{mid}`~~ | 폐지 (#53). 보낸 글은 삭제·수정하지 않는다 |
@@ -220,8 +221,8 @@
 | 메서드 | 경로 | 동작 |
 |---|---|---|
 | GET | `/plaza/messages?since=` | 최근 24시간 대화. `since`(ISO 시각, 예 `2026-11-18T03:00:00Z`)가 없으면 가장 최근 30개, 있으면 그 이후 글을 오래된 순으로 최대 30개(24시간보다 오래된 `since`는 24시간 전으로 본다). 응답 `[{id, publicId, nickname, avatar, content, createdAt}]`(글쓴이는 `publicId`로만 가리키고 핸들·내부 id는 없다, 결정 #69), 잘못된 `since`는 400. 광장 안(채팅창이 떠 있는 동안)에서 몇 초마다 다시 부르거나 SSE로 받는다 (실시간 방식은 서버 단계에서 결정) |
-| GET | `/plaza/presence` | `{online, max}`. 마을 접속 인원과 정원(하단 `접속 (06/100)` 표시용). 접속은 연결(SSE/WebSocket) 수로 세고 DB에는 저장하지 않는다. 정원은 100명(기본값, 설정값)이고 가득 차면 마을 입장 연결이 409를 받아 "마을이 가득 찼어요" 안내를 띄운다. 초대 링크 입장자나 모닥불 참여자도 예외 없이 같다(링크는 그대로 유효). 내 방 API는 정원과 무관하다 (결정 #35). 화면에는 가까운 20명까지만 그린다 |
-| POST | `/plaza/messages` | body `{content}` (1~40자, 앞뒤 공백 제거, 글자는 코드 포인트 기준). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 공유방 대화와 같은 `ChatRate`이지만 따로 센다. 같은 사람의 동시 전송은 DB 잠금으로 한 줄로 세운다), 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`. 성공하면 201과 만든 글 |
+| GET | `/plaza/presence` | **구현(결정 #91·#94)**: 마을 접속 인원. 로그인 필요. 응답은 `text/event-stream`이고 화면은 마을에 있는 동안 연결을 유지하며, 연결된 동안 마을에 있는 것으로 센다(DB에 저장하지 않는다). 연결한 순간과 누가 오갈 때마다 모두에게 `event: presence`, `data: [{publicId, nickname, avatar}]`(나 포함, 공개 번호 순, 같은 사람의 여러 연결은 한 명)를 보낸다. 25초마다 주석 `:ping`을 보내 끊긴 연결을 빼고, 연결은 30분 뒤 끝나므로 화면이 다시 연결한다. 마을 입장 정원 409(결정 #35)는 아직 없다 |
+| POST | `/plaza/messages` | body `{content}` (1~300자, 공유방 대화와 같다(결정 #93), 앞뒤 공백 제거, 글자는 코드 포인트 기준). 사용자당 3초에 3건·같은 글 30초 연속 금지(#61, 공유방 대화와 같은 `ChatRate`이지만 따로 센다. 같은 사람의 동시 전송은 DB 잠금으로 한 줄로 세운다), 넘으면 429 `TOO_FAST`, 같은 글은 409 `DUPLICATE_MESSAGE`. 성공하면 201과 만든 글 |
 
 ### 이웃집 책 추천 API
 
@@ -272,6 +273,6 @@ sync();
 - **가져오기 마감 D-1 알림 / 자동 가져오기 옵션**(SPEC "마감 알림"): 아직 없다.
 - **하드 삭제(매일 새벽)**: 구현했다(`RoomPurgeService`·`RoomPurgeBatch`, 매일 04:00 한국 시간, 결정 #66). 글(`room_message`)·참여자·알림(`room_alarm`)은 `ON DELETE CASCADE`로 함께 지워지고, `room_open_log`·`book_room_archive`·`camp_stay`는 방 외래키가 없어 남는다.
 - **모닥불 머문 시간**: 구현했다(`CampStayService`, `V14__camp_stay.sql`, `GET /me/reading-time`, 결정 #65). 남은 것: 퇴장을 못 부른 열린 입장 행은 다음 입장 때 지워질 뿐 따로 청소하지 않는다(사용자당 하나라 쌓이지 않는다). 진행 중인 스탠드와 겹치는 열린 입장은 퇴장 뒤 합산에서 정리된다.
-- **광장 접속 인원 `GET /plaza/presence`**: 연결(SSE/WebSocket) 수로 세는데 연결 방식·경로가 문서에 정해져 있지 않아 만들지 않았다. 정원 100명이 차면 마을 입장 연결이 409를 받는 규칙까지 포함해 연결 방식을 먼저 정해야 한다.
+- **광장 접속 인원 `GET /plaza/presence`**: SSE로 광장 안 접속자 명단까지 만들었다(결정 #91). 남은 것: 마을 전체 정원 100명이 차면 409로 막는 규칙(결정 #35), 서버를 여러 대로 늘릴 때 명단 공유.
 - **정하지 않은 것**: `app_user`를 지울 때 글을 지울지 익명으로 남길지(지금은 `ON DELETE CASCADE`로 함께 지워진다). 재입장하면 보관 동의를 다시 받으므로 화면은 재입장 때 동의 고지를 다시 띄워야 한다. 나간 동안의 글은 재입장 후에도 보인다. 가져온 기록을 지우는 API(가져오기 취소)는 없다.
 - **테스트 요령**: `ApiTestBase`가 `TestClock`(기준 `2026-11-17T03:00:00Z`)과 `truncate app_user ... cascade`를 쓰므로 `app_user`에서 외래키로 이어진 새 테이블은 자동으로 비워진다. 방은 `RoomOpenTest`·`RoomJoinTest`·`RoomChatTest`·`RoomImportTest`의 `open(...)`·`roomWith(...)`처럼 API로 열면 규칙이 그대로 지켜진다. 글은 도배 제한(3초 3건) 때문에 `clock.advance`로 시각을 옮겨 가며 보낸다.

@@ -167,14 +167,12 @@ test('마을: 문으로 나가면 미니맵·접속 표시가 오른쪽 위·아
   expect(errors).toEqual([]);
 });
 
-test('마을: 광장 안에서만 채팅창이 뜨고 글이 화면에 보이며 화면을 넘지 않는다', async ({ page }) => {
+test('마을: 마을 어디서나 채팅창이 뜨고 글이 화면에 보이며 화면을 넘지 않는다', async ({ page }) => {
   const errors = await open(page);
   await page.evaluate("openF('door')");
   await page.waitForFunction("VIEW==='village'", null, { timeout: 20000 });
   const chat = page.locator('#plazaChat');
-  await page.evaluate("Object.assign(sim,{x:2,z:5});syncPlazaChat()");
-  await expect(chat).toBeHidden();
-  await page.evaluate("Object.assign(sim,{x:PLAZA.cx,z:PLAZA.cz});syncPlazaChat()");   // 광장 크기가 바뀌어도 맞도록 중심 좌표를 읽는다
+  await page.evaluate("Object.assign(sim,{x:2,z:5});syncPlazaChat()");   // 광장 밖이어도 마을 안이면 보인다 (결정 #94)
   await expect(chat).toBeVisible();
   const vp = page.viewportSize(), box = await chat.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(-1);

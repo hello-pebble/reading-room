@@ -395,20 +395,18 @@ test('저장 실패: 저장소가 막히면 한 번만 알린다', async () => {
   fin(a);
 });
 
-test('광장 대화: 광장 안에서만 채팅창이 뜨고, 40자로 자르고, 밖에서는 보내지 않고, 글자는 그대로 보인다(HTML 주입 방지)', async () => {
+test('마을 대화: 마을 어디서나 채팅창이 뜨고 보낼 수 있으며(결정 #94), 300자로 자르고(결정 #93), 마을을 떠나면 숨고, 글자는 그대로 보인다(HTML 주입 방지)', async () => {
   const a = load();
   a.ev('enterVillage()'); await sleep(350);
   assert.equal(a.ev('VIEW'), 'village');
   const wrap = a.doc.getElementById('stageWrap');
-  // 광장 밖: 채팅창이 없다
+  // 광장 밖이어도 마을 안이면 채팅창이 뜬다 (결정 #94)
   a.ev(`Object.assign(sim,{x:2,z:5});syncPlazaChat()`);
-  assert.ok(!wrap.classList.contains('pz'), '광장 밖에서는 채팅창이 숨어야 해요');
-  // 광장 안: 채팅창이 뜬다
-  a.ev(`Object.assign(sim,{x:PLAZA.cx,z:PLAZA.cz});syncPlazaChat()`);   // 광장 한가운데 (광장 위치가 바뀌어도 맞도록 좌표를 직접 쓰지 않는다)
-  assert.ok(a.ev('inPlaza(PLAZA.cx,PLAZA.cz)'));
-  assert.ok(wrap.classList.contains('pz'), '광장 안에서는 채팅창이 떠야 해요');
-  a.doc.getElementById('pz').value = '가'.repeat(60); a.ev('plazaSend()');
-  assert.equal(a.state().plaza.at(-1).text.length, 40);
+  assert.ok(!a.ev('inPlaza(2,5)'));
+  assert.ok(wrap.classList.contains('pz'), '마을 어디서나 채팅창이 떠야 해요');
+  a.doc.getElementById('pz').value = '가'.repeat(310); a.ev('plazaSend()');
+  assert.equal(a.state().plaza.at(-1).text.length, 300);
+  assert.equal(a.doc.getElementById('pz').maxLength, 300);
   a.doc.getElementById('pz').value = '<img src=x onerror=alert(1)>'; a.ev('plazaSend()');
   assert.equal(a.doc.querySelector('#pzLog img'), null, '태그가 요소로 만들어지면 안 돼요');
   assert.match(a.doc.getElementById('pzLog').textContent, /<img src=x/);
@@ -416,11 +414,12 @@ test('광장 대화: 광장 안에서만 채팅창이 뜨고, 40자로 자르고
   const n = a.state().plaza.length;
   a.doc.getElementById('pz').value = '   '; a.ev('plazaSend()');
   assert.equal(a.state().plaza.length, n);
-  // 광장 밖
-  a.ev(`Object.assign(sim,{x:2,z:5})`);
+  // 광장 밖에서도 보낸다
   a.doc.getElementById('pz').value = '밖에서'; a.ev('plazaSend()');
-  assert.equal(a.state().plaza.length, n, '광장 밖에서는 보내지면 안 돼요');
-  assert.match(a.doc.getElementById('pzE').textContent, /걸어가는 중/);
+  assert.equal(a.state().plaza.at(-1).text, '밖에서', '광장 밖에서도 보낼 수 있어요');
+  // 마을을 떠나면 숨는다
+  a.ev("VIEW = 'room'; syncPlazaChat()");
+  assert.ok(!wrap.classList.contains('pz'), '마을 밖에서는 채팅창이 숨어야 해요');
   fin(a);
 });
 
@@ -1188,11 +1187,47 @@ test('서버 광장: 들어가면 서버의 최근 글을 불러오고 내 글�
   assert.match(pzLog(a).querySelector('.msg.me').textContent, /반가워요/);
   assert.ok(calls(srv, 'GET', /^\/plaza\/messages$/).length >= 1, '광장에 들어서면 받아 와요(로그인 때 이웃집 주인을 뽑으며 한 번 더 부른다)');
   assert.ok(!a.state().plaza.some((m) => /^@/.test(m.who)), '가짜 이웃의 말은 서버 연결 모드에 없어요');
-  assert.doesNotMatch(a.doc.getElementById('pzHead').textContent, /\d\d\/100/, '서버에 접속 인원 API가 아직 없어요');
+  assert.match(a.doc.getElementById('pzHead').textContent, /접속 \(01\/100\)/, '광장 접속 인원은 서버가 센다 (결정 #91)');
   fin(a);
 });
 
-test('서버 광장: 광장에 있는 동안 새 글만 받아 보고, 밖으로 나가면 확인을 멈춘다', async () => {
+test('창문: 테스트 도구(다른 날씨 보기)는 체험판에만 있고 서버 연결 모드에는 없다', async () => {
+  const proto = load();
+  proto.ev("openF('window')");
+  assert.ok(proto.doc.querySelector('[data-act="sceneNext"]'), '체험판에는 있다');
+  fin(proto);
+  const { a } = await plazaApp();
+  a.ev("openF('window')");
+  await settle();
+  assert.equal(a.doc.querySelector('[data-act="sceneNext"]'), null, '실서버에서는 안 보인다');
+  assert.doesNotMatch(a.doc.getElementById('panel').textContent, /테스트 도구/);
+  fin(a);
+});
+
+test('서버 광장 접속 인원:들어서면 연결해 인원을 보이고, 다른 사람이 오가면 바뀌며, 떠나면 연결을 끊는다 (결정 #91)', async () => {
+  const { srv, a } = await plazaApp();
+  const head = () => a.doc.getElementById('pzHead').textContent;
+  await enterPlaza(a);
+  assert.equal(srv.presence.length, 1, '광장에 들어서면 접속으로 센다');
+  assert.match(head(), /접속 \(01\/100\)/);
+  const bye = srv.joinPlaza('bob');
+  await sleep(30);
+  assert.match(head(), /접속 \(02\/100\)/);
+  assert.equal(a.ev('PZ.people.map((p) => p.nickname).join()'), '밥','나는 빼고 다른 사람만 광장에 세운다');
+  bye();
+  await sleep(30);
+  assert.match(head(), /접속 \(01\/100\)/);
+  a.ev('Object.assign(sim, { x: 2, z: 5 }); syncPlazaChat()');
+  await settle();
+  assert.equal(srv.presence.length, 1, '광장 밖이어도 마을 안이면 접속으로 센다 (결정 #94)');
+  a.ev("VIEW = 'room'; syncPlazaChat()");
+  await settle();
+  assert.equal(srv.presence.length, 0, '마을을 떠나면 연결을 끊는다');
+  assert.equal(a.ev('PZ.people'), null);
+  fin(a);
+});
+
+test('서버 광장: 마을에 있는 동안 새 글만 받아 보고, 마을을 떠나면 확인을 멈춘다', async () => {
   const { srv, a } = await plazaApp((s) => s.seedPlaza('bob', '첫 글', 2000));
   await enterPlaza(a);
   srv.seedPlaza('bob', '새로 온 글');
@@ -1200,11 +1235,11 @@ test('서버 광장: 광장에 있는 동안 새 글만 받아 보고, 밖으로
   assert.match(pzLog(a).textContent, /새로 온 글/);
   assert.equal([...pzLog(a).querySelectorAll('.msg')].filter((m) => /첫 글/.test(m.textContent)).length, 1, '같은 글이 두 번 보이면 안 돼요');
   assert.ok(calls(srv, 'GET', /\?since=/).length >= 1, '그 뒤로는 since로 새 글만 물어요');
-  a.ev('Object.assign(sim, { x: 2, z: 5 }); syncPlazaChat()');
+  a.ev("VIEW = 'room'; syncPlazaChat()");
   await settle();
   const n = srv.calls.length;
   await sleep(120);
-  assert.equal(srv.calls.length, n, '광장 밖에서는 서버에 묻지 않아요');
+  assert.equal(srv.calls.length, n, '마을 밖에서는 서버에 묻지 않아요');
   fin(a);
 });
 
@@ -1223,8 +1258,9 @@ test('서버 광장: 글을 보내면 서버가 만든 글이 보이고 칸이 �
   assert.equal(a.doc.getElementById('pz').value, '안녕', '거절되면 쓰던 글이 남아요');
   assert.equal(pzLog(a).querySelectorAll('.msg.me').length, 1);
   a.ev('Object.assign(sim, { x: 2, z: 5 })');
-  say(a, '밖에서');
-  assert.equal(calls(srv, 'POST', /plaza/).length, 2, '광장 밖에서는 보내지 않아요');
+  say(a, '광장 밖에서');
+  await settle();
+  assert.equal(calls(srv, 'POST', /plaza/).length, 3, '광장 밖이어도 마을 안이면 보낸다 (결정 #94)');
   fin(a);
 });
 
@@ -1451,7 +1487,7 @@ test('서버 공유방 대화: 열려 있는 동안 새 글만 받아 보고, �
   await settle();
   const n = srv.calls.length;
   await sleep(120);
-  assert.equal(srv.calls.filter((c, i) => i >= n && /\/messages/.test(c.path)).length, 0, '창이 없으면 서버에 묻지 않아요');
+  assert.equal(srv.calls.filter((c, i) => i >= n && /^\/rooms\/\d+\/messages/.test(c.path)).length, 0, '창이 없으면 서버에 묻지 않아요 (마을 대화 /plaza/messages는 따로 센다)');
   fin(a);
 });
 
@@ -1593,6 +1629,26 @@ test('서버 가져오기: 내 책에 없으면 나중에 읽을 책으로 담�
   assert.equal(a.state().later.length, 1);
   assert.equal(a.state().later[0].title, '모모');
   assert.equal(a.state().finished.length, 0, '나중에 읽을 책은 완독으로 세지 않아요');
+  fin(a);
+});
+
+test('서버 모닥불 참여자: 들어가면 실제 참여자 명단을 받아 나와 나간 사람을 빼고, 각자 읽기 방은 그 사람의 실제 책을 붙인다 (결정 #92)', async () => {
+  const { srv, a } = await chatApp((s) => {
+    const r = chatRoom(s, { kind: 'OWN' });
+    r.parts[0].bookTitle = '싯다르타';
+  });
+  await openChat(a, newsOf(a)[0]);
+  assert.equal(calls(srv, 'GET', /\/participants$/).length, 1);
+  assert.equal(a.ev('S.news[0].parts.map((p) => p.nickname).join()'), '밥', '체험판 이웃이 아니라 실제 참여자 (나와 나간 사람은 빠진다)');
+  assert.equal(a.ev("rcBookTag(S.news[0], '밥')"), ' 『싯다르타』');
+  assert.equal(a.ev("rcBookTag(S.news[0], '모르는')"), '', '서버 연결 모드는 지어낸 책을 붙이지 않는다');
+  assert.equal(a.ev("rcBookTag(S.news[0], '나')"), '', '책을 고르지 않았으면 내 이름표에 방 이름을 책처럼 붙이지 않는다');
+  const before = a.ev('S.news[0].messages.length');
+  a.ev('rcFakeMsg(S.news[0])');
+  assert.equal(a.ev('S.news[0].messages.length'), before, '실제 참여자 이름으로 체험판 대사를 지어내지 않는다');
+  a.ev('loadRooms()');
+  await settle();
+  assert.equal(a.ev('S.news[0].parts.length'), 1, '방 목록을 새로 받아도 참여자 명단은 남는다');
   fin(a);
 });
 

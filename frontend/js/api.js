@@ -68,9 +68,44 @@ const base = ls.get(KEY_BASE) || (window.RR_API === 'same-origin' && /^https?:/.
     return data;
   }
 
+  // 서버가 보내는 이벤트(SSE)를 계속 받는다. EventSource는 Authorization 헤더를 못 실어서 fetch 스트림으로 읽는다.
+  // onEvent(이름, JSON 값)를 부르고, 서버가 연결을 끝내면 돌아온다. signal로 끊으면 AbortError를 던진다.
+  async function stream(path, onEvent, signal) {
+    const headers = { Accept: 'text/event-stream' };
+    const token = ls.get(KEY_TOKEN);
+    if (token) headers.Authorization = 'Bearer ' + token;
+    const res = await fetch(base + path, { headers, signal });
+    if (res.status === 401 && token) {
+      ls.set(KEY_TOKEN, null);
+      if (api.onUnauthorized) api.onUnauthorized();
+    }
+    if (!res.ok || !res.body) throw new ApiError(res.status, 'ERROR', '연결하지 못했어요');
+    const reader = res.body.getReader(),
+      dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buf += dec.decode(value, { stream: true }).replace(/\r/g, '');
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        let name = 'message',
+          data = '';
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) name = line.slice(6).trim();
+          else if (line.startsWith('data:')) data += line.slice(5).trim();
+        }
+        if (data) onEvent(name, JSON.parse(data));
+      }
+    }
+  }
+
   const api = {
     ApiError,
     request,
+    stream,
     onUnauthorized: null,
     get enabled() {
       return !!base;

@@ -9,7 +9,7 @@ import kr.readingroom.app.village.PlazaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/** 마을 광장 채팅: 40자, 3초 3건·같은 글 제한, 24시간 보관 (기준 시각 2026-11-17T03:00:00Z) */
+/** 마을 광장 채팅: 300자(결정 #93), 3초 3건·같은 글 제한, 24시간 보관 (기준 시각 2026-11-17T03:00:00Z) */
 class PlazaTest extends ApiTestBase {
     @Autowired PlazaService plaza;
 
@@ -68,8 +68,8 @@ class PlazaTest extends ApiTestBase {
         mvc.perform(POST(a, "/plaza/messages", Map.of("content", ""))).andExpect(status().isBadRequest());
         mvc.perform(POST(a, "/plaza/messages", Map.of("content", "   "))).andExpect(status().isBadRequest());
         mvc.perform(POST(a, "/plaza/messages", Map.of("other", "x"))).andExpect(status().isBadRequest());
-        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "가".repeat(41)))).andExpect(status().isBadRequest());
-        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "가".repeat(40)))).andExpect(status().isCreated());
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "가".repeat(301)))).andExpect(status().isBadRequest());
+        mvc.perform(POST(a, "/plaza/messages", Map.of("content", "가".repeat(300)))).andExpect(status().isCreated());
     }
 
     @Test

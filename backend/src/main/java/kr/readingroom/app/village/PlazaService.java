@@ -17,10 +17,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 마을 광장 대화: 한 줄 40자, 사용자당 3초에 3건·같은 글 30초 연속 금지(결정 #61, `ChatRate`), 글은 24시간만 보관한다 (결정 #34). */
+/** 마을 광장 대화: 한 번에 300자(공유방 대화와 같다, 결정 #93), 사용자당 3초에 3건·같은 글 30초 연속 금지(결정 #61, `ChatRate`), 글은 24시간만 보관한다 (결정 #34). */
 @Service
 public class PlazaService {
-    static final int MAX_CHARS = 40, PAGE = 30;
+    static final int MAX_CHARS = 300, PAGE = 30;
     static final Duration KEEP = Duration.ofHours(24);
     private final PlazaRepository plaza;
     private final Clock clock;

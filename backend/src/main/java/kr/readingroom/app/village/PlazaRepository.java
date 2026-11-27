@@ -16,6 +16,11 @@ public class PlazaRepository {
         this.dsl = dsl;
     }
 
+    /** 광장 접속 명단에 보일 그 사람의 공개 번호·닉네임·캐릭터 */
+    public Record member(long userId) {
+        return dsl.fetchOne("select public_id::text as public_id, nickname, avatar::text as avatar from app_user where id = ?", userId);
+    }
+
     /** 같은 사람이 동시에 두 번 보내도 도배 제한(3초 3건·같은 글)이 새지 않게, 이 트랜잭션 동안 그 사람의 전송을 한 줄로 세운다. */
     public void lockSender(long userId) {
         dsl.fetch("select pg_advisory_xact_lock(?)", 7_000_000_000L + userId);

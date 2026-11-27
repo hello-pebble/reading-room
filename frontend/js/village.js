@@ -294,20 +294,19 @@ function plazaSay(who, text, i, mine) {
 let pzShown = false;
 const pzBox = document.getElementById('plazaChat');
 const pzHeadText = () => {
-  const count = API.enabled // 서버 연결 모드는 접속 인원 API가 생기면 채운다
-    ? ''
-    : ' · 접속 (' + String(NPCS.length + 1).padStart(2, '0') + '/' + VMAX + ')';
+  const n = API.enabled ? (PZ.people ? PZ.people.length + 1 : null) : NPCS.length + 1; // 서버 연결 모드는 광장 접속 인원(나 포함, 결정 #91)
+  const count = n == null ? '' : ' · 접속 (' + String(n).padStart(2, '0') + '/' + VMAX + ')';
   document.getElementById('pzHead').textContent =
     '💬 광장 이야기' + count + ' ' + (pzBox.classList.contains('min') ? '▴' : '▾');
 };
 function syncPlazaChat() {
-  const on = VIEW === 'village' && inPlaza(sim.x, sim.z);
+  const on = VIEW === 'village'; // 마을 어디에 있든 대화창이 보인다 (광장 구역으로 제한하지 않는다, 결정 #94)
   if (on === pzShown) return;
   pzShown = on;
   document.getElementById('stageWrap').classList.toggle('pz', on);
   if (API.enabled) {
     if (on)
-      plazaStart(); // 서버의 글을 받기 시작 / 광장을 나서면 멈춘다 (plaza.js)
+      plazaStart(); // 서버의 글을 받기 시작 / 마을을 나서면 멈춘다 (plaza.js)
     else plazaStop();
   }
   if (on) {
@@ -321,15 +320,12 @@ function syncPlazaChat() {
 function plazaSend() {
   const inp = document.getElementById('pz'),
     e = document.getElementById('pzE'),
-    t = inp.value.trim().slice(0, 40);
+    t = inp.value.trim().slice(0, MAXMSG); // 공유방 대화와 같은 300자 (결정 #93)
   if (!t) {
     inp.value = '';
     return;
   }
-  if (!inPlaza(sim.x, sim.z)) {
-    e.textContent = '광장 안으로 걸어가는 중이에요. 도착하면 보낼 수 있어요';
-    return;
-  }
+  if (VIEW !== 'village') return; // 마을 어디서나 보낼 수 있다 (결정 #94)
   if (API.enabled) {
     serverPlazaSend(t); // 글자 수·도배 규칙은 서버가 정한다 (plaza.js)
     return;

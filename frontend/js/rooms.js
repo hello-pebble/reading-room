@@ -98,8 +98,8 @@ async function serverCreateRoom(nf, err) {
   }
 }
 
-// 초대 코드(또는 #join= 링크)로 들어가기. 들어오면 그 방의 안내 창을 연다
-async function serverJoin(raw) {
+// 초대 코드(또는 #join= 링크)로 들어가기. 들어오면 그 방의 안내 창(보관 동의)을 연다. onErr가 있으면 거절 문구를 거기로 보낸다(입력창 아래)
+async function serverJoin(raw, onErr) {
   if (ROOM_BUSY.join) return;
   let code = String(raw || '').trim();
   const m = /join=([A-Za-z0-9]+)/i.exec(code);
@@ -114,7 +114,8 @@ async function serverJoin(raw) {
       setTimeout(() => openV('room:' + id), 900);
     } else openV('room:' + id);
   } catch (e) {
-    toast(e.message);
+    if (onErr) onErr(e.message);
+    else toast(e.message);
   } finally {
     ROOM_BUSY.join = false;
   }

@@ -264,7 +264,7 @@ function boardPanel() {
       ? sec('열린 방', 'OPEN') + sec('곧 열릴 방', 'SOON') + sec('지난 방', 'CLOSED')
       : '<p class="muted">지금 열린 공유방이 없어요.</p>') +
     '<button class="primary" data-act="newRoom" style="width:100%;margin-top:10px">모닥불 피우기</button>' +
-    '<label for="jl">초대 링크로 들어가기</label><div class="row"><input id="jl" placeholder="초대 링크나 코드"><button data-act="joinLink">들어가기</button></div>' +
+    joinCodeHtml() +
     '<p class="muted" style="margin-top:10px">공유방 기록은 종료 후 7일 동안만 보관돼요. 모닥불이 작아지다 꺼지면 사라져요.</p>'
   );
 }

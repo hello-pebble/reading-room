@@ -142,6 +142,82 @@ async function copyLink(n) {
     }
   }
 }
+// ===== 초대 코드로 입장 (결정 #95): 코드 입력 → 입장 전 확인(방 이름·책·진행 시간·인원) → [이 방에 입장] → 보관 동의 → 모닥불 =====
+// panelView.join: { code, err, preview } (게시판 창 안에서만 쓴다)
+const joinCodeOf = (raw) => {
+  let c = String(raw || '').trim();
+  const m = /join=([A-Za-z0-9]+)/i.exec(c); // 초대 링크를 붙여 넣어도 된다
+  if (m) c = m[1];
+  return c.replace(/[\s-]/g, '').toUpperCase();
+};
+function joinCodeHtml() {
+  const j = panelView.join;
+  if (!j) return '<button data-act="joinOpen" style="width:100%;margin-top:8px">초대 코드로 입장</button>';
+  const p = j.preview;
+  return (
+    '<label for="jl">초대 코드로 입장</label>' +
+    `<div class="row"><input id="jl" value="${esc(j.code || '')}" placeholder="8자리 초대 코드를 입력해 주세요" aria-label="초대 코드" autocomplete="off" autocapitalize="characters" enterkeyhint="go"><button data-act="joinCheck" style="white-space:nowrap">확인</button></div>` +
+    `<div class="muted" id="jlE" role="alert" style="color:var(--danger);min-height:1.2em">${esc(j.err || '')}</div>` +
+    (p
+      ? `<div class="card" id="joinPreview"><b>${esc(p.title)}</b>` +
+        `<p class="muted" style="margin:6px 0 0">책: ${esc(p.book)}</p>` +
+        `<p class="muted" style="margin:2px 0 0">진행 시간: ${esc(p.period)}${p.soon ? ' (아직 열리지 않았어요)' : ''}</p>` +
+        `<p class="muted" style="margin:2px 0 0">참여 인원: ${p.people}/${p.max}명</p>` +
+        `<button class="primary" data-act="joinConfirm" style="width:100%;margin-top:10px">이 방에 입장</button></div>`
+      : '')
+  );
+}
+async function joinCheck() {
+  const j = panelView.join || (panelView.join = {});
+  const inp = document.getElementById('jl');
+  j.code = joinCodeOf(inp ? inp.value : j.code);
+  j.preview = null;
+  j.err = '';
+  if (!/^[A-Z0-9]{8}$/.test(j.code)) j.err = '8자리 초대 코드를 입력해 주세요';
+  else if (API.enabled) {
+    try {
+      const r = await API.get('/rooms/invite/' + encodeURIComponent(j.code)); // 로그인 없이도 열리는 미리보기
+      if (r.status === 'CLOSED') j.err = '이미 끝난 모닥불이에요';
+      else
+        j.preview = {
+          title: r.title,
+          book: r.kind === 'OWN' ? '각자 읽는 책' : r.bookTitle || '같은 책',
+          period: timeRange(Date.parse(r.openAt), Date.parse(r.closeAt)),
+          soon: r.status === 'SCHEDULED',
+          people: r.participants,
+          max: r.maxParticipants,
+        };
+    } catch (e) {
+      j.err = e.status === 404 ? '초대 코드를 찾을 수 없어요. 코드를 다시 확인해 주세요' : e.message;
+    }
+  } else {
+    const n = findByCode(j.code);
+    if (!n) j.err = '초대 코드를 찾을 수 없어요. 체험판에서는 같은 브라우저에서 만든 모닥불만 열려요';
+    else if (n.kind === 'CLOSED') j.err = '이미 끝난 모닥불이에요';
+    else
+      j.preview = { title: n.title, book: n.rtype === 'OWN' ? '각자 읽는 책' : n.book, period: n.period || '', soon: n.kind === 'SOON', people: n.people, max: n.max };
+  }
+  renderPanel();
+  if (!j.preview && document.getElementById('jl')) document.getElementById('jl').focus();
+}
+// 정원이 찼거나 그새 끝났으면 서버가 거절하고, 그 이유를 입력창 아래에 보인다
+function joinConfirm() {
+  const j = panelView.join;
+  if (!j || !j.preview) return;
+  const fail = (msg) => {
+    j.preview = null;
+    j.err = msg;
+    renderPanel();
+  };
+  if (API.enabled) serverJoin(j.code, fail); // 들어오면 보관 동의 창으로 간다 (rooms.js)
+  else if (!joinByCode(j.code)) fail('초대 코드를 찾을 수 없어요');
+}
+function copyCode(n) {
+  const ok = () => toast('초대 코드를 복사했어요');
+  const manual = () => toast('초대 코드 ' + n.inviteCode + ' 를 직접 적어 알려 주세요');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(n.inviteCode).then(ok, manual);
+  else manual();
+}
 function findByCode(c) {
   c = String(c || '').trim();
   const m = /join=([A-Za-z0-9]+)/i.exec(c);

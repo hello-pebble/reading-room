@@ -225,6 +225,8 @@ const defaultRoomName = (nf) => {
   const b = nfBook(nf);
   return nf.kind === 'SAME' ? (b ? '『' + b.title + '』 같이 읽기' : '같이 읽기') : S.user.nickname + '의 모닥불';
 };
+// 마을 모닥불 이름표 앞 표시: 내가 연 모닥불이면 방장 왕관 (결정 #103). 불 색은 상태(열림·예정)를 뜻하므로 바꾸지 않는다
+const fireMine = (n) => (n && n.mine ? CROWN.replace('aria-label="방장"', 'aria-label="내가 연 모닥불"').replace('<title>방장</title>', '<title>내가 연 모닥불</title>') : '');
 const inviteLink = (n) => location.href.split('#')[0] + '#join=' + n.inviteCode;
 const genCode = () => {
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

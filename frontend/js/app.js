@@ -58,7 +58,7 @@ function fireDue() {
       save();
       notify(
         '아직 읽고 있어요?',
-        (S.reading ? '『' + S.reading.title + '』을 ' : '') + '읽은 지 60분이 지났어요. 계속 읽고 있나요?',
+        (S.reading ? '『' + S.reading.title + '』' + eulReul(S.reading.title) + ' ' : '') + '읽은 지 60분이 지났어요. 계속 읽고 있나요?',
         'check',
       );
     }

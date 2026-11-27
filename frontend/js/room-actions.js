@@ -127,7 +127,7 @@ function roomAction(act, b) {
     save();
     render();
     renderPanel();
-    toast('소파에 『' + t + '』을 올렸어요');
+    toast('소파에 『' + t + '』' + eulReul(t) + ' 올렸어요');
     return true;
   }
   if (act === 'laterToSofa') {
@@ -154,7 +154,7 @@ function roomAction(act, b) {
     save();
     closePanel();
     render();
-    toast('소파에 『' + lb.title + '』을 올렸어요. 공유방 기록이 따라왔어요');
+    toast('소파에 『' + lb.title + '』' + eulReul(lb.title) + ' 올렸어요. 공유방 기록이 따라왔어요');
     return true;
   }
   if (act === 'type') {
@@ -250,7 +250,7 @@ function roomAction(act, b) {
     closePanel();
     render();
     if (G3) G3.flash('shelf');
-    toast('『' + r.title + '』을 책장에 꽂았어요');
+    toast('『' + r.title + '』' + eulReul(r.title) + ' 책장에 꽂았어요');
     return true;
   }
   if (act === 'doDrop') {

@@ -20,6 +20,19 @@ test('부팅: 오류 없이 열리고 기본 상태가 있다', () => {
   fin(a);
 });
 
+test('책 제목 뒤 을/를: 마지막 글자의 받침을 따른다', () => {
+  const a = load();
+  const t = (s) => a.ev(`eulReul(${JSON.stringify(s)})`);
+  assert.equal(t('채식주의자'), '를');
+  assert.equal(t('소년이 온다'), '를');
+  assert.equal(t('데미안'), '을');
+  assert.equal(t('어린 왕자 (개정판)'), '을');
+  assert.equal(t('1984'), '를');
+  assert.equal(t('2023'), '을');
+  assert.equal(t('Dune'), '을(를)');
+  fin(a);
+});
+
 test('이웃집 추천: 읽는 중·완독만 선택하고, 집마다 한 권을 저장하며 확인 후 다시 꽂는다', () => {
   const a = load();
   a.ev(`S.reading={id:99,title:'읽는 중인 책',author:'저자',notes:[],page:10};

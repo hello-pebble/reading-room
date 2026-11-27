@@ -32,6 +32,14 @@ function wallRect(x1, x2, z1, z2, fill, y = 0.02) {
 }
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// 책 제목 뒤 목적격 조사: 끝 괄호·문장부호를 건너뛴 마지막 글자의 받침으로 고른다. 숫자는 읽는 소리로, 그 밖(영문 등)은 '을(를)'
+function eulReul(title) {
+  const c = String(title).replace(/[\s\p{P}\p{S}]+$/u, '').slice(-1);
+  const code = c.charCodeAt(0) - 0xac00;
+  if (code >= 0 && code < 11172) return code % 28 ? '을' : '를';
+  if (/\d/.test(c)) return '013678'.includes(c) ? '을' : '를';
+  return '을(를)';
+}
 const today = () => ymd(); // 메모·인용구 날짜와 읽기 시작일도 연도를 포함한 한국 시간 날짜로 저장한다 (결정 #41, 열린 결정 Q ①)
 // 화면에는 올해는 '11.05', 다른 해는 '2025.11.05'로 보여준다
 const shortDate = (s) => {

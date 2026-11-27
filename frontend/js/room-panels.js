@@ -33,7 +33,7 @@ function sofaPanel() {
   if (panelView.mode === 'drop') {
     return (
       head('포기할까요?') +
-      `<p>『${esc(r.title)}』을 소파에서 내려요. 남긴 메모 ${r.notes.length}개는 책장의 ‘포기한 책’에 그대로 보관돼요.</p>
+      `<p>『${esc(r.title)}』${eulReul(r.title)} 소파에서 내려요. 남긴 메모 ${r.notes.length}개는 책장의 ‘포기한 책’에 그대로 보관돼요.</p>
   <div class="row"><button class="grow" data-act="cancelFinish">계속 읽기</button><button class="grow" data-act="doDrop" style="color:var(--danger)">포기</button></div>`
     );
   }

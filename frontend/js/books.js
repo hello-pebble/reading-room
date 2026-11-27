@@ -65,7 +65,7 @@ async function serverAddBook(title, author, totalPages) {
     save();
     render();
     renderPanel();
-    toast('소파에 『' + title + '』을 올렸어요');
+    toast('소파에 『' + title + '』' + eulReul(title) + ' 올렸어요');
   } catch (e) {
     toast(e.message);
   } finally {
@@ -155,7 +155,7 @@ async function serverEndBook(kind, rating, review) {
     render();
     if (kind === 'finish') {
       if (G3) G3.flash('shelf');
-      toast('『' + r.title + '』을 책장에 꽂았어요');
+      toast('『' + r.title + '』' + eulReul(r.title) + ' 책장에 꽂았어요');
     } else toast('소파를 비웠어요');
   } catch (e) {
     toast(e.message);

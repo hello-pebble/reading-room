@@ -1243,7 +1243,7 @@ function createScene() {
       vhull(st, -1.6, -1.6, 0, 3.2, 3.2, 1.9, 'plaza');
       vcollect('plaza', st);
     }
-    NPCS.forEach((p, i) => {
+    if (!API.enabled) NPCS.forEach((p, i) => { // 체험판의 가짜 이웃. 서버 연결 모드에서는 그리지 않는다 (결정 #89)
       const gm = build(p.av);
       gm.root.userData.nodim = true;
       villageG.add(gm.root);
@@ -1839,7 +1839,7 @@ function createScene() {
           b.el.remove();
           return false;
         }
-        place(b.el, p.x, p.y + 3.3, p.z);
+        place(b.el, p.x, p.y + (b.i < 0 ? 2.5 : 2.65), p.z, b.i < 0 ? -22 : -25); // 공유방과 같이 이름표 기준점에서 화면 픽셀로 띄운다 (나 2.5, 이웃 이름표 2.65)
         return true;
       });
     } else if (view === 'shared') {

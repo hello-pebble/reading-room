@@ -26,7 +26,7 @@ function rcAct(act, b) {
       rooms: [],
     });
     save();
-    toast('『' + roomBook(n) + '』을 "나중에 읽을 책"에 담았어요');
+    toast('『' + roomBook(n) + '』' + eulReul(roomBook(n)) + ' "나중에 읽을 책"에 담았어요');
     renderPanel();
     return true;
   }
@@ -167,7 +167,7 @@ function rcAct(act, b) {
         };
         save();
         render();
-        toast('소파에 『' + roomBook(n) + '』을 올렸어요 (0쪽)');
+        toast('소파에 『' + roomBook(n) + '』' + eulReul(roomBook(n)) + ' 올렸어요 (0쪽)');
       } else toast('이미 소파에 있어요');
     }
     if (v === 'page') {

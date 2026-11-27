@@ -147,9 +147,9 @@ function sharedRoomAction(act, b) {
         const t = bk ? bk.title : '책';
         toast(
           res.bookCreated
-            ? '『' + t + '』을 "나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요'
+            ? '『' + t + '』' + eulReul(t) + ' "나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요'
             : res.bookStatus === 'READING'
-              ? '『' + t + '』을 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요'
+              ? '『' + t + '』' + eulReul(t) + ' 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요'
               : '『' + t + '』에 공유방 탭이 생겼어요',
         );
         if (bk) loadBookRooms(bk.id).catch(() => {});
@@ -171,7 +171,7 @@ function sharedRoomAction(act, b) {
     if (!bk && S.reading && S.reading.title === n.book) {
       bk = S.reading;
       if (!bk.rooms) bk.rooms = [];
-      msg = '『' + n.book + '』을 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요';
+      msg = '『' + n.book + '』' + eulReul(n.book) + ' 읽는 중이라, 다 읽으면 책장에 공유방 탭이 생겨요';
     }
     if (!bk) {
       bk = S.later.find((x) => x.title === n.book);
@@ -187,7 +187,7 @@ function sharedRoomAction(act, b) {
           rooms: [],
         };
         S.later.push(bk);
-        msg = '『' + n.book + '』을 "나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요';
+        msg = '『' + n.book + '』' + eulReul(n.book) + ' "나중에 읽을 책"에 담고 공유방 기록을 같이 넣었어요';
       }
     }
     if (!bk.rooms) bk.rooms = [];

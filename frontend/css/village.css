@@ -101,8 +101,9 @@
   font-size: 11px;
   margin-left: 6px;
 }
-#pzLog .msg.me {
-  text-align: right;
+/* 게임 채팅처럼 모두 왼쪽에서 시작한다. 오른쪽 정렬은 글 길이마다 시작점이 달라 들쭉날쭉했다. 내 글은 이름 색으로 구분 */
+#pzLog .msg.me b {
+  color: var(--accent);
 }
 #pzForm {
   display: flex;

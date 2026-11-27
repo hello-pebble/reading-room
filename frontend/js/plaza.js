@@ -14,14 +14,15 @@ const plazaFromServer = (m) => ({
   mine: !!S.user && m.publicId === S.user.publicId,
 });
 // 새로 온 글만 덧붙이고(번호로 거른다) 보이는 대화창을 맨 아래로 맞춘다
-function plazaMerge(list) {
+function plazaMerge(list, bubble = !!PZ.last) { // 광장에 들어서며 처음 받는 지난 글은 말풍선으로 다시 띄우지 않는다
   const fresh = list.map(plazaFromServer).filter((m) => !S.plaza.some((x) => x.id === m.id));
   for (const m of list) if (!PZ.last || m.createdAt > PZ.last) PZ.last = m.createdAt;
   if (!fresh.length) return;
   S.plaza = S.plaza.concat(fresh).slice(-60);
-  fresh.forEach((m) => {
-    if (m.mine && G3) G3.say(-1, m.text); // 내 말풍선만. 다른 사람은 광장에 그려지지 않는다
-  });
+  if (bubble)
+    fresh.forEach((m) => {
+      if (m.mine && G3) G3.say(-1, m.text); // 내 말풍선만. 다른 사람은 광장에 그려지지 않는다
+    });
   const lg = document.getElementById('pzLog');
   if (pzShown && lg) {
     const atEnd = lg.scrollHeight - lg.scrollTop - lg.clientHeight < 40 || fresh.some((m) => m.mine);
@@ -75,7 +76,7 @@ async function serverPlazaSend(text) {
   const inp = document.getElementById('pz'),
     err = document.getElementById('pzE');
   try {
-    plazaMerge([await API.post('/plaza/messages', { content: text })]);
+    plazaMerge([await API.post('/plaza/messages', { content: text })], true);
     err.textContent = '';
     inp.value = '';
     inp.focus();

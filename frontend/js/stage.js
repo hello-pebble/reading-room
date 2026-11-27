@@ -86,8 +86,9 @@ setLayout(MQ.matches ? 'tall' : 'wide');
 const clampX = (x) => Math.max(L.minX || 1.1, Math.min(L.X - 0.4, x)),
   clampZ = (z) => Math.max(L.minZ || 0.8, Math.min(L.Y - 0.4, z));
 
-// ===== 마을 키보드 이동 (결정 #99): 방향키·WASD를 누르는 동안 화면 방향으로 걷는다 =====
-// 화면은 (1, 0.82, 1) 쪽에서 비스듬히 내려다보므로 화면 위 = 마을 (-x,-z), 화면 오른쪽 = (+x,-z)
+// ===== 키보드 이동 (마을 결정 #99, 내 방 결정 #102): 방향키·WASD를 누르는 동안 화면 방향으로 걷는다 =====
+// 두 장면 모두 (1, 0.82, 1) 쪽에서 비스듬히 내려다보므로 화면 위 = (-x,-z), 화면 오른쪽 = (+x,-z). 이웃집·모닥불은 고정 구도라 걷지 않는다
+const keyWalkView = () => VIEW === 'village' || VIEW === 'room';
 const MOVE_KEYS = { ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
 const heldKeys = new Set();
 // 글을 쓰는 중인가. 마을에 늘 떠 있는 채팅 입력칸(#94)은 비어 있으면 방향키만 걷기에 쓴다(보낸 뒤 커서가 남아 있어도 걷게, 결정 #100)
@@ -97,9 +98,10 @@ const typingIn = (t, code) =>
   !(t.id === 'pz' && !t.value && code.startsWith('Arrow'));
 document.addEventListener('keydown', (e) => {
   const k = MOVE_KEYS[e.code];
-  if (!k || VIEW !== 'village' || panelOpen || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target, e.code)) return;
+  if (!k || !keyWalkView() || panelOpen || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target, e.code)) return;
   if (e.code.startsWith('Arrow')) e.preventDefault(); // 방향키로 화면이 스크롤되지 않게 (WASD·Tab·Enter는 그대로)
   heldKeys.add(k);
+  if (isSit()) standUp(); // 소파에 앉아 있으면 일어나서 걷는다 (클릭 이동과 같다)
   if (sim.mode === 'walk') {
     sim.mode = 'idle'; // 클릭으로 가던 길과 도착 동작(집·게시판 열기)을 취소한다
     sim.after = null;
@@ -117,7 +119,7 @@ document.addEventListener('visibilitychange', () => {
 });
 function keyMove(dt) {
   if (!heldKeys.size) return 0;
-  if (VIEW !== 'village' || panelOpen || isSit()) {
+  if (!keyWalkView() || panelOpen || isSit()) {
     heldKeys.clear(); // 창이 열리거나 화면이 바뀌면 멈추고, 다시 누를 때까지 걷지 않는다
     return 0;
   }
@@ -127,7 +129,7 @@ function keyMove(dt) {
     dz = uy - ux;
   const len = Math.hypot(dx, dz);
   if (!len) return 0;
-  const v = 4.6 * dt; // 클릭 이동과 같은 마을 걷기 속도. 대각선도 같은 속도
+  const v = (VIEW === 'village' ? 4.6 : 3.4) * dt; // 클릭 이동과 같은 걷기 속도(마을·방). 대각선도 같은 속도
   dx /= len;
   dz /= len;
   sim.x = clampX(sim.x + dx * v);
@@ -135,16 +137,18 @@ function keyMove(dt) {
   sim.rot += angDiff(sim.rot, Math.atan2(dx, dz)) * Math.min(1, dt * 12);
   return 1;
 }
+// 소파에서 일어나 소파 앞에 선다 (클릭 이동·키보드 이동이 같이 쓴다)
+function standUp() {
+  sim.x = STAND[0];
+  sim.z = STAND[1];
+  sim.y = 0;
+  sim.mode = 'idle';
+  sim.sit = 0;
+  render();
+}
 function walkTo(tx, tz, done) {
   if (G3) G3.follow(); // 걸어가라고 하면 지도 끌기를 풀고 다시 캐릭터를 따라간다
-  if (isSit()) {
-    sim.x = STAND[0];
-    sim.z = STAND[1];
-    sim.y = 0;
-    sim.mode = 'idle';
-    sim.sit = 0;
-    render();
-  }
+  if (isSit()) standUp();
   sim.tx = tx;
   sim.tz = tz;
   sim.after = done || null;

@@ -60,6 +60,7 @@ function render() {
       vil: vilList(),
     });
   document.getElementById('stageWrap').classList.toggle('neighbor', visiting);
+  document.getElementById('stageWrap').classList.toggle('room-view', VIEW === 'room'); // 내 방 표시 (키보드 안내 위치, 결정 #102)
   document.getElementById('giftMark').style.display = VIEW === 'room' && gift ? 'block' : 'none';
   // 화면 위 표시
   const nt = document.getElementById('nameTag');

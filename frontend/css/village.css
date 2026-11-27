@@ -40,6 +40,13 @@
   display: block;
 }
 /* 키보드 이동 안내 (결정 #99): 마우스·키보드가 있는 기기의 마을 화면에서만 미니맵 아래에 작게 */
+/* 마을 모닥불 이름표의 내 모닥불 왕관 (결정 #103) */
+.vlab .crown {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  margin-right: 3px;
+}
 #keyHint {
   display: none;
   position: absolute;

@@ -326,6 +326,14 @@ test('키보드 이동(내 방): 방향키·WASD로 걷고 방 바닥 밖으로 
   fin(a);
 });
 
+test('내가 연 모닥불 표시: 마을 모닥불 이름표 앞에 왕관, 남의 모닥불에는 없다 (결정 #103)', () => {
+  const a = load();
+  assert.match(a.ev('fireMine({ mine: true })'), /class="crown"/);
+  assert.match(a.ev('fireMine({ mine: true })'), /내가 연 모닥불/);
+  assert.equal(a.ev('fireMine({ mine: false })'), '');
+  fin(a);
+});
+
 test('마을 구역: 모닥불 자리 8개는 모두 모닥불 구역 안이고 광장 밖이다', () => {
   const a = load();
   const { VSLOTS, PLAZA, ZONE } = JSON.parse(a.ev('JSON.stringify({VSLOTS,PLAZA,ZONE})'));

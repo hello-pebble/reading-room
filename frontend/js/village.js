@@ -66,6 +66,7 @@ const vilList = () =>
     short: shortTitle(n),
     done: !!n.done,
     alarm: !!n.alarm,
+    mine: !!n.mine, // 내가 연 모닥불 왕관 (결정 #103)
     left: roomLeft(n),
     opens: n.opensAt ? mmdd(n.opensAt) : '',
   }));

@@ -83,6 +83,21 @@ test('키보드 이동: 마을에서 방향키·WASD가 화면 방향대로 걷�
   expect(errors).toEqual([]);
 });
 
+test('내가 연 모닥불: 마을의 내 모닥불 이름표에만 왕관이 붙는다 (결정 #103)', async ({ page }, info) => {
+  const errors = await open(page);
+  await page.evaluate('enterVillage()');
+  await page.waitForFunction("VIEW==='village'");
+  await page.evaluate("openV('fire:new'); panelView.nf.kind='OWN'; panelView.nf.name='나의 모닥불'; createRoom(); closePanel(); render()");
+  await page.waitForTimeout(800);
+  const labels = await page.evaluate(() => [...document.querySelectorAll('.vlab')].map((e) => ({ t: e.textContent, crown: !!e.querySelector('svg.crown') })));
+  const mine = labels.find((l) => l.t.includes('나의 모닥불'));
+  expect(mine, '내 모닥불 이름표').toBeTruthy();
+  expect(mine.crown, '내 모닥불에 왕관').toBe(true);
+  expect(labels.filter((l) => l.crown).length, '왕관은 내 모닥불에만').toBe(1);
+  await info.attach('내 모닥불 왕관', { body: await page.screenshot(), contentType: 'image/png' });
+  expect(errors).toEqual([]);
+});
+
 test('마을로 버튼: 이웃집·모닥불에서 바로 보이고(대비 4.5:1·44px 이상) Tab+Enter로 마을에 돌아온다 (결정 #98)', async ({ page }) => {
   const errors = await open(page);
   await page.evaluate('enterVillage()');

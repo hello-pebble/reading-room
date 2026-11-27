@@ -1490,7 +1490,7 @@ function createScene() {
             ? ' · ' + (n.opens || '곧') + (n.alarm ? ' 🔔' : '')
             : ' · ' + (n.done ? '✓ ' : '') + 'D-' + n.left;
       addLabel(
-        `<i class="dot ${n.kind.toLowerCase()}"></i>${esc(n.short)}${st}${n.unread ? ' <span class="vstar">✦</span>' : ''}`,
+        `<i class="dot ${n.kind.toLowerCase()}"></i>${fireMine(n)}${esc(n.short)}${st}${n.unread ? ' <span class="vstar">✦</span>' : ''}`,
         x,
         1.75,
         z,

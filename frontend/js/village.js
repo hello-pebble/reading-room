@@ -294,9 +294,8 @@ function plazaSay(who, text, i, mine) {
 let pzShown = false;
 const pzBox = document.getElementById('plazaChat');
 const pzHeadText = () => {
-  const count = API.enabled // 서버 연결 모드는 접속 인원 API가 생기면 채운다
-    ? ''
-    : ' · 접속 (' + String(NPCS.length + 1).padStart(2, '0') + '/' + VMAX + ')';
+  const n = API.enabled ? (PZ.people ? PZ.people.length + 1 : null) : NPCS.length + 1; // 서버 연결 모드는 광장 접속 인원(나 포함, 결정 #91)
+  const count = n == null ? '' : ' · 접속 (' + String(n).padStart(2, '0') + '/' + VMAX + ')';
   document.getElementById('pzHead').textContent =
     '💬 광장 이야기' + count + ' ' + (pzBox.classList.contains('min') ? '▴' : '▾');
 };

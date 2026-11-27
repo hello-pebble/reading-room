@@ -33,6 +33,7 @@ function load({ state, touch, api, local, dev } = {}) {
       if (api) w.fetch = (url, init) => api.fetch(url, init);
       w.matchMedia = q => ({ matches: /hover: hover/.test(q) && !touch, media: q, addEventListener() {}, removeEventListener() {} });
       w.ResizeObserver = class { observe() {} disconnect() {} };
+      if (!w.TextDecoder) w.TextDecoder = TextDecoder; // 접속 인원 스트림(SSE)을 읽을 때 쓴다
       w.HTMLCanvasElement.prototype.getContext = () => noopCtx();
     },
   });
@@ -99,6 +100,24 @@ function fakeServer() {
       const u = users[label], msg = { id: ++seq, uid: u.id, content, page: o.page == null ? null : o.page, at: Date.now() + srv.skew - (o.agoMs || 0) };
       (room.msgs = room.msgs || []).push(msg);
       return msg;
+    },
+    // 광장 접속 인원 (GET /plaza/presence, SSE): 연결마다 {user, send}. 누가 오가면 모두에게 명단을 보낸다
+    presence: [],
+    presenceList() {
+      const seen = new Map();
+      for (const c of srv.presence) if (!seen.has(c.user.publicId)) seen.set(c.user.publicId, { publicId: c.user.publicId, nickname: c.user.nickname, avatar: {} });
+      return [...seen.values()];
+    },
+    presenceBroadcast() {
+      const list = srv.presenceList();
+      for (const c of srv.presence) c.send('event:presence\ndata:' + JSON.stringify(list) + '\n\n');
+    },
+    // 다른 사람이 광장에 들어온 것처럼 연결을 하나 만든다. 돌려준 함수를 부르면 나간다
+    joinPlaza(label) {
+      const c = { user: users[label], send() {} };
+      srv.presence.push(c);
+      srv.presenceBroadcast();
+      return () => { srv.presence = srv.presence.filter((x) => x !== c); srv.presenceBroadcast(); };
     },
     plaza: [], // 광장 글 (오래된 것부터)
     // 그 계정이 쓴 광장 글을 미리 만들어 둔다. agoMs: 몇 ms 전에 썼는지
@@ -380,6 +399,15 @@ function fakeServer() {
         return res(204);
       }
       // 마을 광장 대화 (모든 계정이 한 줄을 나눠 쓴다. 40자·같은 글 연속 금지·3초 3건만 흉내 낸다)
+      if (method === 'GET' && path === '/plaza/presence') {
+        const q = [], wait = [], enc = new TextEncoder();
+        const c = { user, send(t) { const v = enc.encode(t); wait.length ? wait.shift().ok({ value: v, done: false }) : q.push(v); } };
+        const end = () => { srv.presence = srv.presence.filter((x) => x !== c); srv.presenceBroadcast(); while (wait.length) wait.shift().no(Object.assign(new Error('aborted'), { name: 'AbortError' })); };
+        if (init.signal) init.signal.addEventListener('abort', end);
+        srv.presence.push(c);
+        srv.presenceBroadcast();
+        return { ok: true, status: 200, body: { getReader: () => ({ read: () => (q.length ? Promise.resolve({ value: q.shift(), done: false }) : new Promise((ok, no) => wait.push({ ok, no }))) }) } };
+      }
       if (method === 'GET' && (m = path.match(/^\/plaza\/messages(?:\?since=(.+))?$/))) {
         const since = m[1] ? Date.parse(decodeURIComponent(m[1])) : null;
         const out = since == null ? srv.plaza.slice(-30) : srv.plaza.filter((x) => Date.parse(x.createdAt) >= since).slice(0, 30);

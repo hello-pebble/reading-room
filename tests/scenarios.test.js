@@ -1188,7 +1188,40 @@ test('서버 광장: 들어가면 서버의 최근 글을 불러오고 내 글�
   assert.match(pzLog(a).querySelector('.msg.me').textContent, /반가워요/);
   assert.ok(calls(srv, 'GET', /^\/plaza\/messages$/).length >= 1, '광장에 들어서면 받아 와요(로그인 때 이웃집 주인을 뽑으며 한 번 더 부른다)');
   assert.ok(!a.state().plaza.some((m) => /^@/.test(m.who)), '가짜 이웃의 말은 서버 연결 모드에 없어요');
-  assert.doesNotMatch(a.doc.getElementById('pzHead').textContent, /\d\d\/100/, '서버에 접속 인원 API가 아직 없어요');
+  assert.match(a.doc.getElementById('pzHead').textContent, /접속 \(01\/100\)/, '광장 접속 인원은 서버가 센다 (결정 #91)');
+  fin(a);
+});
+
+test('창문: 테스트 도구(다른 날씨 보기)는 체험판에만 있고 서버 연결 모드에는 없다', async () => {
+  const proto = load();
+  proto.ev("openF('window')");
+  assert.ok(proto.doc.querySelector('[data-act="sceneNext"]'), '체험판에는 있다');
+  fin(proto);
+  const { a } = await plazaApp();
+  a.ev("openF('window')");
+  await settle();
+  assert.equal(a.doc.querySelector('[data-act="sceneNext"]'), null, '실서버에서는 안 보인다');
+  assert.doesNotMatch(a.doc.getElementById('panel').textContent, /테스트 도구/);
+  fin(a);
+});
+
+test('서버 광장 접속 인원:들어서면 연결해 인원을 보이고, 다른 사람이 오가면 바뀌며, 떠나면 연결을 끊는다 (결정 #91)', async () => {
+  const { srv, a } = await plazaApp();
+  const head = () => a.doc.getElementById('pzHead').textContent;
+  await enterPlaza(a);
+  assert.equal(srv.presence.length, 1, '광장에 들어서면 접속으로 센다');
+  assert.match(head(), /접속 \(01\/100\)/);
+  const bye = srv.joinPlaza('bob');
+  await sleep(30);
+  assert.match(head(), /접속 \(02\/100\)/);
+  assert.equal(a.ev('PZ.people.map((p) => p.nickname).join()'), '밥','나는 빼고 다른 사람만 광장에 세운다');
+  bye();
+  await sleep(30);
+  assert.match(head(), /접속 \(01\/100\)/);
+  a.ev('Object.assign(sim, { x: 2, z: 5 }); syncPlazaChat()');
+  await settle();
+  assert.equal(srv.presence.length, 0, '광장을 떠나면 연결을 끊는다');
+  assert.equal(a.ev('PZ.people'), null);
   fin(a);
 });
 

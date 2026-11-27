@@ -1099,6 +1099,37 @@ function createScene() {
     wrap.appendChild(e);
     vilBub.push({ el: e, i, until: performance.now() + ms });
   }
+  // 서버 연결 모드의 광장 접속자(결정 #91): 분수 둘레 두 바퀴(24자리)에 세운다. 자리는 공개 번호로 정해 누가 오가도 남은 사람은 제자리다.
+  // 말풍선 번호(say의 i)는 이 목록의 순서다. ponytail: 25명째부터는 그리지 않고 인원 수에만 센다. 더 많아지면 바퀴를 늘린다.
+  const PEOPLE_SPOTS = [
+    ...Array.from({ length: 10 }, (_, k) => [3.6, (k / 10) * Math.PI * 2 + 0.3]),
+    ...Array.from({ length: 14 }, (_, k) => [4.6, (k / 14) * Math.PI * 2]),
+  ].map(([r, a]) => [PLAZA.cx + r * Math.cos(a), PLAZA.cz + r * Math.sin(a)]);
+  const AV_DEFAULT = { color: '#f3efe6', expr: 'happy', face: 'none', head: 'none', prop: 'none' };
+  function setPeople(list) {
+    if (view !== 'village' || !villageG) return;
+    vilNpcs.forEach((n) => {
+      villageG.remove(n.M.root);
+      if (n.lab) n.lab.remove();
+    });
+    vilLabels = vilLabels.filter((l) => !vilNpcs.some((n) => n.lab === l.el));
+    vilBub = vilBub.filter((b) => (b.i < 0 ? true : (b.el.remove(), false)));
+    vilNpcs = [];
+    const taken = new Set();
+    list.slice(0, PEOPLE_SPOTS.length).forEach((p, i) => {
+      let h = 0;
+      for (const ch of String(p.publicId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      let s = h % PEOPLE_SPOTS.length;
+      while (taken.has(s)) s = (s + 1) % PEOPLE_SPOTS.length;
+      taken.add(s);
+      const [x, z] = PEOPLE_SPOTS[s],
+        gm = build({ ...AV_DEFAULT, ...(p.avatar || {}) });
+      gm.root.userData.nodim = true;
+      villageG.add(gm.root);
+      addLabel('@' + esc(p.nickname), x, 2.65, z);
+      vilNpcs.push({ M: gm, x, z, rot: Math.atan2(PLAZA.cx - x, PLAZA.cz - z), ph: i * 2.3, lab: vilLabels[vilLabels.length - 1].el });
+    });
+  }
   const addLabel = (html, x, y, z, fire) => {
     const e = document.createElement('div');
     e.className = 'ov vlab';
@@ -1876,6 +1907,7 @@ function createScene() {
     fit,
     setView,
     say,
+    setPeople,
     panStart,
     panMove,
     panEnd,

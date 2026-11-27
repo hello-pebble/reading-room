@@ -39,15 +39,9 @@ npm run verify     # 문법 검사 + 시나리오 테스트. 통과해야 커밋
 
 ## 지금 상태와 다음 작업
 
-- **배포:** 서버 jar가 화면까지 낸다(결정 #86, `docs/DEPLOY.md`). 운영은 오라클 VM 컨테이너 + Caddy + Supabase 서울, 주소 `https://readingroom.duckdns.org`(결정 #89). 새 버전은 `main` 머지 뒤 VM에서 다시 빌드해 교체한다(자동 배포 없음). 화면은 `frontend/config.js`(프로토타입, 서버 없음)와 jar의 `static/config.js`(같은 주소 서버 연결)로 갈린다.
-
-- **끝난 것:** 내 방 API(책·메모·스탠드·직접 기록·완독/포기·거울·달력/월 목표·푸시 구독), 책 검색(국립중앙도서관, 키 발급·실제 응답 확인 완료, 결정 #82, 제목 검색은 카카오 우선 결정 #83), 마을 게시판 읽기 `GET /rooms`, 광장 채팅 `GET·POST /plaza/messages`(24시간 삭제 배치), 공유방 개설·입장·대화·읽음(`room`), 이웃집 책 추천(`neighbor`, 결정 #62). 화면은 주소 끝 `?api=http://localhost:8080`으로 켜는 서버 연결 모드에서 **게스트 시작(가입 없음, 결정 #84)·닉네임·내 정보와 책·메모·완독/포기·스탠드 타이머·달력/월 목표·광장 대화·마을 게시판과 공유방 개설/입장/나가기/대화/알림/가져오기/머문 시간·이웃집 책 추천까지** 연결했고(`api.js`·`account.js`·`books.js`·`sessions.js`·`calendar.js`·`plaza.js`·`rooms.js`·`rooms-chat.js`·`neighbor-server.js`, 서버 `POST /dev/login`, 결정 #71~#73·#75~#81), 나머지 기능은 아직 `localStorage`로 동작한다(책 검색은 서버 연결 모드에서 서버 검색을 자동으로 쓰고, 서버 없이는 `?searchApi=`).
-- **공유방 백엔드(`room` 패키지)는 단계별로 만든다.** 1단계(끝남): 개설·초대 미리보기·닫기(`V9__room.sql`, `room_open_log`, 결정 #59). 2단계(끝남): 입장 `POST /rooms/join`·나가기·보관 동의. 3단계(끝남): 대화 `GET·POST /rooms/{id}/messages`(300자, 3초 3건·같은 글 30초 연속 금지(#61), 삭제·수정 없음)·읽음 `POST /rooms/{id}/read`·게시판 `unread`(`V10__room_message.sql`, 결정 #60).
-- 공유방 4단계(끝남): 알림 `PUT·DELETE /rooms/{id}/alarm`, 가져오기 `POST /rooms/{id}/import`·`GET /books/{id}/rooms`(`V12__room_alarm_archive.sql`, 결정 #63).
-- 공유방 5단계(끝남): 개방·종료 배치 `RoomOpenService`·`RoomOpenBatch`(`open_notified_at` 선점, 30분 기준, `V13__room_open_notify.sql`, 결정 #64). 대상 선정까지이고 푸시는 로그만 남긴다. 설계: `docs/superpowers/specs/2026-11-19-room-open-batch-design.md`.
-- 공유방 6단계(끝남): 모닥불 머문 시간 `CampStayService`(`POST /rooms/{id}/stay`·`stay/leave`)·합산 `GET /me/reading-time`·달력 반영(`camp_stay`, `V14__camp_stay.sql`, 결정 #65). 설계: `docs/superpowers/specs/2026-11-19-camp-stay-design.md`.
-- 인증(끝남): 구글 로그인 `AuthService`·`GoogleIdTokenVerifier`·`UserIdFilter`(Bearer 토큰, 개발용 `X-User-Id`는 dev 프로파일만)·`V16__auth_session.sql`·`GOOGLE_CLIENT_ID`. 설계: `docs/superpowers/specs/2026-11-19-google-login-design.md`.
-- **다음 작업(순서 정함, ①·④는 끝남): ② `PushSender` 메시지 모양을 공유방 개방용으로 일반화하고 개방 배치와 잇기 ③ VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만).** 광장 접속 인원 `GET /plaza/presence`(SSE, 광장 안 명단)는 앞당겨 끝냈다(결정 #91, 마을 정원 409는 아직). (앞 번호는 원래 순서다.) 7일 지난 방 삭제 배치는 끝났고(결정 #66), 가져오기 마감 알림·이웃 접속 상태는 만들지 않기로 했다. 닉네임 규칙(한글·영문·숫자 1~5자, `PUT /me/nickname`, 결정 #67)은 구현했고, 구글 로그인(`POST /auth/google`, Bearer 세션 토큰, `auth_session`, 결정 #68)도 구현했다. 핸들은 없고 사용자는 공개 번호(무작위 UUID, `app_user.public_id`)로 가리킨다(결정 #69). 가입 제한(초대 코드)은 정하지 않았다. 설계와 정하지 않은 점은 `docs/DATA_API.md` 끝의 "공유방 남은 일 메모"에 있다. 규칙은 `docs/SPEC.md`의 "공유방 개설"과 결정 #32·#33·#38·#41·#43·#53·#54·#56·#59·#60·#64·#65 를 따른다.
+- **배포:** 서버 jar가 화면까지 낸다(결정 #86). 운영은 오라클 VM 컨테이너 + Caddy + Supabase 서울, 주소 `https://readingroom.duckdns.org`(결정 #90, `docs/DEPLOY.md`). 자동 배포는 없고 `main` 머지 뒤 VM에서 `rr-deploy`로 다시 빌드해 교체한다. 버전 이름은 git 태그(GitHub 릴리스)에서 온다. 화면 설정은 `frontend/config.js`(프로토타입, 서버 없음)와 jar의 `static/config.js`(같은 주소 서버 연결)로 갈린다.
+- **끝난 것:** 내 방, 책 검색(카카오 우선·국립중앙도서관 쪽수), 마을(광장 대화 300자·접속 인원 SSE), 공유방(개설·공개 범위·초대 코드 입장·대화·알림·가져오기·머문 시간·참여자 명단), 이웃집 책 추천, 게스트 시작·기기 이전 코드, 구글 로그인(서버만). 화면은 서버 연결 모드에서 이 기능을 쓴다(`api.js`·`account.js`·`books.js`·`sessions.js`·`calendar.js`·`plaza.js`·`rooms.js`·`rooms-chat.js`·`neighbor-server.js`). 거울 꾸미기·웹 푸시 구독은 서버 API만 있고 화면은 아직 `localStorage`다. 기능별 진행은 `README.md`, 규칙과 이력은 `docs/DECISIONS.md`, 끝난 설계서는 `docs/archive/`에 있다.
+- **다음 작업(순서):** ① `PushSender` 메시지를 공유방 개방용으로 일반화하고 개방 배치(`RoomOpenBatch`)와 잇기 ② VAPID 실발송(웹 푸시 라이브러리 추가, 키는 환경변수만) ③ 마을 정원 100명을 넘으면 409(결정 #35). 정하지 않은 것: 가입 제한(초대 코드), 광장 신고·차단·금칙어(결정 #41 ④, 공개 가입 전).
 - 한 번에 한 기능씩 만들고, 기능마다 통합 테스트를 추가한다.
 
 ## 작업 방식

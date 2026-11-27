@@ -1605,23 +1605,56 @@ test('서버 모닥불 피우기: ISBN이 없는 책으로는 같은 책 방을 
   fin(a);
 });
 
-test('남의 모닥불: 참여하지 않아도 게시판에 보이고, 누르면 초대 코드가 필요하다고 안내하며 [초대 코드로 입장]으로 이어진다. 창문 소식에는 없다 (결정 #97)', async () => {
-  const { a } = await roomApp((s) => s.seedRoom('bob', { title: '밥의 모닥불', code: 'BOBS2345' }));
+test('남의 초대 모닥불: 게시판에 보이고, 카드의 [초대 코드로 입장]은 걸어가지 않고 그 방의 코드 입력 창을 바로 연다. 창문 소식에는 없다 (결정 #97·#101)', async () => {
+  const { srv, a } = await roomApp((s) => s.seedRoom('bob', { title: '밥의 모닥불', code: 'BOBS2345' }));
   await toVillage(a);
   const n = newsOf(a)[0];
-  assert.equal(n.title, '밥의 모닥불');
   assert.equal(n.locked, true);
-  a.ev(`openV('board')`);
+  a.ev(`openV('board'); Object.assign(sim, { x: 3, z: 3, mode: 'idle', after: null })`);
   assert.match(text(a, 'panel'), /밥의 모닥불/);
   assert.match(text(a, 'panel'), /초대 코드 필요/);
-  a.ev(`openV('room:${n.id}')`);
-  assert.match(text(a, 'panel'), /초대 코드가 필요해요/);
+  a.click(`#panel [data-act=joinWithCode][data-id="${n.id}"]`);
+  assert.equal(a.ev('panelOpen'), 'room:' + n.id, '그 방의 창이 열린다');
+  assert.equal(a.ev('sim.mode'), 'idle', '게시판·광장으로 걸어가지 않는다');
+  assert.match(text(a, 'panel'), /초대 코드를 적어 주세요/);
   assert.equal(a.doc.querySelector('#panel [data-act=rcAgree]'), null, '동의하고 들어가기는 없다');
-  a.click('#panel [data-act=joinWithCode]');
-  assert.equal(a.ev('panelOpen'), 'board');
-  assert.ok(a.doc.getElementById('jl'), '게시판의 초대 코드 입력칸이 열린다');
+  a.doc.getElementById('jl').value = 'bobs2345';
+  a.click('#panel [data-act=joinCheck]');
+  await settle();
+  assert.ok(a.doc.getElementById('joinPreview'), '입장 전 확인 카드');
+  a.click('#panel [data-act=joinConfirm]');
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'BOBS2345' });
+  assert.equal(newsOf(a)[0].joined, true);
   a.ev(`closePanel(); openF('window')`);
-  assert.doesNotMatch(text(a, 'panel'), /밥의 모닥불/, '창문은 내 방·참여한 방 소식만');
+  assert.match(text(a, 'panel'), /밥의 모닥불/, '참여한 뒤에는 창문 소식에 나온다');
+  fin(a);
+});
+
+test('내가 연 방 표시와 누구나 들어오는 방: 내 방 카드에 "내가 연 방", 개설 창에서 누구나(코드 없이)를 고르면 PUBLIC으로 열고, 남의 공개 방은 코드 없이 동의만으로 들어간다 (결정 #101)', async () => {
+  const { srv, a } = await roomApp((s) => {
+    s.seedRoom('bob', { title: '누구나 오세요', code: 'OPEN2345', vis: 'PUBLIC' });
+  });
+  await toVillage(a);
+  a.ev(`openV('fire:new')`);
+  a.click('#panel [data-act=rkind][data-v=OWN]');
+  a.click('#panel [data-act=rvis][data-v=public]');
+  a.click('#panel [data-act=rcreate]');
+  await settle();
+  assert.equal(calls(srv, 'POST', /^\/rooms$/).at(-1).body.visibility, 'PUBLIC');
+  a.ev(`closePanel(); openV('board')`);
+  assert.match(text(a, 'panel'), /내가 연 방/);
+  const pub = newsOf(a).find((x) => x.title === '누구나 오세요');
+  assert.equal(pub.locked, false, '남의 공개 방은 잠겨 있지 않다');
+  assert.equal(pub.vis, 'public');
+  assert.match(text(a, 'panel'), /누구나/);
+  a.ev(`openV('room:${pub.id}')`);
+  a.click('#panel [data-act=rcAgree]');
+  await settle();
+  await settle();
+  assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'OPEN2345' }, '게시판이 준 코드로 입장한다 (사람이 코드를 적지 않는다)');
+  assert.equal(calls(srv, 'POST', /\/agree$/).length, 1);
+  assert.equal(a.ev('VIEW'), 'shared', '모닥불로 간다');
   fin(a);
 });
 

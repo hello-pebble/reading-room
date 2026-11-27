@@ -16,7 +16,7 @@ public class BoardRepository {
 
     /** 마을 게시판의 방: 내가 만들었거나 참여 중(나가지 않은)인 방 + 아직 끝나지 않은 다른 사람의 방(결정 #97, 들어가려면 초대 코드). 참여 인원은 나가지 않은 사람만 센다. */
     public Result<Record> findVisible(long userId, String now) {
-        return dsl.fetch("select r.id, r.kind, r.title, r.isbn, r.open_at, r.close_at, r.closed_at, r.max_participants, r.invite_code, "
+        return dsl.fetch("select r.id, r.kind, r.title, r.isbn, r.visibility, r.open_at, r.close_at, r.closed_at, r.max_participants, r.invite_code, "
                 + "r.created_by, u.nickname as owner_nickname, "
                 + "(select count(*) from room_participant p where p.room_id = r.id and p.left_at is null) as participants, "
                 + "(me.user_id is not null and me.left_at is null) as joined, "

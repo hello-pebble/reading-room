@@ -91,7 +91,7 @@ function fakeServer() {
     seedRoom(label, o = {}) {
       const u = users[label], open = o.openAt == null ? Date.now() + srv.skew : o.openAt;
       const r = { id: ++seq, kind: o.kind || 'SAME', title: o.title || '같이 읽기', isbn: o.isbn || '9780000000001', openAt: open, closeAt: open + (o.hours || 3) * 3600000, closedAt: null,
-        max: o.max || 8, code: o.code || 'INVITE' + seq, parts: [{ uid: u.id, agreed: false, left: false }] };
+        max: o.max || 8, code: o.code || 'INVITE' + seq, vis: o.vis || 'INVITE', parts: [{ uid: u.id, agreed: false, left: false }] };
       srv.rooms.push(r);
       return r;
     },
@@ -244,7 +244,8 @@ function fakeServer() {
           deleteAt: roomStatus(r) === 'CLOSED' ? iso(closed + 7 * 86400000) : null, participants: live.length, maxParticipants: r.max, mine: r.parts[0].uid === user.id,
           joined: !!me && !me.left, agreed: !!me && !me.left && !!me.agreed,
           unread: !!me && !me.left && !!me.agreed && (r.msgs || []).some((x) => x.uid !== user.id && x.at > (me.lastRead || 0)), alarm: !!(me && !me.left && me.alarm),
-          ownerNickname: Object.values(users).find((u) => u.id === r.parts[0].uid).nickname, inviteCode: r.parts[0].uid === user.id ? r.code : null };
+          ownerNickname: Object.values(users).find((u) => u.id === r.parts[0].uid).nickname, visibility: r.vis || 'INVITE',
+          inviteCode: r.parts[0].uid === user.id || r.vis === 'PUBLIC' ? r.code : null }; // 공개 방은 코드를 누구에게나 (결정 #101)
       };
       const mineRooms = () => srv.rooms.filter((r) => { const p = r.parts.find((x) => x.uid === user.id); return p && !p.left; });
       // 모닥불 참여자 명단 (참여 중이면 동의 전에도. 들어온 순, 나간 사람 제외, 결정 #92)
@@ -372,7 +373,7 @@ function fakeServer() {
         if (srv.rooms.filter((r) => r.parts[0].uid === user.id).length >= 3) return res(409, { error: 'ROOM_LIMIT_DAILY', message: '모닥불은 하루에 3번까지 피울 수 있어요. 내일 다시 피워 주세요' });
         const bk = body.bookId && books.find((b) => b.id === body.bookId);
         const r = { id: ++seq, kind: body.kind, title: body.title || (body.kind === 'OWN' ? user.nickname + '의 모닥불' : '『' + (bk ? bk.title : '책') + '』 같이 읽기'), isbn: body.kind === 'SAME' ? body.isbn : null,
-          openAt: open, closeAt: open + (body.hours || 3) * 3600000, closedAt: null, max: body.maxParticipants, code: 'CODE' + String(seq).padStart(4, '0'), parts: [{ uid: user.id, agreed: false, left: false }] };
+          openAt: open, closeAt: open + (body.hours || 3) * 3600000, closedAt: null, max: body.maxParticipants, code: 'CODE' + String(seq).padStart(4, '0'), vis: body.visibility || 'INVITE', parts: [{ uid: user.id, agreed: false, left: false }] };
         srv.rooms.push(r);
         return res(201, roomRow(r));
       }

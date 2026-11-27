@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class RoomRepository {
     /** 마을 게시판(BoardRepository)과 같은 열이라 BoardService.view로 응답을 만든다. 마지막 두 `?`는 (나, 방 조건) 순이다. */
-    private static final String VIEW = "select r.id, r.kind, r.title, r.isbn, r.open_at, r.close_at, r.closed_at, r.max_participants, r.invite_code, "
+    private static final String VIEW = "select r.id, r.kind, r.title, r.isbn, r.visibility, r.open_at, r.close_at, r.closed_at, r.max_participants, r.invite_code, "
             + "r.created_by, u.nickname as owner_nickname, "
             + "(select count(*) from room_participant p where p.room_id = r.id and p.left_at is null) as participants, "
             + "(me.user_id is not null and me.left_at is null) as joined, "
@@ -53,12 +53,12 @@ public class RoomRepository {
     }
 
     /** 초대 코드가 겹치면 아무것도 넣지 않고 null을 돌려준다(서비스가 새 코드로 다시 시도). */
-    public Long insertRoom(long userId, String kind, String isbn, String title, int max, String code, Instant open, Instant close, String status, Instant now) {
+    public Long insertRoom(long userId, String kind, String isbn, String title, String visibility, int max, String code, Instant open, Instant close, String status, Instant now) {
         // 지금 바로 열리는 방은 개설자가 이미 알고 있으니 개방 알림 대상이 아니다: 개설 시각으로 미리 표시한다
         String notified = open.isAfter(now) ? null : now.toString();
         Record r = dsl.fetchOne("insert into shared_room(created_by, kind, isbn, title, visibility, max_participants, invite_code, open_at, close_at, status, created_at, open_notified_at) "
-                + "values (?, ?, ?, ?, 'INVITE', ?, ?, ?::timestamptz, ?::timestamptz, ?, ?::timestamptz, ?::timestamptz) "
-                + "on conflict (invite_code) do nothing returning id", userId, kind, isbn, title, max, code, open.toString(), close.toString(), status, now.toString(), notified);
+                + "values (?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::timestamptz, ?, ?::timestamptz, ?::timestamptz) "
+                + "on conflict (invite_code) do nothing returning id", userId, kind, isbn, title, visibility, max, code, open.toString(), close.toString(), status, now.toString(), notified);
         return r == null ? null : r.get("id", Long.class);
     }
 

@@ -46,8 +46,9 @@ public class RoomService {
     public RoomResponse create(long userId, CreateRoomRequest body) {
         String kind = body.kind();
         if (kind == null || !KINDS.contains(kind)) throw bad("BAD_KIND", "kind는 SAME(같은 책) 또는 OWN(각자 읽기)이어야 해요");
-        if (body.visibility() != null && !body.visibility().equals("INVITE"))
-            throw bad("BAD_VISIBILITY", "베타에서는 초대 링크로만 열 수 있어요");
+        String visibility = body.visibility() == null ? "INVITE" : body.visibility();   // 공개 방은 누구나 코드 없이 입장 (결정 #101)
+        if (!visibility.equals("INVITE") && !visibility.equals("PUBLIC"))
+            throw bad("BAD_VISIBILITY", "공개 범위는 INVITE(초대만) 또는 PUBLIC(누구나)이어야 해요");
         String isbn = body.isbn();
         if (kind.equals("SAME") && (isbn == null || isbn.isEmpty())) throw bad("ISBN_REQUIRED", "같은 책 방은 책(isbn)이 필요해요");
         if (kind.equals("OWN")) isbn = null;                          // 각자 읽기는 방에 책을 두지 않는다
@@ -84,7 +85,7 @@ public class RoomService {
         Instant close = open.plus(Duration.ofHours(hours));
         String status = open.isAfter(now) ? "SCHEDULED" : "OPEN";
         Long id = null;
-        for (int i = 0; i < 8 && id == null; i++) id = rooms.insertRoom(userId, kind, isbn, title, max, newCode(), open, close, status, now);
+        for (int i = 0; i < 8 && id == null; i++) id = rooms.insertRoom(userId, kind, isbn, title, visibility, max, newCode(), open, close, status, now);
         if (id == null) throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "CODE_BUSY", "초대 코드를 만들지 못했어요. 다시 시도해 주세요");
         rooms.insertParticipant(id, userId, bookId, now);
         rooms.insertOpenLog(userId, id, now);

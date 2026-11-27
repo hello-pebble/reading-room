@@ -55,8 +55,8 @@ function createPanel() {
       ? `<label>공개 범위</label>${seg(
           'rvis',
           [
-            ['invite', '초대 링크로만'],
-            ['public', '마을에 공개'],
+            ['invite', '초대 코드로만'],
+            ['public', '누구나 (코드 없이)'],
           ],
           nf.vis,
         )}`
@@ -150,12 +150,12 @@ const joinCodeOf = (raw) => {
   if (m) c = m[1];
   return c.replace(/[\s-]/g, '').toUpperCase();
 };
-function joinCodeHtml() {
+function joinCodeHtml(label = '초대 코드로 입장') {
   const j = panelView.join;
   if (!j) return '<button data-act="joinOpen" style="width:100%;margin-top:8px">초대 코드로 입장</button>';
   const p = j.preview;
   return (
-    '<label for="jl">초대 코드로 입장</label>' +
+    `<label for="jl">${label}</label>` +
     `<div class="row"><input id="jl" value="${esc(j.code || '')}" placeholder="8자리 초대 코드를 입력해 주세요" aria-label="초대 코드" autocomplete="off" autocapitalize="characters" enterkeyhint="go"><button data-act="joinCheck" style="white-space:nowrap">확인</button></div>` +
     `<div class="muted" id="jlE" role="alert" style="color:var(--danger);min-height:1.2em">${esc(j.err || '')}</div>` +
     (p

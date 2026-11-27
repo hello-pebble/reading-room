@@ -294,6 +294,38 @@ test('키보드 이동: 클릭으로 가던 중 키를 누르면 그 이동과 �
   fin(a);
 });
 
+test('키보드 이동(내 방): 방향키·WASD로 걷고 방 바닥 밖으로 나가지 않으며, 소파에 앉아 있으면 일어나서 걷고, 창이 열린 동안은 걷지 않는다 (결정 #102)', async () => {
+  const a = load();
+  assert.equal(a.ev('VIEW'), 'room');
+  const mid = JSON.parse(a.ev('JSON.stringify([((L.minX || 1.1) + L.X - 0.4) / 2, ((L.minZ || 0.8) + L.Y - 0.4) / 2])'));
+  a.ev(`Object.assign(sim, { x: ${mid[0]}, z: ${mid[1]}, mode: 'idle', after: null })`);
+  key(a, 'keydown', 'ArrowUp');
+  a.ev('stepSim(0.2)');
+  key(a, 'keyup', 'ArrowUp');
+  let [x, z] = pos(a);
+  assert.ok(x < mid[0] && z < mid[1], '화면 위로 = (-x,-z) 쪽 (마을과 같은 시점)');
+  assert.ok(Math.abs(Math.hypot(mid[0] - x, mid[1] - z) - 3.4 * 0.2) < 1e-6, '방 걷기 속도(클릭 이동과 같음)');
+  // 경계: 오래 눌러도 방 바닥 안
+  key(a, 'keydown', 'KeyD');
+  for (let i = 0; i < 60; i++) a.ev('stepSim(0.1)');
+  key(a, 'keyup', 'KeyD');
+  [x, z] = pos(a);
+  assert.ok(x <= a.ev('L.X - 0.4') + 1e-9 && z >= a.ev('L.minZ || 0.8') - 1e-9, '방 밖으로 나가지 않는다');
+  // 소파에 앉아 있으면 일어나서 걷는다
+  a.ev(`Object.assign(sim, { mode: 'sit', sit: 1, x: SIT[0], z: SIT[1] })`);
+  key(a, 'keydown', 'ArrowDown');
+  a.ev('stepSim(0.2)');
+  key(a, 'keyup', 'ArrowDown');
+  assert.equal(a.ev('isSit()'), false, '일어난다');
+  // 창(가구 패널)이 열린 동안은 걷지 않는다
+  a.ev(`openF('shelf'); Object.assign(sim, { x: ${mid[0]}, z: ${mid[1]}, mode: 'idle', after: null })`);
+  key(a, 'keydown', 'ArrowLeft');
+  a.ev('stepSim(0.2)');
+  key(a, 'keyup', 'ArrowLeft');
+  assert.deepEqual(pos(a), mid, '창이 열린 동안');
+  fin(a);
+});
+
 test('마을 구역: 모닥불 자리 8개는 모두 모닥불 구역 안이고 광장 밖이다', () => {
   const a = load();
   const { VSLOTS, PLAZA, ZONE } = JSON.parse(a.ev('JSON.stringify({VSLOTS,PLAZA,ZONE})'));

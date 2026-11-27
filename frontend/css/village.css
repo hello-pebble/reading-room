@@ -57,6 +57,11 @@
   .stage-wrap.vil #keyHint {
     display: block;
   }
+  /* 내 방에서도 키보드로 걷는다 (결정 #102): 미니맵이 없으니 오른쪽 위에 */
+  .stage-wrap.room-view #keyHint {
+    display: block;
+    top: 12px;
+  }
 }
 .plog {
   max-height: 46vh;

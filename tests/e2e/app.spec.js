@@ -28,6 +28,26 @@ const contrastOf = (page, sel) => page.evaluate(sel => {
 
 test('키보드 이동: 마을에서 방향키·WASD가 화면 방향대로 걷고, 화면이 스크롤되지 않으며, 채팅 입력 중에는 걷지 않는다 (결정 #99)', async ({ page }, info) => {
   const errors = await open(page);
+  // 내 방 (결정 #102): 고정 카메라라 캐릭터 이름표가 화면에서 움직인 방향을 본다
+  if (info.project.name === 'mobile') {
+    await expect(page.locator('#keyHint'), '폰에는 키보드 안내를 보이지 않는다').toBeHidden();
+  } else {
+    await expect(page.locator('#keyHint')).toBeVisible();
+    await info.attach('내 방 키보드 안내', { body: await page.screenshot(), contentType: 'image/png' });
+    const tag = () => page.evaluate(() => { const r = document.getElementById('nameTag').getBoundingClientRect(); return [r.x, r.y]; });
+    const roomWalk = async (k) => {
+      await page.evaluate("Object.assign(sim,{x:((L.minX||1.1)+L.X-0.4)/2,z:((L.minZ||0.8)+L.Y-0.4)/2,mode:'idle',after:null})");
+      await page.waitForTimeout(300);
+      const a = await tag();
+      await page.keyboard.down(k); await page.waitForTimeout(250); await page.keyboard.up(k);
+      await page.waitForTimeout(300);
+      const b = await tag();
+      return [b[0] - a[0], b[1] - a[1]];
+    };
+    const rUp = await roomWalk('ArrowUp'), rRight = await roomWalk('KeyD');
+    expect(rUp[1], '내 방: 위로 걸으면 캐릭터가 화면 위로').toBeLessThan(-10);
+    expect(rRight[0], '내 방: 오른쪽으로 걸으면 캐릭터가 화면 오른쪽으로').toBeGreaterThan(10);
+  }
   await page.evaluate('enterVillage()');
   await page.waitForFunction("VIEW==='village'");
   if (info.project.name === 'mobile') {

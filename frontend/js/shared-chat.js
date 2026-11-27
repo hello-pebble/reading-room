@@ -351,6 +351,12 @@ function roomPanel(id) {
   if (!n) return head('모닥불') + '<p class="muted">이 공유방은 사라졌어요.</p>';
   const t = shortTitle(n);
   if (panelView.readAt === undefined) panelView.readAt = n.lastRead || 0;
+  if (n.locked)
+    return (
+      head(t) +
+      roomCard(n, false, true) +
+      `<p class="muted">${esc(n.owner || '방장')}님이 피운 모닥불이에요. 들어가려면 방을 만든 사람에게 받은 초대 코드가 필요해요.</p>` // 결정 #97
+    );
   if (n.kind === 'SOON') return head(t) + roomCard(n, false, true) + rcInfoHtml(n); // RC-01 예정 방
   if (!n.agreed) {
     if (n.kind === 'CLOSED')

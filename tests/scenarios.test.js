@@ -1388,7 +1388,7 @@ test('서버 초대 코드 입장: [초대 코드로 입장] → 확인하면 �
   a.click('#panel [data-act=joinConfirm]');
   await settle();
   assert.match(err(), /정원이 가득 찼어요/);
-  assert.equal(newsOf(a).length, 0);
+  assert.equal(newsOf(a).filter((x) => x.joined).length, 0, '들어가지 못했다 (남의 방은 보이기만 한다, 결정 #97)');
   // 정상 코드 (소문자·띄어쓰기·하이픈도 된다)
   await check(' abcd-2345 ');
   const card = a.doc.getElementById('joinPreview').textContent;
@@ -1399,8 +1399,9 @@ test('서버 초대 코드 입장: [초대 코드로 입장] → 확인하면 �
   a.click('#panel [data-act=joinConfirm]');
   await settle();
   assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'ABCD2345' });
-  const n = newsOf(a)[0];
-  assert.equal(n.title, '밥의 모닥불');
+  const n = newsOf(a).find((x) => x.title === '밥의 모닥불');
+  assert.equal(n.joined, true);
+  assert.equal(n.locked, false);
   assert.equal(n.people, 2, '참여 인원이 바로 바뀐다');
   assert.equal(n.agreed, false);
   assert.equal(a.ev('panelOpen'), 'room:' + n.id, '들어오면 그 방의 보관 동의 창이 열린다');
@@ -1409,7 +1410,7 @@ test('서버 초대 코드 입장: [초대 코드로 입장] → 확인하면 �
   await settle();
   assert.equal(a.ev('VIEW'), 'shared', '동의하면 모닥불로 이동한다');
   assert.ok(calls(srv, 'GET', /\/participants$/).length >= 1, '참여자 목록을 바로 받는다');
-  assert.equal(a.ev('S.news[0].parts.map((p) => p.nickname).join()'), '밥');
+  assert.equal(a.ev(`S.news.find((x) => x.id === '${n.id}').parts.map((p) => p.nickname).join()`), '밥');
   fin(a);
 });
 
@@ -1445,7 +1446,8 @@ test('서버 보관 동의와 나가기: 동의하면 서버에 기록되고, �
   a.ev(`rcAct('rcLeave', { dataset: { id: '${id}' } })`);
   await settle();
   assert.equal(calls(srv, 'DELETE', /\/participants\/me$/).length, 1);
-  assert.equal(newsOf(a).length, 0, '나온 방은 게시판에서 사라져요');
+  assert.equal(newsOf(a)[0].joined, false, '나온 방은 참여 중이 아니다');
+  assert.equal(newsOf(a)[0].locked, true, '열려 있는 동안은 보이지만 다시 들어가려면 초대 코드가 필요하다 (결정 #97)');
   fin(a);
 });
 
@@ -1484,14 +1486,34 @@ test('서버 모닥불 피우기: ISBN이 없는 책으로는 같은 책 방을 
   fin(a);
 });
 
+test('남의 모닥불: 참여하지 않아도 게시판에 보이고, 누르면 초대 코드가 필요하다고 안내하며 [초대 코드로 입장]으로 이어진다. 창문 소식에는 없다 (결정 #97)', async () => {
+  const { a } = await roomApp((s) => s.seedRoom('bob', { title: '밥의 모닥불', code: 'BOBS2345' }));
+  await toVillage(a);
+  const n = newsOf(a)[0];
+  assert.equal(n.title, '밥의 모닥불');
+  assert.equal(n.locked, true);
+  a.ev(`openV('board')`);
+  assert.match(text(a, 'panel'), /밥의 모닥불/);
+  assert.match(text(a, 'panel'), /초대 코드 필요/);
+  a.ev(`openV('room:${n.id}')`);
+  assert.match(text(a, 'panel'), /초대 코드가 필요해요/);
+  assert.equal(a.doc.querySelector('#panel [data-act=rcAgree]'), null, '동의하고 들어가기는 없다');
+  a.click('#panel [data-act=joinWithCode]');
+  assert.equal(a.ev('panelOpen'), 'board');
+  assert.ok(a.doc.getElementById('jl'), '게시판의 초대 코드 입력칸이 열린다');
+  a.ev(`closePanel(); openF('window')`);
+  assert.doesNotMatch(text(a, 'panel'), /밥의 모닥불/, '창문은 내 방·참여한 방 소식만');
+  fin(a);
+});
+
 test('서버 초대 링크: #join= 코드로 열면 로그인이 끝난 뒤에 그 방에 들어간다', async () => {
   const { srv, a } = await roomApp((s) => s.seedRoom('bob', { title: '밥의 모닥불', code: 'LINK234' }));
-  assert.equal(newsOf(a).length, 0);
+  assert.equal(newsOf(a)[0].locked, true, '들어가기 전에는 보이기만 한다 (결정 #97)');
   a.ev(`PENDING_JOIN = 'LINK234'; afterSignIn()`);
   await settle();
   await settle();
   assert.deepEqual(calls(srv, 'POST', /^\/rooms\/join$/).at(-1).body, { code: 'LINK234' });
-  assert.equal(newsOf(a).length, 1);
+  assert.equal(newsOf(a)[0].joined, true);
   assert.equal(a.ev('PENDING_JOIN'), '', '한 번만 들어가요');
   fin(a);
 });

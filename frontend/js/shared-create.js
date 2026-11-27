@@ -161,7 +161,7 @@ function joinCodeHtml() {
     (p
       ? `<div class="card" id="joinPreview"><b>${esc(p.title)}</b>` +
         `<p class="muted" style="margin:6px 0 0">책: ${esc(p.book)}</p>` +
-        `<p class="muted" style="margin:2px 0 0">진행 시간: ${esc(p.period)}${p.soon ? ' (아직 열리지 않았어요)' : ''}</p>` +
+        (p.period ? `<p class="muted" style="margin:2px 0 0">진행 시간: ${esc(p.period)}${p.soon ? ' (아직 열리지 않았어요)' : ''}</p>` : '') + // 기간을 모르면 줄을 비워 두지 않는다
         `<p class="muted" style="margin:2px 0 0">참여 인원: ${p.people}/${p.max}명</p>` +
         `<button class="primary" data-act="joinConfirm" style="width:100%;margin-top:10px">이 방에 입장</button></div>`
       : '')

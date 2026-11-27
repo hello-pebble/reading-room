@@ -16,21 +16,28 @@ class BoardTest extends ApiTestBase {
     }
 
     @Test
-    void onlyMyRoomsAndInviteCodeOnlyForOwner() throws Exception {
+    void liveRoomsAreVisibleToEveryoneButInviteCodeOnlyForOwner() throws Exception {   // 결정 #97
         long a = newUser("alice"), b = newUser("bob");
         long r = room(a, "책 자랑", "2026-11-17T02:00:00Z", "2026-11-17T05:00:00Z", null);
         mvc.perform(GET(a, "/rooms")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].title").value("책 자랑")).andExpect(jsonPath("$[0].status").value("OPEN"))
                 .andExpect(jsonPath("$[0].mine").value(true)).andExpect(jsonPath("$[0].inviteCode").value("WXYZAAAB"))
                 .andExpect(jsonPath("$[0].ownerNickname").exists()).andExpect(jsonPath("$[0].participants").value(1));
-        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(1))   // 참여하지 않아도 열린 방은 보인다
+                .andExpect(jsonPath("$[0].mine").value(false)).andExpect(jsonPath("$[0].joined").value(false))
+                .andExpect(jsonPath("$[0].inviteCode").doesNotExist());              // 들어가려면 초대 코드가 있어야 한다
         dsl.execute("insert into room_participant(room_id, user_id) values (?, ?)", r, b);
         mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].mine").value(false))
                 .andExpect(jsonPath("$[0].joined").value(true)).andExpect(jsonPath("$[0].agreed").value(false))
                 .andExpect(jsonPath("$[0].inviteCode").doesNotExist()).andExpect(jsonPath("$[0].participants").value(2));
         dsl.execute("update room_participant set left_at = now() where room_id = ? and user_id = ?", r, b);
-        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].joined").value(false));   // 나가도 열린 동안은 보인다
         mvc.perform(GET(a, "/rooms")).andExpect(jsonPath("$[0].participants").value(1));
+        room(a, "곧", "2026-11-17T05:00:00Z", "2026-11-17T08:00:00Z", null);
+        room(a, "끝남", "2026-11-17T00:00:00Z", "2026-11-17T02:00:00Z", null);
+        mvc.perform(GET(b, "/rooms")).andExpect(jsonPath("$.length()").value(2))      // 남의 예정 방은 보이고, 끝난 방은 참여자에게만
+                .andExpect(jsonPath("$[?(@.title == '끝남')]").isEmpty());
+        mvc.perform(GET(a, "/rooms")).andExpect(jsonPath("$.length()").value(3));
     }
 
     @Test

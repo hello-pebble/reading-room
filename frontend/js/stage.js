@@ -90,10 +90,14 @@ const clampX = (x) => Math.max(L.minX || 1.1, Math.min(L.X - 0.4, x)),
 // 화면은 (1, 0.82, 1) 쪽에서 비스듬히 내려다보므로 화면 위 = 마을 (-x,-z), 화면 오른쪽 = (+x,-z)
 const MOVE_KEYS = { ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
 const heldKeys = new Set();
-const typingIn = (t) => !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
+// 글을 쓰는 중인가. 마을에 늘 떠 있는 채팅 입력칸(#94)은 비어 있으면 방향키만 걷기에 쓴다(보낸 뒤 커서가 남아 있어도 걷게, 결정 #100)
+const typingIn = (t, code) =>
+  !!t &&
+  (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) &&
+  !(t.id === 'pz' && !t.value && code.startsWith('Arrow'));
 document.addEventListener('keydown', (e) => {
   const k = MOVE_KEYS[e.code];
-  if (!k || VIEW !== 'village' || panelOpen || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
+  if (!k || VIEW !== 'village' || panelOpen || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target, e.code)) return;
   if (e.code.startsWith('Arrow')) e.preventDefault(); // 방향키로 화면이 스크롤되지 않게 (WASD·Tab·Enter는 그대로)
   heldKeys.add(k);
   if (sim.mode === 'walk') {

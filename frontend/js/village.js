@@ -389,6 +389,7 @@ function bindVillageEvents() {
       e.preventDefault();
       plazaSend();
     }
+    if (e.key === 'Escape' && e.target.id === 'pz') e.target.blur(); // 입력칸을 빠져나오면 WASD로 걷는다 (결정 #100)
   });
 
   if (window.visualViewport) {
